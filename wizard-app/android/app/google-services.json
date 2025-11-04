@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "159613662745",
+    "project_id": "wizard-app-dev",
+    "storage_bucket": "wizard-app-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:159613662745:android:e800964d29878d5fbc5c88",
+        "android_client_info": {
+          "package_name": "com.bargain.wiz"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADziGIZqIssPmnDm7rveLK7l79ku3AzQg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:159613662745:android:e800964d29878d5fbc5c88",
+        "android_client_info": {
+          "package_name": "com.bargain.wiz.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADziGIZqIssPmnDm7rveLK7l79ku3AzQg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+

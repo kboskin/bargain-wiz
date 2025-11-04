@@ -1,0 +1,11 @@
+{
+  "dart.flutterRunAdditionalArgs": [
+    "--flavor",
+    "dev"
+  ],
+  "dart.flutterBuildAdditionalArgs": [
+    "--flavor",
+    "dev"
+  ]
+}
+

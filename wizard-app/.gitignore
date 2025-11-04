@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase configuration files
+# Note: These should be added to version control for your team, but you may want to ignore them
+# if you have different Firebase projects per developer
+# android/app/google-services.json
+# ios/Runner/GoogleService-Info.plist

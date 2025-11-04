@@ -1,0 +1,8 @@
+#include "Generated.xcconfig"
+// Dev flavor version - automatically adds -dev suffix
+// This matches Android's versionNameSuffix = "-dev"
+// Version format: <base_version>-dev
+// Update base version in pubspec.yaml and this file will follow
+FLUTTER_BUILD_NAME=1.0.0-dev
+FLUTTER_BUILD_NUMBER=1
+

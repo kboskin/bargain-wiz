@@ -1,0 +1,8 @@
+#include "Generated.xcconfig"
+// Prod flavor version - standard version without suffix
+// This matches Android's prod flavor (no versionNameSuffix)
+// Version format: <base_version>
+// Update base version in pubspec.yaml and this file will follow
+FLUTTER_BUILD_NAME=1.0.0
+FLUTTER_BUILD_NUMBER=1
+
