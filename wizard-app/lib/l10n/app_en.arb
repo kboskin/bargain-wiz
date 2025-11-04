@@ -1,0 +1,12 @@
+{
+  "@@locale": "en",
+  "appTitle": "Bargain Wiz",
+  "@appTitle": {
+    "description": "The application title"
+  },
+  "welcome": "Welcome",
+  "@welcome": {
+    "description": "Welcome message"
+  }
+}
+
