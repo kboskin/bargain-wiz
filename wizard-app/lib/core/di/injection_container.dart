@@ -2,6 +2,7 @@ import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../network/network_info.dart';
 import '../../data/network/network_info_impl.dart';
+import '../../core/services/auth_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 final sl = GetIt.instance;
@@ -14,6 +15,11 @@ Future<void> init() async {
   
   sl.registerLazySingleton<NetworkInfo>(
     () => NetworkInfoImpl(Connectivity()),
+  );
+
+  // Services
+  sl.registerLazySingleton<AuthService>(
+    () => AuthService(),
   );
 
   // Add your repositories, datasources, and use cases here
