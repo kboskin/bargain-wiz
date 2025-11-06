@@ -7,12 +7,14 @@ abstract class OnboardingModel implements JsonSerializable<OnboardingModel> {
   final String description;
   final String? nextButtonText;
   final AnswerStructure? answerStructure;
+  final bool showTopBar; // Controls visibility of progress bar and back button
 
   OnboardingModel({
     required this.title,
     required this.description,
     this.nextButtonText,
     this.answerStructure,
+    this.showTopBar = true, // Default to true for backward compatibility
   });
 
   /// Factory constructor that parses JSON and returns the appropriate model type
@@ -94,6 +96,7 @@ class EngagementScreenModel extends OnboardingModel {
     this.visual,
     super.nextButtonText,
     super.answerStructure,
+    super.showTopBar,
   });
 
   @override
@@ -111,6 +114,7 @@ class EngagementScreenModel extends OnboardingModel {
               JsonParser.requireMap(json, 'answer_structure'),
             )
           : null,
+      showTopBar: json['show_top_bar'] as bool? ?? true,
     );
     model.validate();
     return model;
@@ -125,6 +129,7 @@ class EngagementScreenModel extends OnboardingModel {
       if (visual != null) 'visual': visual,
       if (nextButtonText != null) 'next_button_text': nextButtonText,
       if (answerStructure != null) 'answer_structure': answerStructure!.toJson(),
+      if (!showTopBar) 'show_top_bar': showTopBar,
     };
   }
 }
@@ -179,6 +184,7 @@ class SelectScreenModel extends OnboardingModel {
     required this.options,
     super.nextButtonText,
     super.answerStructure,
+    super.showTopBar,
   });
 
   @override
@@ -207,6 +213,7 @@ class SelectScreenModel extends OnboardingModel {
               JsonParser.requireMap(json, 'answer_structure'),
             )
           : null,
+      showTopBar: json['show_top_bar'] as bool? ?? true,
     );
     model.validate();
     return model;
@@ -221,6 +228,7 @@ class SelectScreenModel extends OnboardingModel {
       'options': options.map((e) => e.toJson()).toList(),
       if (nextButtonText != null) 'next_button_text': nextButtonText,
       if (answerStructure != null) 'answer_structure': answerStructure!.toJson(),
+      if (!showTopBar) 'show_top_bar': showTopBar,
     };
   }
 
@@ -284,6 +292,7 @@ class SliderScreenModel extends OnboardingModel {
     this.metadata,
     super.nextButtonText,
     super.answerStructure,
+    super.showTopBar,
   });
 
   @override
@@ -326,6 +335,7 @@ class SliderScreenModel extends OnboardingModel {
               JsonParser.requireMap(json, 'answer_structure'),
             )
           : null,
+      showTopBar: json['show_top_bar'] as bool? ?? true,
     );
     model.validate();
     return model;
@@ -344,6 +354,7 @@ class SliderScreenModel extends OnboardingModel {
         },
       if (nextButtonText != null) 'next_button_text': nextButtonText,
       if (answerStructure != null) 'answer_structure': answerStructure!.toJson(),
+      if (!showTopBar) 'show_top_bar': showTopBar,
     };
   }
 

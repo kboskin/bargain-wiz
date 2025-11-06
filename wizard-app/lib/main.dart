@@ -10,6 +10,7 @@ import 'core/services/remote_config_service.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_logger.dart';
+import 'core/widgets/pastel_gradient_background.dart';
 import 'presentation/bloc/auth/auth_bloc.dart';
 
 void main() async {
@@ -37,24 +38,27 @@ class MyApp extends StatelessWidget {
         authService: di.sl<AuthService>(),
         logger: di.sl<AppLogger>(),
       ),
-      child: MaterialApp.router(
-        title: AppConfig.appName,
-        debugShowCheckedModeBanner: kDebugMode,
-        
-        // Router configuration
-        routerConfig: AppRouter.router,
-        
-        // Localization configuration
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: const [
-          Locale('en', ''), // English
-          Locale('es', ''), // Spanish
-        ],
-        
-        // Theme configuration
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system, // Automatically switch based on system settings
+      child: PastelGradientBackground(
+        blurSigma: 2.0, // Subtle blur for glass effect
+        child: MaterialApp.router(
+          title: AppConfig.appName,
+          debugShowCheckedModeBanner: kDebugMode,
+          
+          // Router configuration
+          routerConfig: AppRouter.router,
+          
+          // Localization configuration
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: const [
+            Locale('en', ''), // English
+            Locale('es', ''), // Spanish
+          ],
+          
+          // Theme configuration
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: ThemeMode.system, // Automatically switch based on system settings
+        ),
       ),
     );
   }

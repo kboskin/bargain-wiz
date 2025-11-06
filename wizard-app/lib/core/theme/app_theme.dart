@@ -22,13 +22,13 @@ class AppTheme {
         onSurface: AppColors.textPrimary,
       ),
 
-      // Scaffold
-      scaffoldBackgroundColor: AppColors.background,
+      // Scaffold - transparent to show global gradient background
+      scaffoldBackgroundColor: Colors.transparent,
 
-      // AppBar theme
+      // AppBar theme - transparent to show gradient
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: Colors.transparent,
+        foregroundColor: AppColors.backgroundDark,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: AppTextStyles.titleLarge,
@@ -163,13 +163,13 @@ class AppTheme {
         onSurface: AppColors.textPrimaryDark,
       ),
 
-      // Scaffold
-      scaffoldBackgroundColor: AppColors.backgroundDark,
+      // Scaffold - transparent to show global gradient background
+      scaffoldBackgroundColor: Colors.transparent,
 
-      // AppBar theme
+      // AppBar theme - transparent to show gradient
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.backgroundDark,
-        foregroundColor: AppColors.textPrimaryDark,
+        backgroundColor: Colors.transparent,
+        foregroundColor: AppColors.backgroundDark,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(

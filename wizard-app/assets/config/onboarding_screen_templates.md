@@ -12,7 +12,8 @@ Informational/warmup screens that display content with optional visual elements.
   "description": "Screen description that can include keywords like bargain, deal, analysis, negotiate, smart, ai for highlighting",
   "type": "engagement",
   "visual": "assets/lottie/animation.json",  // Optional: Lottie animation path
-  "next_button_text": "Next"  // Optional: Custom button text
+  "next_button_text": "Next",  // Optional: Custom button text
+  "show_top_bar": true  // Optional: Show/hide progress bar and back button (defaults to true)
 }
 ```
 
@@ -22,6 +23,7 @@ Informational/warmup screens that display content with optional visual elements.
 - `type`: `"engagement"`
 - `visual` (optional): Path to Lottie animation file (e.g., `"assets/lottie/welcome.json"`)
 - `next_button_text` (optional): Custom button text (defaults to "Next" or "Get Started" for last screen)
+- `show_top_bar` (optional): Controls visibility of progress bar and back button (defaults to `true`)
 
 ## Select Screen
 
@@ -50,7 +52,8 @@ Multiple choice selection screen with predefined options.
   "answer_structure": {
     "answer_key_name": "question_key"  // Required: Key for storing the answer
   },
-  "next_button_text": "Continue"  // Optional: Custom button text
+  "next_button_text": "Continue",  // Optional: Custom button text
+  "show_top_bar": true  // Optional: Show/hide progress bar and back button (defaults to true)
 }
 ```
 
@@ -65,6 +68,7 @@ Multiple choice selection screen with predefined options.
 - `answer_structure` (required): Answer storage configuration
   - `answer_key_name` (required): Unique key for storing the answer
 - `next_button_text` (optional): Custom button text
+- `show_top_bar` (optional): Controls visibility of progress bar and back button (defaults to `true`)
 
 ## Slider Screen
 
@@ -101,7 +105,8 @@ Slider with predefined labeled positions:
   "answer_structure": {
     "answer_key_name": "question_key"  // Required: Key for storing the answer
   },
-  "next_button_text": "Next"  // Optional: Custom button text
+  "next_button_text": "Next",  // Optional: Custom button text
+  "show_top_bar": true  // Optional: Show/hide progress bar and back button (defaults to true)
 }
 ```
 
@@ -117,6 +122,7 @@ Slider with predefined labeled positions:
 - `answer_structure` (required): Answer storage configuration
   - `answer_key_name` (required): Unique key for storing the answer
 - `next_button_text` (optional): Custom button text
+- `show_top_bar` (optional): Controls visibility of progress bar and back button (defaults to `true`)
 
 ### Continuous Slider (Legacy)
 
@@ -137,7 +143,8 @@ For continuous numeric input:
   "answer_structure": {
     "answer_key_name": "question_key"  // Required: Key for storing the answer
   },
-  "next_button_text": "Next"  // Optional: Custom button text
+  "next_button_text": "Next",  // Optional: Custom button text
+  "show_top_bar": true  // Optional: Show/hide progress bar and back button (defaults to true)
 }
 ```
 
@@ -199,6 +206,9 @@ A complete onboarding flow with all three types:
 
 - All screens are stored in an array in the order they should appear
 - The `next_button_text` is optional - if not provided, defaults to "Get Started" for the last screen and "Next" for others
+- The `show_top_bar` field controls whether the progress bar and back button are displayed on each screen (defaults to `true`)
+  - Set to `false` for cleaner, distraction-free screens (e.g., welcome screens, final confirmation screens)
+  - When `false`, the top bar is completely hidden, including the progress indicator
 - For engagement screens, keywords in descriptions (bargain, deal, analysis, negotiate, smart, ai) are automatically highlighted
 - Answers are stored using the `answer_key_name` from `answer_structure`
 - Visual paths can be:

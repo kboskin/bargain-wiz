@@ -83,16 +83,16 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       builder: (context, state) {
         if (state is OnboardingLoading || state is OnboardingInitial) {
           return Scaffold(
-            backgroundColor: AppColors.backgroundDark,
-            body: const Center(
-              child: CircularProgressIndicator(color: Colors.white),
+            backgroundColor: Colors.transparent, // Transparent to show global gradient
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.backgroundDark),
             ),
           );
         }
 
         if (state is OnboardingError) {
           return Scaffold(
-            backgroundColor: AppColors.backgroundDark,
+            backgroundColor: Colors.transparent, // Transparent to show global gradient
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -101,7 +101,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                     state.message,
                     style: Theme.of(
                       context,
-                    ).textTheme.bodyLarge?.copyWith(color: Colors.white),
+                    ).textTheme.bodyLarge?.copyWith(color: AppColors.backgroundDark),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -116,40 +116,42 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
         if (state is OnboardingConfigLoaded) {
           if (state.screens.isEmpty) {
-            return Scaffold(
-              backgroundColor: AppColors.backgroundDark,
-              body: Center(
-                child: Text(
-                  AppLocalizations.of(context)!.noOnboardingConfig,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: Colors.white),
-                ),
+          return Scaffold(
+            backgroundColor: Colors.transparent, // Transparent to show global gradient
+            body: Center(
+              child: Text(
+                AppLocalizations.of(context)!.noOnboardingConfig,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: AppColors.backgroundDark),
               ),
-            );
+            ),
+          );
           }
 
           return Scaffold(
-            backgroundColor: AppColors.backgroundDark,
+            backgroundColor: Colors.transparent, // Transparent to show global gradient
             body: AnnotatedRegion<SystemUiOverlayStyle>(
-              value: const SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.light,
-                // Light icons for dark background
-                statusBarBrightness: Brightness.dark,
-                // iOS
-                systemNavigationBarColor: Colors.transparent,
-                systemNavigationBarIconBrightness: Brightness.light,
-              ),
-              child: SafeArea(
-                child: Stack(
-                  children: [
+                value: const SystemUiOverlayStyle(
+                  statusBarColor: Colors.transparent,
+                  statusBarIconBrightness: Brightness.dark,
+                  // Dark icons for light background
+                  statusBarBrightness: Brightness.light,
+                  // iOS
+                  systemNavigationBarColor: Colors.transparent,
+                  systemNavigationBarIconBrightness: Brightness.dark,
+                ),
+                child: SafeArea(
+                  child: Stack(
+                    children: [
                     // Main content (PageView and bottom controls)
                     Column(
                       children: [
-                        // Spacer for top bar (always present to prevent layout shift)
-                        const SizedBox(height: 48 + 32),
-                        // Top bar height + padding
+                        // Spacer for top bar (only if current screen shows top bar)
+                        if (state.screens.isNotEmpty &&
+                            _currentScreenIndex < state.screens.length &&
+                            state.screens[_currentScreenIndex].showTopBar)
+                          const SizedBox(height: 48 + 32), // Top bar height + padding
 
                         // PageView for onboarding screens
                         Expanded(
@@ -169,23 +171,11 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                           ),
                         ),
 
-                        // Page indicators and next button
+                        // Next/Get Started button
                         Padding(
                           padding: const EdgeInsets.all(24.0),
                           child: Column(
                             children: [
-                              // Page indicators
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: List.generate(
-                                  state.screens.length,
-                                  (index) => _buildPageIndicator(
-                                    index == _currentScreenIndex,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 32),
-
                               // Next/Get Started button
                               SizedBox(
                                 width: double.infinity,
@@ -195,8 +185,8 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                     context.read<OnboardingBloc>(),
                                   ),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor: AppColors.backgroundDark,
+                                    backgroundColor: AppColors.backgroundDark,
+                                    foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 18,
                                     ),
@@ -219,37 +209,40 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                       ],
                     ),
 
-                    // Top bar positioned absolutely (invisible on first page, with fade animation)
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: RepaintBoundary(
-                        child: AnimatedOpacity(
-                          opacity: _currentScreenIndex > 0 ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          child: _OnboardingTopBar(
-                            key: const ValueKey('onboarding_top_bar'),
-                            currentIndex: _currentScreenIndex,
-                            totalScreens: state.screens.length,
-                            onBackPressed: _currentScreenIndex > 0 ? _goToPreviousPage : null,
+                    // Top bar positioned absolutely (controlled by showTopBar and screen index)
+                    if (state.screens.isNotEmpty &&
+                        _currentScreenIndex < state.screens.length &&
+                        state.screens[_currentScreenIndex].showTopBar)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: RepaintBoundary(
+                          child: AnimatedOpacity(
+                            opacity: _currentScreenIndex > 0 ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            child: _OnboardingTopBar(
+                              key: const ValueKey('onboarding_top_bar'),
+                              currentIndex: _currentScreenIndex,
+                              totalScreens: state.screens.length,
+                              onBackPressed: _currentScreenIndex > 0 ? _goToPreviousPage : null,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
           );
         }
 
         if (state is OnboardingSubmitting) {
           return Scaffold(
-            backgroundColor: AppColors.backgroundDark,
-            body: const Center(
-              child: CircularProgressIndicator(color: Colors.white),
+            backgroundColor: Colors.transparent, // Transparent to show global gradient
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.backgroundDark),
             ),
           );
         }
@@ -341,7 +334,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           AppLocalizations.of(context)!.invalidScreenIndex,
           style: Theme.of(
             context,
-          ).textTheme.bodyLarge?.copyWith(color: Colors.white),
+          ).textTheme.bodyLarge?.copyWith(color: AppColors.backgroundDark),
         ),
       );
     }
@@ -387,23 +380,12 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           'Unknown screen type: ${screen.runtimeType}',
           style: Theme.of(
             context,
-          ).textTheme.bodyLarge?.copyWith(color: Colors.white),
+          ).textTheme.bodyLarge?.copyWith(color: AppColors.backgroundDark),
         ),
       );
     }
   }
 
-  Widget _buildPageIndicator(bool isActive) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      width: isActive ? 24 : 8,
-      height: 8,
-      decoration: BoxDecoration(
-        color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(4),
-      ),
-    );
-  }
 }
 
 /// Stable top bar widget for onboarding screen
@@ -452,7 +434,7 @@ class _OnboardingTopBarState extends State<_OnboardingTopBar> {
                 padding: const EdgeInsets.only(left: 24.0),
                 child: IconButton(
                   onPressed: widget.onBackPressed,
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  icon: Icon(Icons.arrow_back, color: AppColors.backgroundDark),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -482,8 +464,8 @@ class _OnboardingTopBarState extends State<_OnboardingTopBar> {
                   builder: (context, value, child) {
                     return LinearProgressIndicator(
                       value: value,
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      backgroundColor: AppColors.backgroundDark.withValues(alpha: 0.2),
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.backgroundDark),
                       minHeight: 4,
                       borderRadius: BorderRadius.circular(2),
                     );

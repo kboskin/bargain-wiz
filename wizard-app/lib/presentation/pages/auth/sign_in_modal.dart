@@ -2,10 +2,11 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/glass_container.dart';
 import '../../bloc/auth/auth_bloc.dart';
 import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 
 class SignInModal extends StatelessWidget {
@@ -32,30 +33,31 @@ class SignInModal extends StatelessWidget {
         final isLoading = state is AuthLoading;
 
         if (state is AuthInitial) {
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.6,
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(24),
-                topRight: Radius.circular(24),
-              ),
-            ),
-            child: const Center(child: CircularProgressIndicator(color: Colors.white)),
-          );
-        }
-
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
+          return GlassContainer(
+            blurSigma: 15.0,
+            color: Colors.black,
+            opacity: 0.3,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(24),
               topRight: Radius.circular(24),
             ),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+            ),
+          );
+        }
+
+        return GlassContainer(
+          blurSigma: 15.0,
+          color: Colors.black,
+          opacity: 0.3,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -234,7 +236,6 @@ class SignInModal extends StatelessWidget {
                 ),
               ],
             ),
-          ),
         );
       },
     );

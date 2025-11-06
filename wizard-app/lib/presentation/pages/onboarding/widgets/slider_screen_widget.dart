@@ -5,7 +5,7 @@ import '../../../../data/models/onboarding_model.dart';
 
 /// Widget for slider-type onboarding screens
 /// Supports discrete labeled options with optional animations
-class SliderScreenWidget extends StatelessWidget {
+class SliderScreenWidget extends StatefulWidget {
   final SliderScreenModel model;
   final dynamic selectedValue;
   final Function(dynamic) onValueChanged;
@@ -18,9 +18,15 @@ class SliderScreenWidget extends StatelessWidget {
   });
 
   @override
+  State<SliderScreenWidget> createState() => _SliderScreenWidgetState();
+}
+
+class _SliderScreenWidgetState extends State<SliderScreenWidget> {
+
+  @override
   Widget build(BuildContext context) {
     // Check if this is a discrete slider with options
-    if (model.options.isNotEmpty) {
+    if (widget.model.options.isNotEmpty) {
       return _buildDiscreteSlider(context);
     }
     
@@ -30,7 +36,7 @@ class SliderScreenWidget extends StatelessWidget {
 
   Widget _buildDiscreteSlider(BuildContext context) {
     // Use the parsed options from the model (already sorted)
-    final sliderOptions = List<SliderOption>.from(model.options)
+    final sliderOptions = List<SliderOption>.from(widget.model.options)
       ..sort((a, b) => a.value.compareTo(b.value));
 
     // Use normalized slider range (0.0 to 1.0) for smooth sliding
@@ -40,8 +46,8 @@ class SliderScreenWidget extends StatelessWidget {
     // Get current selected value
     int currentOptionIndex = 0;
 
-    if (selectedValue != null) {
-      final answerValue = (selectedValue as num).toDouble();
+    if (widget.selectedValue != null) {
+      final answerValue = (widget.selectedValue as num).toDouble();
       // Find which option index matches the stored value
       for (int i = 0; i < sliderOptions.length; i++) {
         if (sliderOptions[i].value == answerValue) {
@@ -65,43 +71,58 @@ class SliderScreenWidget extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Title
-          _buildStyledTitle(context, model.title),
+          _buildStyledTitle(context, widget.model.title),
           const SizedBox(height: 16),
 
           // Description
-          if (model.description.isNotEmpty) ...[
-            _buildStyledDescription(context, model.description),
+          if (widget.model.description.isNotEmpty) ...[
+            _buildStyledDescription(context, widget.model.description),
             const SizedBox(height: 48),
           ],
 
-          // Selected value display with optional animation
-          Column(
-            children: [
-              // Show animation if available for selected option
-              if (currentOption.animation != null) ...[
-                _buildVisual(currentOption.animation!, width: 100, height: 100),
-                const SizedBox(height: 16),
-              ],
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  currentOption.label,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+          // Selected value display with optional animation (smooth transitions)
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.9, end: 1.0).animate(
+                    CurvedAnimation(parent: animation, curve: Curves.easeOut),
                   ),
-                  textAlign: TextAlign.center,
+                  child: child,
                 ),
-              ),
-            ],
+              );
+            },
+            child: Column(
+              key: ValueKey<int>(currentOptionIndex),
+              children: [
+                // Show animation if available for selected option
+                if (currentOption.animation != null) ...[
+                  _buildVisual(currentOption.animation!, width: 100, height: 100),
+                  const SizedBox(height: 16),
+                ],
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundDark.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    currentOption.label,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: AppColors.backgroundDark,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 48),
 
-          // Animations above slider (if provided)
+          // Animations above slider (if provided) with smooth transitions
           if (sliderOptions.any((opt) => opt.animation != null)) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0),
@@ -115,22 +136,47 @@ class SliderScreenWidget extends StatelessWidget {
                   return Expanded(
                     child: Center(
                       child: opt.animation != null
-                          ? _buildVisual(opt.animation!, width: 60, height: 60)
-                          : SizedBox(
+                          ? AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              transitionBuilder: (Widget child, Animation<double> animation) {
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: ScaleTransition(
+                                    scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+                                      CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                                    ),
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: _buildVisual(
+                                opt.animation!,
+                                width: 60,
+                                height: 60,
+                                key: ValueKey<String>('${opt.animation}_$optIndex'),
+                              ),
+                            )
+                          : AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
                               width: 60,
                               height: 60,
-                              child: Container(
-                                decoration: BoxDecoration(
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? AppColors.backgroundDark.withValues(alpha: 0.2)
+                                    : AppColors.backgroundDark.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                                style: TextStyle(
                                   color: isSelected
-                                      ? Colors.white.withValues(alpha: 0.2)
-                                      : Colors.white.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
+                                      ? AppColors.backgroundDark
+                                      : AppColors.backgroundDark.withValues(alpha: 0.5),
                                 ),
-                                child: Icon(
+                                child: const Icon(
                                   Icons.circle,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.white.withValues(alpha: 0.5),
                                   size: 30,
                                 ),
                               ),
@@ -159,7 +205,7 @@ class SliderScreenWidget extends StatelessWidget {
                       : 0;
                   final selectedOption = sliderOptions[optionIndex];
 
-                  onValueChanged(selectedOption.value);
+                  widget.onValueChanged(selectedOption.value);
                 },
                 onChangeEnd: (value) {
                   // Final snap to nearest option when user releases
@@ -171,12 +217,12 @@ class SliderScreenWidget extends StatelessWidget {
                   final selectedOption = sliderOptions[optionIndex];
 
                   // Update to the exact option value for visual consistency
-                  onValueChanged(selectedOption.value);
+                  widget.onValueChanged(selectedOption.value);
                 },
-                activeColor: Colors.white,
-                inactiveColor: Colors.white.withValues(alpha: 0.3),
+                activeColor: AppColors.backgroundDark,
+                inactiveColor: AppColors.backgroundDark.withValues(alpha: 0.3),
               ),
-              // Labels below slider
+              // Labels below slider with smooth color/weight transitions
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
                 child: Row(
@@ -187,18 +233,22 @@ class SliderScreenWidget extends StatelessWidget {
                     final isSelected = optIndex == currentOptionIndex;
                     return Expanded(
                       child: Center(
-                        child: Text(
-                          opt.label,
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: isSelected
-                                ? Colors.white
-                                : Colors.white.withValues(alpha: 0.6),
+                                ? AppColors.backgroundDark
+                                : AppColors.backgroundDark.withValues(alpha: 0.6),
                             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                             fontSize: 11,
+                          ) ?? const TextStyle(),
+                          child: Text(
+                            opt.label,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     );
@@ -212,37 +262,33 @@ class SliderScreenWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildVisual(String visualPath, {double width = 200, double height = 200}) {
+  Widget _buildVisual(String visualPath, {double width = 200, double height = 200, Key? key}) {
     // Check if it's an asset path or URL
+    Widget lottieWidget;
     if (visualPath.startsWith('http://') || visualPath.startsWith('https://')) {
       // URL - load from network
-      return SizedBox(
-        width: width,
-        height: height,
-        child: Lottie.network(visualPath, fit: BoxFit.contain),
-      );
+      lottieWidget = Lottie.network(visualPath, fit: BoxFit.contain);
     } else if (visualPath.startsWith('assets/')) {
       // Asset path
-      return SizedBox(
-        width: width,
-        height: height,
-        child: Lottie.asset(visualPath, fit: BoxFit.contain),
-      );
+      lottieWidget = Lottie.asset(visualPath, fit: BoxFit.contain);
     } else {
       // Assume it's an asset path without prefix
-      return SizedBox(
-        width: width,
-        height: height,
-        child: Lottie.asset('assets/$visualPath', fit: BoxFit.contain),
-      );
+      lottieWidget = Lottie.asset('assets/$visualPath', fit: BoxFit.contain);
     }
+    
+    return SizedBox(
+      width: width,
+      height: height,
+      key: key,
+      child: lottieWidget,
+    );
   }
 
   Widget _buildStyledTitle(BuildContext context, String title) {
     return Text(
       title,
       style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-        color: Colors.white,
+        color: AppColors.backgroundDark,
         fontWeight: FontWeight.bold,
       ),
       textAlign: TextAlign.center,
@@ -253,7 +299,7 @@ class SliderScreenWidget extends StatelessWidget {
     return Text(
       description,
       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: AppColors.backgroundDark.withValues(alpha: 0.8),
       ),
       textAlign: TextAlign.center,
     );

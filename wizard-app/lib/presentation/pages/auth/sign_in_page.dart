@@ -2,6 +2,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/glass_container.dart';
 import '../../bloc/auth/auth_bloc.dart';
 import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
@@ -18,7 +20,7 @@ class _SignInPageState extends State<SignInPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.transparent, // Transparent to show global gradient
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -37,9 +39,9 @@ class _SignInPageState extends State<SignInPage> {
           final isLoading = state is AuthLoading;
 
           if (state is AuthInitial) {
-            return const Scaffold(
-              backgroundColor: Colors.black,
-              body: Center(child: CircularProgressIndicator(color: Colors.white)),
+            return Scaffold(
+              backgroundColor: Colors.transparent, // Transparent to show global gradient
+              body: Center(child: CircularProgressIndicator(color: AppColors.backgroundDark)),
             );
           }
 
@@ -47,22 +49,20 @@ class _SignInPageState extends State<SignInPage> {
             child: Column(
               children: [
                 const Spacer(),
-                // Modal-style sign-in card
-                Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1A1A1A),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
+                // Modal-style sign-in card with glass effect
+                GlassContainer(
+                  blurSigma: 15.0,
+                  color: Colors.black,
+                  opacity: 0.3,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                         // Title and close button
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -238,8 +238,7 @@ class _SignInPageState extends State<SignInPage> {
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
               ],

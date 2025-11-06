@@ -31,9 +31,9 @@ class EngagementScreenWidget extends StatelessWidget {
                 color: AppColors.surface,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.check_circle_outline,
-                color: Colors.white,
+                color: AppColors.backgroundDark,
                 size: 60,
               ),
             ),
@@ -82,7 +82,7 @@ class EngagementScreenWidget extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-        color: Colors.white,
+        color: AppColors.backgroundDark,
         fontWeight: FontWeight.bold,
       ),
       textAlign: TextAlign.center,
@@ -93,7 +93,7 @@ class EngagementScreenWidget extends StatelessWidget {
     return Text(
       description,
       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: AppColors.backgroundDark.withValues(alpha: 0.8),
       ),
       textAlign: TextAlign.center,
     );

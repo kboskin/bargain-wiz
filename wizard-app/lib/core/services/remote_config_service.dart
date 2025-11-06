@@ -6,6 +6,7 @@ import '../utils/app_logger.dart';
 import 'firebase_service.dart';
 import '../../data/models/onboarding_model.dart';
 import '../../data/models/json_serializable.dart';
+import '../../data/models/gradient_background_config.dart';
 
 /// Service for managing Firebase Remote Config values
 /// Loads and caches remote config values on app startup
@@ -111,6 +112,7 @@ class RemoteConfigService {
     final knownKeys = [
       'api_url',
       'feature_enabled',
+      'gradient_background_config',
       // Add more keys as needed
       // Note: onboarding_screens is excluded from cache - always fetched fresh
     ];
@@ -207,6 +209,28 @@ class RemoteConfigService {
   /// Get all cached keys
   Set<String> getKeys() {
     return _cache.keys.toSet();
+  }
+
+  /// Get gradient background configuration from Remote Config
+  /// Returns null if not configured
+  GradientBackgroundConfig? getGradientBackgroundConfig() {
+    try {
+      final jsonString = getString('gradient_background_config');
+      if (jsonString.isEmpty) {
+        return null;
+      }
+
+      final json = jsonDecode(jsonString);
+      if (json is! Map<String, dynamic>) {
+        _logger.w('Invalid gradient_background_config format');
+        return null;
+      }
+
+      return GradientBackgroundConfig.fromJson(json);
+    } catch (e, stackTrace) {
+      _logger.e('Error parsing gradient background config', e, stackTrace);
+      return null;
+    }
   }
 }
 

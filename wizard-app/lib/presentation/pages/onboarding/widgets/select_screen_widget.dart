@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/onboarding_model.dart';
 
 /// Widget for select-type onboarding screens
@@ -68,11 +69,11 @@ class SelectScreenWidget extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
           side: BorderSide(
-            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.5),
+            color: isSelected ? AppColors.backgroundDark : AppColors.backgroundDark.withValues(alpha: 0.5),
             width: isSelected ? 2 : 1,
           ),
           backgroundColor: isSelected
-              ? Colors.white.withValues(alpha: 0.1)
+              ? AppColors.backgroundDark.withValues(alpha: 0.1)
               : Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -81,7 +82,7 @@ class SelectScreenWidget extends StatelessWidget {
         child: Text(
           option.label,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Colors.white,
+            color: AppColors.backgroundDark,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -93,7 +94,7 @@ class SelectScreenWidget extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-        color: Colors.white,
+        color: AppColors.backgroundDark,
         fontWeight: FontWeight.bold,
       ),
       textAlign: TextAlign.center,
@@ -104,7 +105,7 @@ class SelectScreenWidget extends StatelessWidget {
     return Text(
       description,
       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: AppColors.backgroundDark.withValues(alpha: 0.8),
       ),
       textAlign: TextAlign.center,
     );
