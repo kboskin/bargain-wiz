@@ -1,4 +1,4 @@
-import '../../data/models/onboarding_screen_config.dart';
+import '../../data/models/onboarding_model.dart';
 import '../utils/app_logger.dart';
 import 'remote_config_service.dart';
 
@@ -10,29 +10,24 @@ class OnboardingService {
 
   OnboardingService(this._remoteConfigService, this._logger);
 
-  /// Get onboarding screen configuration directly from Remote Config (not cached)
+  /// Get onboarding screen models directly from Remote Config (not cached)
   /// Always fetches fresh data from Remote Config to ensure latest configuration
-  /// Returns empty config if not found in Remote Config
-  Future<OnboardingConfig> getOnboardingConfig() async {
+  /// Returns list of OnboardingModel instances (polymorphic)
+  Future<List<OnboardingModel>> getOnboardingConfig() async {
     try {
-      // Get directly from Remote Config (not from cache)
-      final remoteConfigString = await _remoteConfigService.getOnboardingScreensFresh();
-      if (remoteConfigString.isNotEmpty) {
-        try {
-          final config = OnboardingConfig.fromJsonString(remoteConfigString);
-          _logger.i('Loaded onboarding config directly from Remote Config');
-          return config;
-        } catch (e, stackTrace) {
-          _logger.e('Error parsing Remote Config onboarding config', e, stackTrace);
-        }
+      // Get directly from Remote Config (not from cache) - returns list of models
+      final screens = await _remoteConfigService.getOnboardingScreensFresh();
+      if (screens.isNotEmpty) {
+        _logger.i('Loaded ${screens.length} onboarding screens directly from Remote Config');
+        return screens;
       }
 
-      // Return empty config if not found - no hardcoded defaults
-      _logger.w('No onboarding config found in Remote Config, returning empty config');
-      return OnboardingConfig(screens: []);
+      // Return empty list if not found - no hardcoded defaults
+      _logger.w('No onboarding config found in Remote Config, returning empty list');
+      return [];
     } catch (e, stackTrace) {
       _logger.e('Error loading onboarding config', e, stackTrace);
-      return OnboardingConfig(screens: []);
+      return [];
     }
   }
 }

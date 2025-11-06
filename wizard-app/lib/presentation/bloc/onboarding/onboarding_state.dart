@@ -1,5 +1,5 @@
 import '../base_bloc.dart';
-import '../../../data/models/onboarding_screen_config.dart';
+import '../../../data/models/onboarding_model.dart';
 
 /// Onboarding states
 abstract class OnboardingState extends BaseState {
@@ -18,26 +18,26 @@ class OnboardingLoading extends OnboardingState {
 
 /// Configuration loaded state
 class OnboardingConfigLoaded extends OnboardingState {
-  final OnboardingConfig config;
+  final List<OnboardingModel> screens;
   final Map<int, dynamic> answers;
 
   const OnboardingConfigLoaded({
-    required this.config,
+    required this.screens,
     this.answers = const {},
   });
 
   OnboardingConfigLoaded copyWith({
-    OnboardingConfig? config,
+    List<OnboardingModel>? screens,
     Map<int, dynamic>? answers,
   }) {
     return OnboardingConfigLoaded(
-      config: config ?? this.config,
+      screens: screens ?? this.screens,
       answers: answers ?? this.answers,
     );
   }
 
   @override
-  List<Object> get props => [config, answers];
+  List<Object> get props => [screens, answers];
 }
 
 /// Submitting state

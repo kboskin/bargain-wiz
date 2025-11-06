@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import '../utils/app_logger.dart';
 import 'firebase_service.dart';
+import '../../data/models/onboarding_model.dart';
+import '../../data/models/json_serializable.dart';
 
 /// Service for managing Firebase Remote Config values
 /// Loads and caches remote config values on app startup
@@ -40,8 +42,7 @@ class RemoteConfigService {
       
       final remoteConfig = FirebaseService.remoteConfig;
       if (remoteConfig == null) {
-        _logger.w('Firebase Remote Config not available, using cached values');
-        await _loadCachedValues();
+        _logger.w('Firebase Remote Config not available');
         // Apply defaults for missing values
         _applyDefaults();
         return;
@@ -67,8 +68,7 @@ class RemoteConfigService {
       _logger.i('Remote Config Service initialized');
     } catch (e, stackTrace) {
       _logger.e('Error initializing Remote Config Service', e, stackTrace);
-      // Fallback to cached values
-      await _loadCachedValues();
+      // Apply defaults for missing values
       _applyDefaults();
     }
   }
@@ -130,25 +130,6 @@ class RemoteConfigService {
     }
   }
 
-  /// Load cached values from SharedPreferences
-  Future<void> _loadCachedValues() async {
-    try {
-      final keys = _prefs.getKeys();
-      for (final key in keys) {
-        if (key.startsWith(_configCachePrefix)) {
-          final configKey = key.substring(_configCachePrefix.length);
-          final value = _prefs.getString(key);
-          if (value != null && value.isNotEmpty) {
-            _cache[configKey] = value;
-            _logger.d('Loaded cached config key: $configKey');
-          }
-        }
-      }
-    } catch (e, stackTrace) {
-      _logger.e('Error loading cached config values', e, stackTrace);
-    }
-  }
-
   /// Get a string value from Remote Config
   /// Returns empty string if not found
   String getString(String key, {String defaultValue = ''}) {
@@ -157,23 +138,43 @@ class RemoteConfigService {
 
   /// Get onboarding screens directly from Remote Config (not cached)
   /// This ensures we always get the latest onboarding configuration
-  Future<String> getOnboardingScreensFresh() async {
+  /// Returns a list of OnboardingModel instances (polymorphic)
+  Future<List<OnboardingModel>> getOnboardingScreensFresh() async {
     try {
       final remoteConfig = FirebaseService.remoteConfig;
       if (remoteConfig == null) {
         _logger.w('Firebase Remote Config not available');
-        return '';
+        return [];
       }
 
       // Fetch and activate to get latest values
       await remoteConfig.fetchAndActivate();
       
-      final value = remoteConfig.getString('onboarding_screens');
-      _logger.i('Fetched onboarding screens directly from Remote Config');
-      return value;
+      final jsonString = remoteConfig.getString('onboarding_screens');
+      if (jsonString.isEmpty) {
+        _logger.w('Onboarding screens config is empty');
+        return [];
+      }
+
+      // Parse JSON string to list of models with strict type checking
+      final json = jsonDecode(jsonString);
+      
+      if (json is! List) {
+        throw FormatException(
+          'Expected List for onboarding_screens, got ${json.runtimeType}',
+        );
+      }
+      
+      // Use strict parsing with validation - returns polymorphic OnboardingModel instances
+      final screens = json.mapToModel<OnboardingModel>(
+        (item) => OnboardingModel.fromJson(item),
+      );
+      
+      _logger.i('Fetched ${screens.length} onboarding screens from Remote Config');
+      return screens;
     } catch (e, stackTrace) {
       _logger.e('Error fetching onboarding screens from Remote Config', e, stackTrace);
-      return '';
+      return [];
     }
   }
 
@@ -206,40 +207,6 @@ class RemoteConfigService {
   /// Get all cached keys
   Set<String> getKeys() {
     return _cache.keys.toSet();
-  }
-
-  /// Refresh config values from Remote Config
-  /// This can be called periodically or when needed
-  Future<void> refresh() async {
-    try {
-      final remoteConfig = FirebaseService.remoteConfig;
-      if (remoteConfig == null) {
-        _logger.w('Firebase Remote Config not available for refresh');
-        return;
-      }
-
-      await remoteConfig.fetchAndActivate();
-      await _loadConfigValues(remoteConfig);
-      _logger.i('Remote Config refreshed');
-    } catch (e, stackTrace) {
-      _logger.e('Error refreshing Remote Config', e, stackTrace);
-    }
-  }
-
-  /// Clear all cached config values
-  Future<void> clearCache() async {
-    try {
-      _cache.clear();
-      final keys = _prefs.getKeys();
-      for (final key in keys) {
-        if (key.startsWith(_configCachePrefix)) {
-          await _prefs.remove(key);
-        }
-      }
-      _logger.i('Remote Config cache cleared');
-    } catch (e, stackTrace) {
-      _logger.e('Error clearing Remote Config cache', e, stackTrace);
-    }
   }
 }
 

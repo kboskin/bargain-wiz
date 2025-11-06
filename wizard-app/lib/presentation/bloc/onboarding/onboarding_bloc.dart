@@ -34,9 +34,9 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
   ) async {
     emit(const OnboardingLoading());
     try {
-      final config = await _onboardingService.getOnboardingConfig();
+      final screens = await _onboardingService.getOnboardingConfig();
       emit(OnboardingConfigLoaded(
-        config: config,
+        screens: screens,
         answers: {},
       ));
     } catch (e, stackTrace) {
@@ -74,15 +74,15 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
     // Convert answers to entity
     final answers = currentState.answers.entries.map((entry) {
       final screenIndex = entry.key;
-      if (screenIndex >= currentState.config.screens.length) {
+      if (screenIndex >= currentState.screens.length) {
         _logger.w('Screen index $screenIndex out of bounds, skipping');
         return null;
       }
-      final screen = currentState.config.screens[screenIndex];
+      final screen = currentState.screens[screenIndex];
       return OnboardingAnswer(
         screenIndex: screenIndex,
         screenTitle: screen.title,
-        screenType: screen.type.name,
+        screenType: screen.type,
         answerKey: screen.answerStructure?.answerKeyName,
         answer: entry.value,
       );
