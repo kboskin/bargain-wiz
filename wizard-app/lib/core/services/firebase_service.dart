@@ -6,7 +6,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'firebase_options.dart';
 import '../config/app_config.dart';
-import '../utils/app_logger.dart';
 
 /// Firebase service for initializing and managing Firebase services
 class FirebaseService {
@@ -28,19 +27,21 @@ class FirebaseService {
   static FirebaseRemoteConfig? get remoteConfig => _remoteConfig;
 
   /// Initialize Firebase services
+  /// Note: AppLogger is not available here as it depends on Crashlytics
+  /// Use debugPrint directly for initialization logging
   static Future<void> initialize() async {
     try {
-      AppLogger.i('Initializing Firebase...');
+      debugPrint('[INFO] Initializing Firebase...');
 
       // Initialize Firebase Core
       await Firebase.initializeApp(
         options: _getFirebaseOptions(),
       );
-      AppLogger.i('Firebase Core initialized');
+      debugPrint('[INFO] Firebase Core initialized');
 
       // Initialize Analytics
       _analytics = FirebaseAnalytics.instance;
-      AppLogger.i('Firebase Analytics initialized');
+      debugPrint('[INFO] Firebase Analytics initialized');
 
       // Initialize Crashlytics
       _crashlytics = FirebaseCrashlytics.instance;
@@ -55,7 +56,7 @@ class FirebaseService {
         _crashlytics?.recordError(error, stack, fatal: true);
         return true;
       };
-      AppLogger.i('Firebase Crashlytics initialized');
+      debugPrint('[INFO] Firebase Crashlytics initialized');
 
       // Initialize Messaging
       _messaging = FirebaseMessaging.instance;
@@ -66,7 +67,7 @@ class FirebaseService {
         badge: true,
         sound: true,
       );
-      AppLogger.i('Firebase Messaging permission: ${settings.authorizationStatus}');
+      debugPrint('[INFO] Firebase Messaging permission: ${settings.authorizationStatus}');
 
       // Initialize Remote Config
       _remoteConfig = FirebaseRemoteConfig.instance;
@@ -79,20 +80,15 @@ class FirebaseService {
         ),
       );
       
-      // Set default values
-      await _remoteConfig!.setDefaults({
-        'api_url': AppConfig.baseUrl,
-        'feature_enabled': false,
-      });
-      
-      // Fetch and activate
-      await _remoteConfig!.fetchAndActivate();
-      AppLogger.i('Firebase Remote Config initialized');
+      // Default values will be set by RemoteConfigService from asset file
+      // fetchAndActivate() will be called by RemoteConfigService.initialize()
+      debugPrint('[INFO] Firebase Remote Config instance created');
 
-      AppLogger.i('Firebase initialization complete');
+      debugPrint('[INFO] Firebase initialization complete');
     } catch (e, stackTrace) {
-      AppLogger.e('Error initializing Firebase', e, stackTrace);
+      // Note: AppLogger might not be available yet, so log directly to Crashlytics if available
       _crashlytics?.recordError(e, stackTrace, fatal: false);
+      debugPrint('[ERROR] Error initializing Firebase: $e');
       rethrow;
     }
   }

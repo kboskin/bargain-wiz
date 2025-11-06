@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// App text styles
+/// App text styles with light and dark theme variants
 class AppTextStyles {
   AppTextStyles._();
 
-  // Display styles
+  // Display styles - Light theme
   static const TextStyle displayLarge = TextStyle(
     fontSize: 57,
     fontWeight: FontWeight.w400,
@@ -27,7 +27,7 @@ class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
-  // Headline styles
+  // Headline styles - Light theme
   static const TextStyle headlineLarge = TextStyle(
     fontSize: 32,
     fontWeight: FontWeight.w400,
@@ -49,7 +49,7 @@ class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
-  // Title styles
+  // Title styles - Light theme
   static const TextStyle titleLarge = TextStyle(
     fontSize: 22,
     fontWeight: FontWeight.w500,
@@ -71,7 +71,7 @@ class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
-  // Body styles
+  // Body styles - Light theme
   static const TextStyle bodyLarge = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w400,
@@ -93,7 +93,7 @@ class AppTextStyles {
     color: AppColors.textSecondary,
   );
 
-  // Label styles
+  // Label styles - Light theme
   static const TextStyle labelLarge = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w500,
@@ -114,5 +114,116 @@ class AppTextStyles {
     letterSpacing: 0.5,
     color: AppColors.textPrimary,
   );
+
+  // Dark theme variants
+  static const TextStyle displayLargeDark = TextStyle(
+    fontSize: 57,
+    fontWeight: FontWeight.w400,
+    letterSpacing: -0.25,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle displayMediumDark = TextStyle(
+    fontSize: 45,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle displaySmallDark = TextStyle(
+    fontSize: 36,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle headlineLargeDark = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle headlineMediumDark = TextStyle(
+    fontSize: 28,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle headlineSmallDark = TextStyle(
+    fontSize: 24,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle titleLargeDark = TextStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle titleMediumDark = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.15,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle titleSmallDark = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.1,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle bodyLargeDark = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.5,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle bodyMediumDark = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.25,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle bodySmallDark = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.4,
+    color: AppColors.textSecondaryDark,
+  );
+
+  static const TextStyle labelLargeDark = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.1,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle labelMediumDark = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.5,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle labelSmallDark = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.5,
+    color: AppColors.textPrimaryDark,
+  );
+}
+
+/// Extension to easily access text styles based on theme
+extension AppTextStylesExtension on BuildContext {
+  TextTheme get textStyles => Theme.of(this).textTheme;
 }
 

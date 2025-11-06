@@ -6,10 +6,11 @@ import 'core/config/app_config.dart';
 import 'core/di/injection_container.dart' as di;
 import 'core/services/firebase_service.dart';
 import 'core/services/auth_service.dart';
+import 'core/services/remote_config_service.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/app_logger.dart';
 import 'presentation/bloc/auth/auth_bloc.dart';
-import 'presentation/bloc/auth/auth_event.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,9 @@ void main() async {
   // Initialize dependency injection
   await di.init();
   
+  // Initialize Remote Config Service (loads configs on startup)
+  await di.sl<RemoteConfigService>().initialize();
+  
   runApp(const MyApp());
 }
 
@@ -29,8 +33,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => AuthBloc(authService: di.sl<AuthService>())
-        ..add(const AuthCheckRequested()),
+      create: (context) => AuthBloc(
+        authService: di.sl<AuthService>(),
+        logger: di.sl<AppLogger>(),
+      ),
       child: MaterialApp.router(
         title: AppConfig.appName,
         debugShowCheckedModeBanner: kDebugMode,

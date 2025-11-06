@@ -13,4 +13,67 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get welcome => 'Bienvenido';
+
+  @override
+  String get goBack => 'Volver';
+
+  @override
+  String get skip => 'Omitir';
+
+  @override
+  String get next => 'Siguiente';
+
+  @override
+  String get getStarted => 'Comenzar';
+
+  @override
+  String get pleaseSelectOption => 'Por favor selecciona una opción';
+
+  @override
+  String get pleaseSelectValue => 'Por favor selecciona un valor';
+
+  @override
+  String get invalidScreenIndex => 'Índice de pantalla inválido';
+
+  @override
+  String get noOnboardingConfig =>
+      'No hay configuración de onboarding disponible';
+
+  @override
+  String get termsAndConditions => 'Términos y Condiciones';
+
+  @override
+  String get privacyPolicy => 'Política de Privacidad';
+
+  @override
+  String agreeToTerms(String appName) {
+    return 'Al continuar, aceptas los $appName';
+  }
+
+  @override
+  String get and => ' y ';
+
+  @override
+  String get error => 'Error';
+
+  @override
+  String get loading => 'Cargando...';
+
+  @override
+  String get signIn => 'Iniciar sesión';
+
+  @override
+  String get signInWithGoogle => 'Iniciar sesión con Google';
+
+  @override
+  String get signInWithApple => 'Iniciar sesión con Apple';
+
+  @override
+  String get dontHaveAccount => '¿No tienes una cuenta?';
+
+  @override
+  String get alreadyHaveAccount => '¿Ya tienes una cuenta?';
+
+  @override
+  String get continueButton => 'Continuar';
 }

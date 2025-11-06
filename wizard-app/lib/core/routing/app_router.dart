@@ -38,23 +38,24 @@ class AppRouter {
         path: '/',
         name: 'home',
         builder: (context, state) {
-          final authBloc = context.read<AuthBloc>();
-          final authState = authBloc.state;
+          return BlocBuilder<AuthBloc, AuthState>(
+            builder: (context, authState) {
+              // Show loading while checking auth
+              if (authState is AuthInitial || authState is AuthLoading) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
 
-          // Show loading while checking auth
-          if (authState is AuthInitial || authState is AuthLoading) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
+              // If not authenticated, show onboarding
+              if (authState is! AuthAuthenticated) {
+                return const OnboardingPage();
+              }
 
-          // If not authenticated, show onboarding
-          if (authState is! AuthAuthenticated) {
-            return const OnboardingPage();
-          }
-
-          // If authenticated, show home
-          return const HomePage();
+              // If authenticated, show home
+              return const HomePage();
+            },
+          );
         },
       ),
       GoRoute(

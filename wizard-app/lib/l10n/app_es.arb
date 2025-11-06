@@ -1,6 +1,26 @@
 {
   "@@locale": "es",
   "appTitle": "Bargain Wiz",
-  "welcome": "Bienvenido"
+  "welcome": "Bienvenido",
+  "goBack": "Volver",
+  "skip": "Omitir",
+  "next": "Siguiente",
+  "getStarted": "Comenzar",
+  "pleaseSelectOption": "Por favor selecciona una opción",
+  "pleaseSelectValue": "Por favor selecciona un valor",
+  "invalidScreenIndex": "Índice de pantalla inválido",
+  "noOnboardingConfig": "No hay configuración de onboarding disponible",
+  "termsAndConditions": "Términos y Condiciones",
+  "privacyPolicy": "Política de Privacidad",
+  "agreeToTerms": "Al continuar, aceptas los {appName}",
+  "and": " y ",
+  "error": "Error",
+  "loading": "Cargando...",
+  "signIn": "Iniciar sesión",
+  "signInWithGoogle": "Iniciar sesión con Google",
+  "signInWithApple": "Iniciar sesión con Apple",
+  "dontHaveAccount": "¿No tienes una cuenta?",
+  "alreadyHaveAccount": "¿Ya tienes una cuenta?",
+  "continueButton": "Continuar"
 }
 

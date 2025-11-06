@@ -8,6 +8,9 @@ import '../utils/app_logger.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final AppLogger _logger;
+
+  AuthService(this._logger);
 
   /// Get current user
   User? get currentUser => _auth.currentUser;
@@ -24,18 +27,18 @@ class AuthService {
     required String password,
   }) async {
     try {
-      AppLogger.i('Signing in with email: $email');
+      _logger.i('Signing in with email: $email');
       final credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
-      AppLogger.i('Successfully signed in with email');
+      _logger.i('Successfully signed in with email');
       return credential;
     } on FirebaseAuthException catch (e) {
-      AppLogger.e('Email sign in error', e);
+      _logger.e('Email sign in error', e);
       throw _handleAuthException(e);
-    } catch (e) {
-      AppLogger.e('Unexpected error during email sign in', e);
+    } catch (e, stackTrace) {
+      _logger.e('Unexpected error during email sign in', e, stackTrace);
       rethrow;
     }
   }
@@ -46,18 +49,18 @@ class AuthService {
     required String password,
   }) async {
     try {
-      AppLogger.i('Signing up with email: $email');
+      _logger.i('Signing up with email: $email');
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
-      AppLogger.i('Successfully signed up with email');
+      _logger.i('Successfully signed up with email');
       return credential;
     } on FirebaseAuthException catch (e) {
-      AppLogger.e('Email sign up error', e);
+      _logger.e('Email sign up error', e);
       throw _handleAuthException(e);
-    } catch (e) {
-      AppLogger.e('Unexpected error during email sign up', e);
+    } catch (e, stackTrace) {
+      _logger.e('Unexpected error during email sign up', e, stackTrace);
       rethrow;
     }
   }
@@ -65,7 +68,7 @@ class AuthService {
   /// Sign in with Google
   Future<UserCredential> signInWithGoogle() async {
     try {
-      AppLogger.i('Starting Google sign in');
+      _logger.i('Starting Google sign in');
       
       // Trigger the authentication flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
@@ -85,16 +88,16 @@ class AuthService {
       );
 
       // Sign in to Firebase with the Google credential
-      AppLogger.i('Signing in to Firebase with Google credential');
+      _logger.i('Signing in to Firebase with Google credential');
       final userCredential = await _auth.signInWithCredential(credential);
-      AppLogger.i('Successfully signed in with Google');
+      _logger.i('Successfully signed in with Google');
       
       return userCredential;
     } on FirebaseAuthException catch (e) {
-      AppLogger.e('Google sign in error', e);
+      _logger.e('Google sign in error', e);
       throw _handleAuthException(e);
-    } catch (e) {
-      AppLogger.e('Unexpected error during Google sign in', e);
+    } catch (e, stackTrace) {
+      _logger.e('Unexpected error during Google sign in', e, stackTrace);
       rethrow;
     }
   }
@@ -106,7 +109,7 @@ class AuthService {
         throw UnsupportedError('Apple Sign-In is only available on iOS');
       }
 
-      AppLogger.i('Starting Apple sign in');
+      _logger.i('Starting Apple sign in');
 
       // Request credential for the currently signed in Apple account
       final appleCredential = await SignInWithApple.getAppleIDCredential(
@@ -123,16 +126,16 @@ class AuthService {
       );
 
       // Sign in to Firebase with the Apple credential
-      AppLogger.i('Signing in to Firebase with Apple credential');
+      _logger.i('Signing in to Firebase with Apple credential');
       final userCredential = await _auth.signInWithCredential(oauthCredential);
-      AppLogger.i('Successfully signed in with Apple');
+      _logger.i('Successfully signed in with Apple');
       
       return userCredential;
     } on FirebaseAuthException catch (e) {
-      AppLogger.e('Apple sign in error', e);
+      _logger.e('Apple sign in error', e);
       throw _handleAuthException(e);
-    } catch (e) {
-      AppLogger.e('Unexpected error during Apple sign in', e);
+    } catch (e, stackTrace) {
+      _logger.e('Unexpected error during Apple sign in', e, stackTrace);
       rethrow;
     }
   }
@@ -140,14 +143,14 @@ class AuthService {
   /// Sign out
   Future<void> signOut() async {
     try {
-      AppLogger.i('Signing out');
+      _logger.i('Signing out');
       await Future.wait([
         _auth.signOut(),
         _googleSignIn.signOut(),
       ]);
-      AppLogger.i('Successfully signed out');
-    } catch (e) {
-      AppLogger.e('Error signing out', e);
+      _logger.i('Successfully signed out');
+    } catch (e, stackTrace) {
+      _logger.e('Error signing out', e, stackTrace);
       rethrow;
     }
   }
@@ -155,14 +158,14 @@ class AuthService {
   /// Send password reset email
   Future<void> sendPasswordResetEmail(String email) async {
     try {
-      AppLogger.i('Sending password reset email to: $email');
+      _logger.i('Sending password reset email to: $email');
       await _auth.sendPasswordResetEmail(email: email.trim());
-      AppLogger.i('Password reset email sent');
+      _logger.i('Password reset email sent');
     } on FirebaseAuthException catch (e) {
-      AppLogger.e('Password reset error', e);
+      _logger.e('Password reset error', e);
       throw _handleAuthException(e);
-    } catch (e) {
-      AppLogger.e('Unexpected error sending password reset', e);
+    } catch (e, stackTrace) {
+      _logger.e('Unexpected error sending password reset', e, stackTrace);
       rethrow;
     }
   }

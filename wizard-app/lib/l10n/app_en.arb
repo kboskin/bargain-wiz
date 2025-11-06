@@ -7,6 +7,91 @@
   "welcome": "Welcome",
   "@welcome": {
     "description": "Welcome message"
+  },
+  "goBack": "Go Back",
+  "@goBack": {
+    "description": "Button text to go back"
+  },
+  "skip": "Skip",
+  "@skip": {
+    "description": "Button text to skip onboarding"
+  },
+  "next": "Next",
+  "@next": {
+    "description": "Button text to go to next screen"
+  },
+  "getStarted": "Get Started",
+  "@getStarted": {
+    "description": "Button text to complete onboarding"
+  },
+  "pleaseSelectOption": "Please select an option",
+  "@pleaseSelectOption": {
+    "description": "Validation message when option not selected"
+  },
+  "pleaseSelectValue": "Please select a value",
+  "@pleaseSelectValue": {
+    "description": "Validation message when value not selected"
+  },
+  "invalidScreenIndex": "Invalid screen index",
+  "@invalidScreenIndex": {
+    "description": "Error message for invalid screen index"
+  },
+  "noOnboardingConfig": "No onboarding configuration available",
+  "@noOnboardingConfig": {
+    "description": "Message when onboarding config is not available"
+  },
+  "termsAndConditions": "Terms and Conditions",
+  "@termsAndConditions": {
+    "description": "Terms and conditions link text"
+  },
+  "privacyPolicy": "Privacy Policy",
+  "@privacyPolicy": {
+    "description": "Privacy policy link text"
+  },
+  "agreeToTerms": "By continuing, you agree to {appName}'s",
+  "@agreeToTerms": {
+    "description": "Terms agreement text",
+    "placeholders": {
+      "appName": {
+        "type": "String"
+      }
+    }
+  },
+  "and": " and ",
+  "@and": {
+    "description": "Conjunction word"
+  },
+  "error": "Error",
+  "@error": {
+    "description": "Generic error label"
+  },
+  "loading": "Loading...",
+  "@loading": {
+    "description": "Loading indicator text"
+  },
+  "signIn": "Sign in",
+  "@signIn": {
+    "description": "Sign in button/label"
+  },
+  "signInWithGoogle": "Sign in with Google",
+  "@signInWithGoogle": {
+    "description": "Sign in with Google button text"
+  },
+  "signInWithApple": "Sign in with Apple",
+  "@signInWithApple": {
+    "description": "Sign in with Apple button text"
+  },
+  "dontHaveAccount": "Don't have an account?",
+  "@dontHaveAccount": {
+    "description": "Text before sign up link"
+  },
+  "alreadyHaveAccount": "Already have an account?",
+  "@alreadyHaveAccount": {
+    "description": "Text before sign in link"
+  },
+  "continueButton": "Continue",
+  "@continueButton": {
+    "description": "Continue button text"
   }
 }
 

@@ -6,6 +6,7 @@ import '../../bloc/auth/auth_bloc.dart';
 import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 
 class SignInModal extends StatelessWidget {
   const SignInModal({super.key});
@@ -62,11 +63,10 @@ class SignInModal extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Sign in',
-                      style: TextStyle(
+                    Text(
+                      AppLocalizations.of(context)!.signIn,
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         color: Colors.white,
-                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -121,10 +121,9 @@ class SignInModal extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        const Text(
-                          'Sign in with Google',
-                          style: TextStyle(
-                            fontSize: 16,
+                        Text(
+                          AppLocalizations.of(context)!.signInWithGoogle,
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -164,10 +163,9 @@ class SignInModal extends StatelessWidget {
                             color: Colors.white,
                           ),
                           const SizedBox(width: 12),
-                          const Text(
-                            'Sign in with Apple',
-                            style: TextStyle(
-                              fontSize: 16,
+                          Text(
+                            AppLocalizations.of(context)!.signInWithApple,
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -184,20 +182,12 @@ class SignInModal extends StatelessWidget {
                     child: RichText(
                       textAlign: TextAlign.center,
                       text: TextSpan(
-                        style: const TextStyle(
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Colors.grey,
-                          fontSize: 12,
                         ),
                         children: [
-                          const TextSpan(
-                            text: "By continuing, you agree to ",
-                          ),
                           TextSpan(
-                            text: "Bargain Wiz's",
-                            style: TextStyle(
-                              color: Colors.grey[300],
-                              fontWeight: FontWeight.w500,
-                            ),
+                            text: AppLocalizations.of(context)!.agreeToTerms(AppLocalizations.of(context)!.appTitle),
                           ),
                           const TextSpan(
                             text: " ",
@@ -208,18 +198,18 @@ class SignInModal extends StatelessWidget {
                                 // TODO: Navigate to Terms and Conditions
                               },
                               child: Text(
-                                'Terms and Conditions',
-                                style: TextStyle(
+                                AppLocalizations.of(context)!.termsAndConditions,
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: Colors.grey[300],
-                                  fontSize: 12,
                                   decoration: TextDecoration.underline,
                                   decorationColor: Colors.grey[300],
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                           ),
-                          const TextSpan(
-                            text: " and ",
+                          TextSpan(
+                            text: AppLocalizations.of(context)!.and,
                           ),
                           WidgetSpan(
                             child: GestureDetector(
@@ -227,12 +217,12 @@ class SignInModal extends StatelessWidget {
                                 // TODO: Navigate to Privacy Policy
                               },
                               child: Text(
-                                'Privacy Policy',
-                                style: TextStyle(
+                                AppLocalizations.of(context)!.privacyPolicy,
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: Colors.grey[300],
-                                  fontSize: 12,
                                   decoration: TextDecoration.underline,
                                   decorationColor: Colors.grey[300],
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),

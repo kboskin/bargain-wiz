@@ -1,0 +1,104 @@
+[
+  {
+    "title": "Welcome to Bargain Wiz",
+    "description": "We'll help you get the best deals with AI-powered analysis and smart negotiation strategies.",
+    "type": "engagement",
+    "visual": "assets/lottie/welcome.json",
+    "next_button_text": "Let's Get Started"
+  },
+  {
+    "title": "What is your favourite marketplace?",
+    "description": "Select your preferred marketplace to get personalized recommendations",
+    "type": "select",
+    "options": [
+      {
+        "label": "eBay",
+        "value": "ebay"
+      },
+      {
+        "label": "Amazon",
+        "value": "amazon"
+      },
+      {
+        "label": "Facebook Marketplace",
+        "value": "facebook"
+      },
+      {
+        "label": "Craigslist",
+        "value": "craigslist"
+      },
+      {
+        "label": "Other",
+        "value": "other"
+      }
+    ],
+    "answer_structure": {
+      "answer_key_name": "favorite_marketplace"
+    },
+    "next_button_text": "Continue"
+  },
+  {
+    "title": "How many deals are you making?",
+    "description": "Tell us about your deal frequency to customize your experience",
+    "type": "slider",
+    "metadata": {
+      "options": [
+        {
+          "value": 1,
+          "label": "1-5 deals",
+          "animation": "assets/lottie/slow.json"
+        },
+        {
+          "value": 10,
+          "label": "5-20 deals",
+          "animation": "assets/lottie/moderate.json"
+        },
+        {
+          "value": 50,
+          "label": "20+ deals",
+          "animation": "assets/lottie/fast.json"
+        }
+      ]
+    },
+    "answer_structure": {
+      "answer_key_name": "deal_count"
+    },
+    "next_button_text": "Next"
+  },
+  {
+    "title": "What is the average deal size?",
+    "description": "Help us understand your typical transaction size",
+    "type": "slider",
+    "metadata": {
+      "options": [
+        {
+          "value": 50,
+          "label": "Below 100 bucks",
+          "animation": "assets/lottie/small_deal.json"
+        },
+        {
+          "value": 550,
+          "label": "100-1000 bucks",
+          "animation": "assets/lottie/medium_deal.json"
+        },
+        {
+          "value": 5000,
+          "label": "1000+ bucks",
+          "animation": "assets/lottie/large_deal.json"
+        }
+      ]
+    },
+    "answer_structure": {
+      "answer_key_name": "average_deal_size"
+    },
+    "next_button_text": "Continue"
+  },
+  {
+    "title": "You're All Set!",
+    "description": "We're ready to help you negotiate better deals and get the best bargains. Let's start analyzing deals together!",
+    "type": "engagement",
+    "visual": "assets/lottie/success.json",
+    "next_button_text": "Get Started"
+  }
+]
+

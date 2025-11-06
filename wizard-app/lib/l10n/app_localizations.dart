@@ -109,6 +109,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Welcome'**
   String get welcome;
+
+  /// Button text to go back
+  ///
+  /// In en, this message translates to:
+  /// **'Go Back'**
+  String get goBack;
+
+  /// Button text to skip onboarding
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get skip;
+
+  /// Button text to go to next screen
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get next;
+
+  /// Button text to complete onboarding
+  ///
+  /// In en, this message translates to:
+  /// **'Get Started'**
+  String get getStarted;
+
+  /// Validation message when option not selected
+  ///
+  /// In en, this message translates to:
+  /// **'Please select an option'**
+  String get pleaseSelectOption;
+
+  /// Validation message when value not selected
+  ///
+  /// In en, this message translates to:
+  /// **'Please select a value'**
+  String get pleaseSelectValue;
+
+  /// Error message for invalid screen index
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid screen index'**
+  String get invalidScreenIndex;
+
+  /// Message when onboarding config is not available
+  ///
+  /// In en, this message translates to:
+  /// **'No onboarding configuration available'**
+  String get noOnboardingConfig;
+
+  /// Terms and conditions link text
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and Conditions'**
+  String get termsAndConditions;
+
+  /// Privacy policy link text
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get privacyPolicy;
+
+  /// Terms agreement text
+  ///
+  /// In en, this message translates to:
+  /// **'By continuing, you agree to {appName}\'s'**
+  String agreeToTerms(String appName);
+
+  /// Conjunction word
+  ///
+  /// In en, this message translates to:
+  /// **' and '**
+  String get and;
+
+  /// Generic error label
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get error;
+
+  /// Loading indicator text
+  ///
+  /// In en, this message translates to:
+  /// **'Loading...'**
+  String get loading;
+
+  /// Sign in button/label
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get signIn;
+
+  /// Sign in with Google button text
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with Google'**
+  String get signInWithGoogle;
+
+  /// Sign in with Apple button text
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with Apple'**
+  String get signInWithApple;
+
+  /// Text before sign up link
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t have an account?'**
+  String get dontHaveAccount;
+
+  /// Text before sign in link
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account?'**
+  String get alreadyHaveAccount;
+
+  /// Continue button text
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get continueButton;
 }
 
 class _AppLocalizationsDelegate
