@@ -74,9 +74,9 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
           _buildStyledTitle(context, widget.model.title),
           const SizedBox(height: 16),
 
-          // Description
-          if (widget.model.description.isNotEmpty) ...[
-            _buildStyledDescription(context, widget.model.description),
+          // Description (optional)
+          if (widget.model.description != null && widget.model.description!.isNotEmpty) ...[
+            _buildStyledDescription(context, widget.model.description!),
             const SizedBox(height: 48),
           ],
 

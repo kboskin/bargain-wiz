@@ -1,0 +1,65 @@
+{
+  "presets": {
+    "current_wizard": {
+      "name": "Current Wizard Theme",
+      "colors": ["#E8D5FF", "#FFE5B4", "#E0F7FA"],
+      "stops": [0.0, 0.5, 1.0],
+      "description": "Purple → Peach → Cyan (current)"
+    },
+    "vibrant_purple_cyan": {
+      "name": "Vibrant Purple to Cyan",
+      "colors": ["#F3E5F5", "#E1F5FE", "#B2EBF2"],
+      "stops": [0.0, 0.4, 1.0],
+      "description": "Light purple → Sky blue → Bright cyan"
+    },
+    "warm_sunset": {
+      "name": "Warm Sunset",
+      "colors": ["#F3E5F5", "#FFF3E0", "#FFE0B2"],
+      "stops": [0.0, 0.3, 1.0],
+      "description": "Purple → Cream → Warm orange"
+    },
+    "purple_gold": {
+      "name": "Purple to Gold",
+      "colors": ["#E8D5FF", "#FFF9C4", "#FFECB3"],
+      "stops": [0.0, 0.5, 1.0],
+      "description": "Soft purple → Bright yellow → Warm gold"
+    },
+    "deep_purple_cyan": {
+      "name": "Deep Purple to Cyan",
+      "colors": ["#EDE7F6", "#E1F5FE", "#B3E5FC"],
+      "stops": [0.0, 0.5, 1.0],
+      "description": "Light indigo → Light cyan → Bright cyan"
+    },
+    "energetic_orange": {
+      "name": "Energetic Orange",
+      "colors": ["#FFF3E0", "#FFE0B2", "#FFCC80"],
+      "stops": [0.0, 0.5, 1.0],
+      "description": "Cream → Peach → Warm orange"
+    },
+    "cool_blue_purple": {
+      "name": "Cool Blue Purple",
+      "colors": ["#E3F2FD", "#E1BEE7", "#CE93D8"],
+      "stops": [0.0, 0.5, 1.0],
+      "description": "Light blue → Light purple → Medium purple"
+    },
+    "soft_pink_blue": {
+      "name": "Soft Pink to Blue",
+      "colors": ["#FCE4EC", "#E1F5FE", "#B3E5FC"],
+      "stops": [0.0, 0.5, 1.0],
+      "description": "Soft pink → Sky blue → Bright cyan"
+    },
+    "mint_purple": {
+      "name": "Mint to Purple",
+      "colors": ["#E0F2F1", "#F3E5F5", "#E1BEE7"],
+      "stops": [0.0, 0.5, 1.0],
+      "description": "Mint green → Light purple → Medium purple"
+    },
+    "warm_gradient": {
+      "name": "Warm Gradient",
+      "colors": ["#FFF8E1", "#FFE0B2", "#FFCC80"],
+      "stops": [0.0, 0.5, 1.0],
+      "description": "Light yellow → Peach → Warm orange"
+    }
+  }
+}
+

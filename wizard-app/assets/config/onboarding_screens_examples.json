@@ -8,32 +8,91 @@
   },
   {
     "title": "What is your favourite marketplace?",
-    "description": "Select your preferred marketplace to get personalized recommendations",
     "type": "select",
     "options": [
       {
         "label": "eBay",
-        "value": "ebay"
+        "value": "ebay",
+        "icon": "store"
       },
       {
         "label": "Amazon",
-        "value": "amazon"
+        "value": "amazon",
+        "icon": "store"
       },
       {
         "label": "Facebook Marketplace",
-        "value": "facebook"
+        "value": "facebook",
+        "icon": "facebook"
       },
       {
         "label": "Craigslist",
-        "value": "craigslist"
+        "value": "craigslist",
+        "icon": "store"
       },
       {
         "label": "Other",
-        "value": "other"
+        "value": "other",
+        "icon": "other"
       }
     ],
     "answer_structure": {
       "answer_key_name": "favorite_marketplace"
+    },
+    "next_button_text": "Continue"
+  },
+  {
+    "title": "Where did you hear about us?",
+    "type": "select",
+    "options": [
+      {
+        "label": "TikTok",
+        "value": "tiktok",
+        "icon": "tiktok"
+      },
+      {
+        "label": "YouTube",
+        "value": "youtube",
+        "icon": "youtube"
+      },
+      {
+        "label": "Google",
+        "value": "google",
+        "icon": "google"
+      },
+      {
+        "label": "Play Store",
+        "value": "playstore",
+        "icon": "playstore"
+      },
+      {
+        "label": "Facebook",
+        "value": "facebook",
+        "icon": "facebook"
+      },
+      {
+        "label": "Friends or Family",
+        "value": "friends_or_family",
+        "icon": "friends_or_family"
+      },
+      {
+        "label": "Instagram",
+        "value": "instagram",
+        "icon": "instagram"
+      },
+      {
+        "label": "X",
+        "value": "x",
+        "icon": "x"
+      },
+      {
+        "label": "Other",
+        "value": "other",
+        "icon": "other"
+      }
+    ],
+    "answer_structure": {
+      "answer_key_name": "referral_source"
     },
     "next_button_text": "Continue"
   },
@@ -101,4 +160,3 @@
     "next_button_text": "Get Started"
   }
 ]
-

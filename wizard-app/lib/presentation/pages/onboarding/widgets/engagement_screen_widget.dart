@@ -43,9 +43,9 @@ class EngagementScreenWidget extends StatelessWidget {
           _buildStyledTitle(context, model.title),
           const SizedBox(height: 16),
 
-          // Description
-          if (model.description.isNotEmpty) ...[
-            _buildStyledDescription(context, model.description),
+          // Description (optional)
+          if (model.description != null && model.description!.isNotEmpty) ...[
+            _buildStyledDescription(context, model.description!),
           ],
         ],
       ),

@@ -18,11 +18,11 @@ class PastelGradientBackground extends StatelessWidget {
   });
 
   /// Default gradient colors (fallback if Remote Config not available)
-  /// Matches Bargain Wizard brand: purple (wizard) + orange (warmth) + cyan (tech)
+  /// Purple to Gold theme: Soft purple → Bright yellow → Warm gold
   static const List<Color> _defaultColors = [
     Color(0xFFE8D5FF), // Soft purple (top) - wizard hat theme
-    Color(0xFFFFE5B4), // Warm peach/orange (mid) - logo background circle
-    Color(0xFFE0F7FA), // Light cyan (bottom) - tech/digital feel
+    Color(0xFFFFF9C4), // Bright yellow (mid) - matches % symbol
+    Color(0xFFFFECB3), // Warm gold (bottom) - premium feel
   ];
 
   static const List<double> _defaultStops = [0.0, 0.5, 1.0];
