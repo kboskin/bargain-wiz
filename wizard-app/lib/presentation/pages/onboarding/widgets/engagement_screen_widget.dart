@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/visual_asset_widget.dart';
 import '../../../../data/models/onboarding_model.dart';
 
 /// Widget for engagement-type onboarding screens
@@ -21,8 +21,13 @@ class EngagementScreenWidget extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Visual (Lottie or placeholder)
+          // Size is configurable via metadata, defaults to 200x200
           if (model.visual != null)
-            _buildVisual(model.visual!, width: 200, height: 200)
+            _buildVisual(
+              model.visual!,
+              width: _getVisualWidth(),
+              height: _getVisualHeight(),
+            )
           else
             Container(
               width: 120,
@@ -52,30 +57,34 @@ class EngagementScreenWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildVisual(String visualPath, {double width = 200, double height = 200}) {
-    // Check if it's an asset path or URL
-    if (visualPath.startsWith('http://') || visualPath.startsWith('https://')) {
-      // URL - load from network
-      return SizedBox(
-        width: width,
-        height: height,
-        child: Lottie.network(visualPath, fit: BoxFit.contain),
-      );
-    } else if (visualPath.startsWith('assets/')) {
-      // Asset path
-      return SizedBox(
-        width: width,
-        height: height,
-        child: Lottie.asset(visualPath, fit: BoxFit.contain),
-      );
-    } else {
-      // Assume it's an asset path without prefix
-      return SizedBox(
-        width: width,
-        height: height,
-        child: Lottie.asset('assets/$visualPath', fit: BoxFit.contain),
-      );
+  /// Get visual width from metadata or default to 200
+  double _getVisualWidth() {
+    if (model.metadata != null && model.metadata!.containsKey('width')) {
+      final width = model.metadata!['width'];
+      if (width is num) {
+        return width.toDouble();
+      }
     }
+    return 200.0; // Default width
+  }
+
+  /// Get visual height from metadata or default to 200
+  double _getVisualHeight() {
+    if (model.metadata != null && model.metadata!.containsKey('height')) {
+      final height = model.metadata!['height'];
+      if (height is num) {
+        return height.toDouble();
+      }
+    }
+    return 200.0; // Default height
+  }
+
+  Widget _buildVisual(String visualPath, {double width = 200, double height = 200}) {
+    return VisualAssetWidget(
+      visualPath: visualPath,
+      width: width,
+      height: height,
+    );
   }
 
   Widget _buildStyledTitle(BuildContext context, String title) {
@@ -90,11 +99,70 @@ class EngagementScreenWidget extends StatelessWidget {
   }
 
   Widget _buildStyledDescription(BuildContext context, String description) {
-    return Text(
-      description,
-      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-        color: AppColors.backgroundDark.withValues(alpha: 0.8),
-      ),
+    // Keywords to highlight with magical style
+    final magicalKeywords = [
+      'deals',
+      'deal',
+      'bargain',
+      'bargains',
+      'AI-powered',
+      'AI',
+      'smart',
+      'magical',
+      'magic',
+      'best',
+      'negotiation',
+      'strategies',
+      'analysis',
+      'help',
+      'get',
+    ];
+
+    // Split description into words and highlight keywords
+    final words = description.split(' ');
+    final textSpans = <TextSpan>[];
+
+    for (final word in words) {
+      // Remove punctuation for comparison
+      final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
+      final isMagical = magicalKeywords.any((keyword) => 
+        cleanWord.contains(keyword.toLowerCase()) || 
+        keyword.toLowerCase().contains(cleanWord)
+      );
+
+      if (isMagical) {
+        // Magical highlight style - amber/yellow with glow effect
+        textSpans.add(
+          TextSpan(
+            text: '$word ',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Colors.amber,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  color: Colors.amber.withValues(alpha: 0.5),
+                  blurRadius: 8,
+                  offset: const Offset(0, 0),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        // Regular text
+        textSpans.add(
+          TextSpan(
+            text: '$word ',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: AppColors.backgroundDark.withValues(alpha: 0.8),
+            ),
+          ),
+        );
+      }
+    }
+
+    return RichText(
+      text: TextSpan(children: textSpans),
       textAlign: TextAlign.center,
     );
   }

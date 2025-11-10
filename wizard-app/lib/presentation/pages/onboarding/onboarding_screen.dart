@@ -129,20 +129,27 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           );
           }
 
-          return Scaffold(
-            backgroundColor: Colors.transparent, // Transparent to show global gradient
-            body: AnnotatedRegion<SystemUiOverlayStyle>(
-                value: const SystemUiOverlayStyle(
-                  statusBarColor: Colors.transparent,
-                  statusBarIconBrightness: Brightness.dark,
-                  // Dark icons for light background
-                  statusBarBrightness: Brightness.light,
-                  // iOS
-                  systemNavigationBarColor: Colors.transparent,
-                  systemNavigationBarIconBrightness: Brightness.dark,
-                ),
-                child: SafeArea(
-                  child: Stack(
+          return PopScope(
+            canPop: _currentScreenIndex == 0,
+            onPopInvoked: (didPop) {
+              if (!didPop && _currentScreenIndex > 0) {
+                _goToPreviousPage();
+              }
+            },
+            child: Scaffold(
+              backgroundColor: Colors.transparent, // Transparent to show global gradient
+              body: AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: const SystemUiOverlayStyle(
+                    statusBarColor: Colors.transparent,
+                    statusBarIconBrightness: Brightness.dark,
+                    // Dark icons for light background
+                    statusBarBrightness: Brightness.light,
+                    // iOS
+                    systemNavigationBarColor: Colors.transparent,
+                    systemNavigationBarIconBrightness: Brightness.dark,
+                  ),
+                  child: SafeArea(
+                    child: Stack(
                     children: [
                     // Main content (PageView and bottom controls)
                     Column(
@@ -199,7 +206,10 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                     style: Theme.of(context)
                                         .textTheme
                                         .labelLarge
-                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white, // Explicitly set white color
+                                        ),
                                   ),
                                 ),
                               ),
@@ -235,6 +245,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                   ),
                 ),
               ),
+            ),
           );
         }
 

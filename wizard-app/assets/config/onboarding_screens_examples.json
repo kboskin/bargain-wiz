@@ -3,22 +3,31 @@
     "title": "Welcome to Bargain Wiz",
     "description": "We'll help you get the best deals with AI-powered analysis and smart negotiation strategies.",
     "type": "engagement",
-    "visual": "assets/lottie/welcome.json",
+    "visual": "assets/lottie/wizard_hello.json",
+    "metadata": {
+      "width": 300,
+      "height": 300
+    },
     "next_button_text": "Let's Get Started"
   },
   {
-    "title": "What is your favourite marketplace?",
+    "title": "Where do you cast your shopping spells?",
+    "description": "Select your preferred marketplace",
     "type": "select",
+    "metadata": {
+      "star_animation": "assets/lottie/star_anim.json",
+      "star_color": "amber"
+    },
     "options": [
       {
         "label": "eBay",
         "value": "ebay",
-        "icon": "store"
+        "icon": "ebay"
       },
       {
         "label": "Amazon",
         "value": "amazon",
-        "icon": "store"
+        "icon": "amazon"
       },
       {
         "label": "Facebook Marketplace",
@@ -28,7 +37,7 @@
       {
         "label": "Craigslist",
         "value": "craigslist",
-        "icon": "store"
+        "icon": "craigslist"
       },
       {
         "label": "Other",
@@ -42,8 +51,13 @@
     "next_button_text": "Continue"
   },
   {
-    "title": "Where did you hear about us?",
+    "title": "How did you discover the magic?",
+    "description": "Tell us how you found Bargain Wiz",
     "type": "select",
+    "metadata": {
+      "star_animation": "assets/lottie/star_anim.json",
+      "star_color": "amber"
+    },
     "options": [
       {
         "label": "TikTok",

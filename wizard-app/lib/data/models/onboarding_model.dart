@@ -87,11 +87,13 @@ class AnswerStructure implements JsonSerializable<AnswerStructure> {
 /// Model for engagement-type onboarding screens
 class EngagementScreenModel extends OnboardingModel {
   final String? visual; // Lottie resource path or asset path
+  final Map<String, dynamic>? metadata; // Optional metadata for visual configuration (width, height, etc.)
 
   EngagementScreenModel({
     required super.title,
     super.description,
     this.visual,
+    this.metadata,
     super.nextButtonText,
     super.answerStructure,
     super.showTopBar,
@@ -106,6 +108,7 @@ class EngagementScreenModel extends OnboardingModel {
       title: JsonParser.requireString(json, 'title'),
       description: JsonParser.optionalString(json, 'description'),
       visual: JsonParser.optionalString(json, 'visual'),
+      metadata: JsonParser.optionalMap(json, 'metadata'),
       nextButtonText: JsonParser.optionalString(json, 'next_button_text'),
       answerStructure: json['answer_structure'] != null
           ? AnswerStructure.fromJson(
@@ -125,6 +128,7 @@ class EngagementScreenModel extends OnboardingModel {
       'type': type,
       if (description != null) 'description': description,
       if (visual != null) 'visual': visual,
+      if (metadata != null) 'metadata': metadata,
       if (nextButtonText != null) 'next_button_text': nextButtonText,
       if (answerStructure != null) 'answer_structure': answerStructure!.toJson(),
       if (!showTopBar) 'show_top_bar': showTopBar,
@@ -179,11 +183,13 @@ class OnboardingOption implements JsonSerializable<OnboardingOption> {
 /// Model for select-type onboarding screens
 class SelectScreenModel extends OnboardingModel {
   final List<OnboardingOption> options;
+  final Map<String, dynamic>? metadata; // Optional metadata for configuration (star_animation, etc.)
 
   SelectScreenModel({
     required super.title,
     required super.description,
     required this.options,
+    this.metadata,
     super.nextButtonText,
     super.answerStructure,
     super.showTopBar,
@@ -209,6 +215,7 @@ class SelectScreenModel extends OnboardingModel {
           return OnboardingOption.fromJson(item);
         },
       ),
+      metadata: JsonParser.optionalMap(json, 'metadata'),
       nextButtonText: JsonParser.optionalString(json, 'next_button_text'),
       answerStructure: json['answer_structure'] != null
           ? AnswerStructure.fromJson(
@@ -228,6 +235,7 @@ class SelectScreenModel extends OnboardingModel {
       'type': type,
       if (description != null) 'description': description,
       'options': options.map((e) => e.toJson()).toList(),
+      if (metadata != null) 'metadata': metadata,
       if (nextButtonText != null) 'next_button_text': nextButtonText,
       if (answerStructure != null) 'answer_structure': answerStructure!.toJson(),
       if (!showTopBar) 'show_top_bar': showTopBar,

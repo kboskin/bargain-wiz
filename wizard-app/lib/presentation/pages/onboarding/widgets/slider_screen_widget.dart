@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/visual_asset_widget.dart';
 import '../../../../data/models/onboarding_model.dart';
 
 /// Widget for slider-type onboarding screens
@@ -263,24 +263,11 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
   }
 
   Widget _buildVisual(String visualPath, {double width = 200, double height = 200, Key? key}) {
-    // Check if it's an asset path or URL
-    Widget lottieWidget;
-    if (visualPath.startsWith('http://') || visualPath.startsWith('https://')) {
-      // URL - load from network
-      lottieWidget = Lottie.network(visualPath, fit: BoxFit.contain);
-    } else if (visualPath.startsWith('assets/')) {
-      // Asset path
-      lottieWidget = Lottie.asset(visualPath, fit: BoxFit.contain);
-    } else {
-      // Assume it's an asset path without prefix
-      lottieWidget = Lottie.asset('assets/$visualPath', fit: BoxFit.contain);
-    }
-    
-    return SizedBox(
+    return VisualAssetWidget(
+      key: key,
+      visualPath: visualPath,
       width: width,
       height: height,
-      key: key,
-      child: lottieWidget,
     );
   }
 
