@@ -49,6 +49,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   final Map<int, AnimationController> _magicControllers = {};
   final Map<int, AnimationController> _waterfallControllers = {}; // Separate controllers for waterfall stars
   final Random _random = Random();
+  AssetPathHelper? _cachedAssetPathHelper;
+  ColorHelper? _cachedColorHelper;
 
   @override
   void initState() {
@@ -309,15 +311,17 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     AnimationController waterfallController,
     OnboardingOption option,
   ) {
+    // Cache DI lookups
+    _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
+    _cachedColorHelper ??= di.sl<ColorHelper>();
+    
     // Get animation path from option metadata or use default
     final animationPath = _getAnimationPath(option);
-    final assetPathHelper = di.sl<AssetPathHelper>();
-    final normalizedPath = assetPathHelper.normalizeAssetPath(animationPath);
+    final normalizedPath = _cachedAssetPathHelper!.normalizeAssetPath(animationPath);
     
     // Get animation color from option metadata or use default
     final animationColorString = option.metadata?['animation_color'] as String?;
-    final colorHelper = di.sl<ColorHelper>();
-    final animationColor = colorHelper.getColor(animationColorString, defaultColor: Colors.amber);
+    final animationColor = _cachedColorHelper!.getColor(animationColorString, defaultColor: Colors.amber);
     
     // Single star animation (no waterfall)
     return SizedBox(
@@ -331,6 +335,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
         child: Lottie.asset(
           normalizedPath,
           fit: BoxFit.contain,
+          frameRate: FrameRate(60),
+          options: LottieOptions(enableMergePaths: true),
         ),
       ),
     );

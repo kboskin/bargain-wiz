@@ -53,7 +53,6 @@ Future<void> init() async {
   
   sl.registerLazySingleton<RemoteConfigService>(
     () => RemoteConfigService(
-      sl<SharedPreferences>(),
       sl<AppLogger>(),
     ),
   );

@@ -43,6 +43,7 @@ class _OnboardingFlowView extends StatefulWidget {
 class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   final PageController _pageController = PageController();
   int _currentScreenIndex = 0;
+  OnboardingBloc? _cachedBloc;
 
   @override
   void dispose() {
@@ -60,13 +61,16 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
   void _goToPreviousPage() {
     _pageController.previousPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Cache bloc reference to avoid repeated lookups
+    _cachedBloc ??= context.read<OnboardingBloc>();
+    
     return BlocConsumer<OnboardingBloc, OnboardingState>(
       listener: (context, state) {
         if (state is OnboardingCompleted) {
@@ -166,13 +170,17 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                             controller: _pageController,
                             onPageChanged: _onPageChanged,
                             itemCount: state.screens.length,
+                            physics: const ClampingScrollPhysics(),
+                            padEnds: false,
                             itemBuilder: (context, index) {
                               final screen = state.screens[index];
-                              return _buildScreen(
-                                screen,
-                                index,
-                                state,
-                                context.read<OnboardingBloc>(),
+                              return RepaintBoundary(
+                                child: _buildScreen(
+                                  screen,
+                                  index,
+                                  state,
+                                  _cachedBloc!,
+                                ),
                               );
                             },
                           ),
@@ -189,7 +197,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                 child: ElevatedButton(
                                   onPressed: () => _handleNext(
                                     state,
-                                    context.read<OnboardingBloc>(),
+                                    _cachedBloc!,
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.backgroundDark,
@@ -275,8 +283,8 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
     if (_currentScreenIndex < state.screens.length - 1) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
       );
     } else {
       bloc.add(const SubmitOnboardingRequested());

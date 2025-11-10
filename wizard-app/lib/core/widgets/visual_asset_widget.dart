@@ -6,7 +6,7 @@ import '../utils/asset_path_helper.dart';
 
 /// Helper widget for rendering visual assets (Lottie, SVG, or Images)
 /// Supports both network URLs and local assets
-class VisualAssetWidget extends StatelessWidget {
+class VisualAssetWidget extends StatefulWidget {
   final String visualPath;
   final double width;
   final double height;
@@ -19,34 +19,53 @@ class VisualAssetWidget extends StatelessWidget {
   });
 
   @override
+  State<VisualAssetWidget> createState() => _VisualAssetWidgetState();
+}
+
+class _VisualAssetWidgetState extends State<VisualAssetWidget> {
+  AssetPathHelper? _cachedAssetPathHelper;
+
+  @override
   Widget build(BuildContext context) {
+    // Cache DI lookup
+    _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
+    
     // Determine file type from extension
-    final lowerPath = visualPath.toLowerCase();
+    final lowerPath = widget.visualPath.toLowerCase();
     final isLottie = lowerPath.endsWith('.json');
     final isSvg = lowerPath.endsWith('.svg');
     // PNG/JPG are handled as the default case (not Lottie or SVG)
 
     // Normalize asset path
-    final assetPathHelper = di.sl<AssetPathHelper>();
-    final normalizedPath = assetPathHelper.normalizeAssetPath(visualPath);
-    final isNetworkUrl = assetPathHelper.isNetworkUrl(visualPath);
+    final normalizedPath = _cachedAssetPathHelper!.normalizeAssetPath(widget.visualPath);
+    final isNetworkUrl = _cachedAssetPathHelper!.isNetworkUrl(widget.visualPath);
 
     Widget visualWidget;
 
     // Check if it's a network URL
     if (isNetworkUrl) {
       if (isLottie) {
-        visualWidget = Lottie.network(visualPath, fit: BoxFit.contain);
+        visualWidget = Lottie.network(
+          widget.visualPath,
+          fit: BoxFit.contain,
+          frameRate: FrameRate(60),
+          options: LottieOptions(enableMergePaths: true),
+        );
       } else if (isSvg) {
-        visualWidget = SvgPicture.network(visualPath, fit: BoxFit.contain);
+        visualWidget = SvgPicture.network(widget.visualPath, fit: BoxFit.contain);
       } else {
         // PNG/JPG from network
-        visualWidget = Image.network(visualPath, fit: BoxFit.contain);
+        visualWidget = Image.network(widget.visualPath, fit: BoxFit.contain);
       }
     } else {
       // Local asset
       if (isLottie) {
-        visualWidget = Lottie.asset(normalizedPath, fit: BoxFit.contain);
+        visualWidget = Lottie.asset(
+          normalizedPath,
+          fit: BoxFit.contain,
+          frameRate: FrameRate(60),
+          options: LottieOptions(enableMergePaths: true),
+        );
       } else if (isSvg) {
         visualWidget = SvgPicture.asset(normalizedPath, fit: BoxFit.contain);
       } else {
@@ -56,8 +75,8 @@ class VisualAssetWidget extends StatelessWidget {
     }
 
     return SizedBox(
-      width: width,
-      height: height,
+      width: widget.width,
+      height: widget.height,
       child: visualWidget,
     );
   }
