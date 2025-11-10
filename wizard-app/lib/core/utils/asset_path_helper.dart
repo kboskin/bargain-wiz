@@ -1,19 +1,19 @@
 /// Utility class for handling asset path normalization and URL detection
 class AssetPathHelper {
   /// Checks if the given path is a network URL (http:// or https://)
-  static bool isNetworkUrl(String path) {
+  bool isNetworkUrl(String path) {
     return path.startsWith('http://') || path.startsWith('https://');
   }
 
   /// Checks if the given path is already a full asset path (starts with 'assets/')
-  static bool isAssetPath(String path) {
+  bool isAssetPath(String path) {
     return path.startsWith('assets/');
   }
 
   /// Normalizes an asset path by adding 'assets/' prefix if needed
   /// Returns the original path if it's a network URL or already has 'assets/' prefix
   /// Otherwise, prepends 'assets/' to the path
-  static String normalizeAssetPath(String path) {
+  String normalizeAssetPath(String path) {
     // Don't modify network URLs
     if (isNetworkUrl(path)) {
       return path;

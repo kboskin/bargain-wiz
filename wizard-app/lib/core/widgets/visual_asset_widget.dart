@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../di/injection_container.dart' as di;
 import '../utils/asset_path_helper.dart';
 
 /// Helper widget for rendering visual assets (Lottie, SVG, or Images)
@@ -26,8 +27,9 @@ class VisualAssetWidget extends StatelessWidget {
     // PNG/JPG are handled as the default case (not Lottie or SVG)
 
     // Normalize asset path
-    final normalizedPath = AssetPathHelper.normalizeAssetPath(visualPath);
-    final isNetworkUrl = AssetPathHelper.isNetworkUrl(visualPath);
+    final assetPathHelper = di.sl<AssetPathHelper>();
+    final normalizedPath = assetPathHelper.normalizeAssetPath(visualPath);
+    final isNetworkUrl = assetPathHelper.isNetworkUrl(visualPath);
 
     Widget visualWidget;
 

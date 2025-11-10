@@ -2,8 +2,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:lottie/lottie.dart'; // Added for Lottie animations
+import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/asset_path_helper.dart';
+import '../../../../core/utils/color_helper.dart';
 import '../../../../core/widgets/glass_container.dart'; // Added for glass effect
 import '../../../../data/models/onboarding_model.dart';
 
@@ -278,7 +280,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
                   textAlign: TextAlign.left,
                 ),
               ),
-              // Magic stars icon to the right when selected (always yellow)
+              // Magic stars icon to the right when selected
+              // Animation and color are configurable per option via metadata
               // Always reserve space to prevent layout jumps
               SizedBox(
                 width: 32,
@@ -287,7 +290,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
                     ? _buildMagicStarAnimation(
                         index,
                         _waterfallControllers[index]!,
-                        Colors.amber, // Always yellow/amber for stars
+                        option, // Pass the option to access its metadata
                       )
                     : const SizedBox.shrink(), // Empty space when not selected
               ),
@@ -300,19 +303,21 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   }
 
   /// Build magic star animation on the right
-  /// Single star animation in yellow
-  /// Star animation path and color are configurable via metadata
+  /// Animation path and color are configurable per option via metadata
   Widget _buildMagicStarAnimation(
     int index,
     AnimationController waterfallController,
-    Color color,
+    OnboardingOption option,
   ) {
-    // Get star animation path from metadata or use default
-    final starAnimationPath = _getStarAnimationPath();
-    final normalizedPath = AssetPathHelper.normalizeAssetPath(starAnimationPath);
+    // Get animation path from option metadata or use default
+    final animationPath = _getAnimationPath(option);
+    final assetPathHelper = di.sl<AssetPathHelper>();
+    final normalizedPath = assetPathHelper.normalizeAssetPath(animationPath);
     
-    // Get star color from metadata or use default
-    final starColor = _getStarColor();
+    // Get animation color from option metadata or use default
+    final animationColorString = option.metadata?['animation_color'] as String?;
+    final colorHelper = di.sl<ColorHelper>();
+    final animationColor = colorHelper.getColor(animationColorString, defaultColor: Colors.amber);
     
     // Single star animation (no waterfall)
     return SizedBox(
@@ -320,7 +325,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       height: 32,
       child: ColorFiltered(
         colorFilter: ColorFilter.mode(
-          starColor,
+          animationColor,
           BlendMode.srcATop,
         ),
         child: Lottie.asset(
@@ -331,82 +336,17 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     );
   }
 
-  /// Get star animation path from metadata or default to star_anim.json
-  String _getStarAnimationPath() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('star_animation')) {
-      final starAnimation = widget.model.metadata!['star_animation'];
-      if (starAnimation is String && starAnimation.isNotEmpty) {
-        return starAnimation;
+  /// Get animation path from option metadata or default to star_anim.json
+  String _getAnimationPath(OnboardingOption option) {
+    if (option.metadata != null && option.metadata!.containsKey('animation')) {
+      final animation = option.metadata!['animation'];
+      if (animation is String && animation.isNotEmpty) {
+        return animation;
       }
     }
     return 'assets/lottie/star_anim.json'; // Default path
   }
 
-  /// Get star color from metadata or default to Colors.amber
-  /// Supports hex color codes (e.g., "#FFC107") or named colors (e.g., "amber", "yellow")
-  Color _getStarColor() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('star_color')) {
-      final starColor = widget.model.metadata!['star_color'];
-      if (starColor is String && starColor.isNotEmpty) {
-        return _parseColor(starColor);
-      }
-    }
-    return Colors.amber; // Default color
-  }
-
-  /// Parse color from string (hex code or named color)
-  Color _parseColor(String colorString) {
-    // Try hex color first (e.g., "#FFC107" or "FFC107")
-    if (colorString.startsWith('#') || RegExp(r'^[0-9A-Fa-f]{6}$').hasMatch(colorString)) {
-      final hexCode = colorString.replaceAll('#', '');
-      try {
-        return Color(int.parse('FF$hexCode', radix: 16));
-      } catch (e) {
-        // Invalid hex, fall through to named colors
-      }
-    }
-
-    // Try named colors (case-insensitive)
-    final colorName = colorString.toLowerCase();
-    switch (colorName) {
-      case 'amber':
-        return Colors.amber;
-      case 'yellow':
-        return Colors.yellow;
-      case 'orange':
-        return Colors.orange;
-      case 'red':
-        return Colors.red;
-      case 'pink':
-        return Colors.pink;
-      case 'purple':
-        return Colors.purple;
-      case 'blue':
-        return Colors.blue;
-      case 'cyan':
-        return Colors.cyan;
-      case 'teal':
-        return Colors.teal;
-      case 'green':
-        return Colors.green;
-      case 'lime':
-        return Colors.lime;
-      case 'indigo':
-        return Colors.indigo;
-      case 'brown':
-        return Colors.brown;
-      case 'grey':
-      case 'gray':
-        return Colors.grey;
-      case 'black':
-        return Colors.black;
-      case 'white':
-        return Colors.white;
-      default:
-        // Unknown color name, return default
-        return Colors.amber;
-    }
-  }
 
   /// Build animated icon with magic effects
   Widget _buildAnimatedIcon(

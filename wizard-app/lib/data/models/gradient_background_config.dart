@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/di/injection_container.dart' as di;
+import '../../core/utils/color_helper.dart';
 import 'json_serializable.dart';
 
 /// Configuration for the app's gradient background
@@ -11,14 +13,12 @@ class GradientBackgroundConfig implements JsonSerializable<GradientBackgroundCon
     required this.stops,
   });
 
-  /// Convert hex string to Color
-  Color _hexToColor(String hex) {
-    final hexCode = hex.replaceAll('#', '');
-    return Color(int.parse('FF$hexCode', radix: 16));
-  }
-
   /// Get colors as Color objects
-  List<Color> get colorObjects => colors.map((c) => _hexToColor(c)).toList();
+  /// Supports hex colors with optional opacity (6 or 8 characters)
+  List<Color> get colorObjects {
+    final colorHelper = di.sl<ColorHelper>();
+    return colors.map((c) => colorHelper.parseHexColor(c)).toList();
+  }
 
   @override
   factory GradientBackgroundConfig.fromJson(Map<String, dynamic> json) {
@@ -73,10 +73,11 @@ class GradientBackgroundConfig implements JsonSerializable<GradientBackgroundCon
         'GradientBackgroundConfig: colors and stops must have the same length',
       );
     }
-    // Validate hex colors
+    // Validate hex colors (supports 6 or 8 characters with optional #)
     for (final color in colors) {
-      if (!RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(color)) {
-        throw FormatException('Invalid hex color format: $color');
+      final hexCode = color.replaceAll('#', '');
+      if (!RegExp(r'^[0-9A-Fa-f]{6}$|^[0-9A-Fa-f]{8}$').hasMatch(hexCode)) {
+        throw FormatException('Invalid hex color format: $color (expected 6 or 8 character hex code)');
       }
     }
     // Validate stops are between 0.0 and 1.0

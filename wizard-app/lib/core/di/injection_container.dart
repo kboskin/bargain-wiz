@@ -8,6 +8,8 @@ import '../../core/services/onboarding_service.dart';
 import '../../core/services/remote_config_service.dart';
 import '../../core/services/firebase_service.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/color_helper.dart';
+import '../../core/utils/asset_path_helper.dart';
 import '../../data/datasources/onboarding_local_datasource.dart';
 import '../../data/repositories/onboarding_repository_impl.dart';
 import '../../domain/repositories/onboarding_repository.dart';
@@ -33,6 +35,15 @@ Future<void> init() async {
   // Register AppLogger with Crashlytics dependency
   sl.registerLazySingleton<AppLogger>(
     () => AppLogger(sl<FirebaseCrashlytics>()),
+  );
+
+  // Utils
+  sl.registerLazySingleton<ColorHelper>(
+    () => ColorHelper(),
+  );
+  
+  sl.registerLazySingleton<AssetPathHelper>(
+    () => AssetPathHelper(),
   );
 
   // Services

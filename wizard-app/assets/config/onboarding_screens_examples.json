@@ -14,35 +14,51 @@
     "title": "Where do you cast your shopping spells?",
     "description": "Select your preferred marketplace",
     "type": "select",
-    "metadata": {
-      "star_animation": "assets/lottie/star_anim.json",
-      "star_color": "amber"
-    },
     "options": [
       {
         "label": "eBay",
         "value": "ebay",
-        "icon": "ebay"
+        "icon": "ebay",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Amazon",
         "value": "amazon",
-        "icon": "amazon"
+        "icon": "amazon",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Facebook Marketplace",
         "value": "facebook",
-        "icon": "facebook"
+        "icon": "facebook",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Craigslist",
         "value": "craigslist",
-        "icon": "craigslist"
+        "icon": "craigslist",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Other",
         "value": "other",
-        "icon": "other"
+        "icon": "other",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       }
     ],
     "answer_structure": {
@@ -54,55 +70,87 @@
     "title": "How did you discover the magic?",
     "description": "Tell us how you found Bargain Wiz",
     "type": "select",
-    "metadata": {
-      "star_animation": "assets/lottie/star_anim.json",
-      "star_color": "amber"
-    },
     "options": [
       {
         "label": "TikTok",
         "value": "tiktok",
-        "icon": "tiktok"
+        "icon": "tiktok",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "YouTube",
         "value": "youtube",
-        "icon": "youtube"
+        "icon": "youtube",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Google",
         "value": "google",
-        "icon": "google"
+        "icon": "google",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Play Store",
         "value": "playstore",
-        "icon": "playstore"
+        "icon": "playstore",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Facebook",
         "value": "facebook",
-        "icon": "facebook"
+        "icon": "facebook",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Friends or Family",
         "value": "friends_or_family",
-        "icon": "friends_or_family"
+        "icon": "friends_or_family",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Instagram",
         "value": "instagram",
-        "icon": "instagram"
+        "icon": "instagram",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "X",
         "value": "x",
-        "icon": "x"
+        "icon": "x",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       },
       {
         "label": "Other",
         "value": "other",
-        "icon": "other"
+        "icon": "other",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
       }
     ],
     "answer_structure": {
