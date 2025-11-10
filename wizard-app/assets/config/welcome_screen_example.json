@@ -13,8 +13,11 @@
     "icon_opacity": 0.3
   },
   "highlight_words": {
-    "title": ["god", "deal"],
-    "description": ["bargain"]
+    "title": {
+      "best": "#FF6B35",
+      "deals": "#4ECDC4"
+    },
+    "description": []
   },
   "secondary_action": {
     "type": "sign_in",

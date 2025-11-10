@@ -118,9 +118,11 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
 
   /// Build title with optional word highlighting
   Widget _buildTitle(BuildContext context) {
-    final highlightWords = widget.config.highlightWords?.title ?? [];
+    final highlightWordsData = widget.config.highlightWords?.title;
 
-    if (highlightWords.isEmpty) {
+    if (highlightWordsData == null || 
+        (highlightWordsData is List && highlightWordsData.isEmpty) ||
+        (highlightWordsData is Map && highlightWordsData.isEmpty)) {
       // Simple title without highlighting
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -136,32 +138,65 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       );
     }
 
-    // Rich text title with highlighted words
+    // Rich text title with highlighted words (supports per-word colors)
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: _buildRichTextTitle(context, widget.config.title, highlightWords),
+      child: _buildRichTextTitle(context, widget.config.title, highlightWordsData),
     );
   }
 
   /// Build rich text title with highlighted words
+  /// Supports per-word colors via map: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
+  /// Or simple list for backward compatibility: ["best", "deals"]
   Widget _buildRichTextTitle(
     BuildContext context,
     String title,
-    List<String> highlightWords,
+    dynamic highlightWordsData,
   ) {
     final parts = title.split(' ');
     final textSpans = <TextSpan>[];
+    final defaultHighlightColor = _getHighlightColor();
+
+    // Parse highlight words - can be a map (word -> color) or list (backward compatibility)
+    Map<String, Color> wordColors = {};
+    List<String> highlightWords = [];
+    
+    if (highlightWordsData is Map) {
+      // Map format: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
+      highlightWordsData.forEach((word, colorValue) {
+        final wordStr = word.toString();
+        highlightWords.add(wordStr);
+        if (colorValue is String) {
+          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
+            colorValue,
+            defaultColor: defaultHighlightColor,
+          );
+        }
+      });
+    } else if (highlightWordsData is List) {
+      // List format: ["best", "deals"] - backward compatibility
+      highlightWords = highlightWordsData.map((item) => item.toString()).toList();
+    }
 
     for (int i = 0; i < parts.length; i++) {
       final word = parts[i];
       final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
-      final isHighlight = highlightWords.any(
-        (hw) =>
-            cleanWord.contains(hw.toLowerCase()) ||
-            hw.toLowerCase().contains(cleanWord),
-      );
+      
+      // Find matching highlight word
+      String? matchedWord;
+      for (final hw in highlightWords) {
+        final cleanHw = hw.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
+        if (cleanWord.contains(cleanHw) || cleanHw.contains(cleanWord)) {
+          matchedWord = hw;
+          break;
+        }
+      }
 
-      final highlightColor = _getHighlightColor();
+      final isHighlight = matchedWord != null;
+      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
+          ? wordColors[matchedWord.toLowerCase()]!
+          : defaultHighlightColor;
+
       textSpans.add(
         TextSpan(
           text: i > 0 ? ' $word' : word,
@@ -172,7 +207,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
                   fontSize: 36,
                   shadows: [
                     Shadow(
-                      color: highlightColor.withValues(alpha: 0.5),
+                      color: wordColor.withValues(alpha: 0.5),
                       blurRadius: 20,
                       offset: const Offset(0, 0),
                     ),

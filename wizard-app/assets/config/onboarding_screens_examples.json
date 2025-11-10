@@ -6,7 +6,14 @@
     "visual": "assets/lottie/wizard_hello.json",
     "metadata": {
       "width": 300,
-      "height": 300
+      "height": 300,
+      "highlight_words": {
+        "title": {
+          "Bargain": "#FF6B35",
+          "Wiz": "#4ECDC4"
+        }
+      },
+      "highlight_color": "#C47A00"
     },
     "next_button_text": "Let's Get Started"
   },
