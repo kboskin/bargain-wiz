@@ -1,0 +1,25 @@
+{
+  "title": "Be a Deal God",
+  "description": "Get the best bargain deals.\nNever overpay again.",
+  "visual": null,
+  "primary_button_text": "Get Started",
+  "glass_container": {
+    "blur_sigma": 10.0,
+    "color": "#FFFFFF",
+    "opacity": 0.2,
+    "border_radius": 24,
+    "height": 500,
+    "icon_size": 80,
+    "icon_opacity": 0.3
+  },
+  "highlight_words": {
+    "title": ["god", "deal"],
+    "description": ["bargain"]
+  },
+  "secondary_action": {
+    "type": "sign_in",
+    "text": "Sign in",
+    "prefix_text": "Already have an account? "
+  }
+}
+

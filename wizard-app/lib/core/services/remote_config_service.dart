@@ -1,10 +1,12 @@
 import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 import '../utils/app_logger.dart';
 import 'firebase_service.dart';
 import '../../data/models/onboarding_model.dart';
 import '../../data/models/json_serializable.dart';
 import '../../data/models/gradient_background_config.dart';
+import '../../data/models/welcome_screen_config.dart';
 
 /// Service for managing Firebase Remote Config values
 /// Always fetches fresh values from Remote Config (no caching)
@@ -22,6 +24,25 @@ class RemoteConfigService {
       if (remoteConfig == null) {
         _logger.w('Firebase Remote Config not available');
         return;
+      }
+
+      // Load defaults from asset file
+      try {
+        final defaultsJson = await rootBundle.loadString('assets/config/remote_config_defaults.json');
+        final defaultsMap = jsonDecode(defaultsJson) as Map<String, dynamic>;
+        
+        // Remote Config setDefaults expects Map<String, dynamic> where values are strings
+        // The values in remote_config_defaults.json are already JSON-encoded strings
+        final defaults = <String, dynamic>{};
+        defaultsMap.forEach((key, value) {
+          // Values are already strings (JSON-encoded), so use them directly
+          defaults[key] = value.toString();
+        });
+        
+        await remoteConfig.setDefaults(defaults);
+        _logger.i('Remote Config defaults loaded from asset file (${defaults.length} keys)');
+      } catch (e) {
+        _logger.w('Error loading Remote Config defaults: $e');
       }
 
       // Fetch fresh values from Remote Config
@@ -155,6 +176,29 @@ class RemoteConfigService {
       return GradientBackgroundConfig.fromJson(json);
     } catch (e, stackTrace) {
       _logger.e('Error parsing gradient background config', e, stackTrace);
+      return null;
+    }
+  }
+
+  /// Get welcome screen configuration from Remote Config
+  /// Returns null if not configured
+  WelcomeScreenConfig? getWelcomeScreenConfig() {
+    try {
+      final jsonString = getString('welcome_screen_config');
+      if (jsonString.isEmpty) {
+        _logger.w('Welcome screen config is empty');
+        return null;
+      }
+
+      final json = jsonDecode(jsonString);
+      if (json is! Map<String, dynamic>) {
+        _logger.w('Invalid welcome_screen_config format');
+        return null;
+      }
+
+      return WelcomeScreenConfig.fromJson(json);
+    } catch (e, stackTrace) {
+      _logger.e('Error parsing welcome screen config', e, stackTrace);
       return null;
     }
   }

@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../presentation/bloc/auth/auth_bloc.dart';
 import '../../presentation/bloc/auth/auth_state.dart';
 import '../../presentation/pages/home/home_page.dart';
-import '../../presentation/pages/onboarding/onboarding_page.dart';
 import '../../presentation/pages/onboarding/onboarding_screen.dart';
+import '../../presentation/pages/onboarding/welcome_screen_page.dart';
 
 /// App router configuration
 class AppRouter {
@@ -37,31 +37,80 @@ class AppRouter {
       GoRoute(
         path: '/',
         name: 'home',
-        builder: (context, state) {
-          return BlocBuilder<AuthBloc, AuthState>(
-            builder: (context, authState) {
-              // Show loading while checking auth
-              if (authState is AuthInitial || authState is AuthLoading) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: BlocBuilder<AuthBloc, AuthState>(
+              builder: (context, authState) {
+                // Show loading while checking auth
+                if (authState is AuthInitial || authState is AuthLoading) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
 
-              // If not authenticated, show onboarding
-              if (authState is! AuthAuthenticated) {
-                return const OnboardingPage();
-              }
+                // If not authenticated, show welcome screen
+                if (authState is! AuthAuthenticated) {
+                  return const WelcomeScreenPage();
+                }
 
-              // If authenticated, show home
-              return const HomePage();
+                // If authenticated, show home
+                return const HomePage();
+              },
+            ),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              // When navigating away, slide out to the left
+              const curve = Curves.linear;
+              
+              var slideOutAnimation = Tween(
+                begin: Offset.zero,
+                end: const Offset(-1.0, 0.0),
+              ).animate(
+                CurvedAnimation(
+                  parent: secondaryAnimation,
+                  curve: curve,
+                ),
+              );
+
+              return SlideTransition(
+                position: slideOutAnimation,
+                child: child,
+              );
             },
+            transitionDuration: const Duration(milliseconds: 300),
           );
         },
       ),
       GoRoute(
         path: '/onboarding',
         name: 'onboarding',
-        builder: (context, state) => const OnboardingFlowPage(),
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: const OnboardingFlowPage(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              // Push transition: new screen slides in from right
+              const curve = Curves.linear;
+
+              // Incoming screen: slides from right (1.0) to center (0.0)
+              var slideInAnimation = Tween(
+                begin: const Offset(1.0, 0.0),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: curve,
+                ),
+              );
+
+              return SlideTransition(
+                position: slideInAnimation,
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        },
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

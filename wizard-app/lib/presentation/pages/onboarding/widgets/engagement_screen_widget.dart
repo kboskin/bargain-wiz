@@ -5,7 +5,7 @@ import '../../../../data/models/onboarding_model.dart';
 
 /// Widget for engagement-type onboarding screens
 /// Displays title, description, and optional Lottie animation
-class EngagementScreenWidget extends StatelessWidget {
+class EngagementScreenWidget extends StatefulWidget {
   final EngagementScreenModel model;
 
   const EngagementScreenWidget({
@@ -13,6 +13,11 @@ class EngagementScreenWidget extends StatelessWidget {
     required this.model,
   });
 
+  @override
+  State<EngagementScreenWidget> createState() => _EngagementScreenWidgetState();
+}
+
+class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -22,35 +27,23 @@ class EngagementScreenWidget extends StatelessWidget {
         children: [
           // Visual (Lottie or placeholder)
           // Size is configurable via metadata, defaults to 200x200
-          if (model.visual != null)
+          if (widget.model.visual != null)
             _buildVisual(
-              model.visual!,
+              widget.model.visual!,
               width: _getVisualWidth(),
               height: _getVisualHeight(),
             )
           else
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.check_circle_outline,
-                color: AppColors.backgroundDark,
-                size: 60,
-              ),
-            ),
+            _buildPlaceholderVisual(),
           const SizedBox(height: 48),
 
           // Title
-          _buildStyledTitle(context, model.title),
+          _buildStyledTitle(context, widget.model.title),
           const SizedBox(height: 16),
 
           // Description (optional)
-          if (model.description != null && model.description!.isNotEmpty) ...[
-            _buildStyledDescription(context, model.description!),
+          if (widget.model.description != null && widget.model.description!.isNotEmpty) ...[
+            _buildStyledDescription(context, widget.model.description!),
           ],
         ],
       ),
@@ -59,8 +52,8 @@ class EngagementScreenWidget extends StatelessWidget {
 
   /// Get visual width from metadata or default to 200
   double _getVisualWidth() {
-    if (model.metadata != null && model.metadata!.containsKey('width')) {
-      final width = model.metadata!['width'];
+    if (widget.model.metadata != null && widget.model.metadata!.containsKey('width')) {
+      final width = widget.model.metadata!['width'];
       if (width is num) {
         return width.toDouble();
       }
@@ -70,8 +63,8 @@ class EngagementScreenWidget extends StatelessWidget {
 
   /// Get visual height from metadata or default to 200
   double _getVisualHeight() {
-    if (model.metadata != null && model.metadata!.containsKey('height')) {
-      final height = model.metadata!['height'];
+    if (widget.model.metadata != null && widget.model.metadata!.containsKey('height')) {
+      final height = widget.model.metadata!['height'];
       if (height is num) {
         return height.toDouble();
       }
@@ -84,6 +77,23 @@ class EngagementScreenWidget extends StatelessWidget {
       visualPath: visualPath,
       width: width,
       height: height,
+    );
+  }
+  
+  /// Build placeholder visual
+  Widget _buildPlaceholderVisual() {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.check_circle_outline,
+        color: AppColors.backgroundDark,
+        size: 60,
+      ),
     );
   }
 
@@ -99,7 +109,7 @@ class EngagementScreenWidget extends StatelessWidget {
   }
 
   Widget _buildStyledDescription(BuildContext context, String description) {
-    // Keywords to highlight with magical style
+    // Regular engagement screen with keyword highlighting
     final magicalKeywords = [
       'deals',
       'deal',

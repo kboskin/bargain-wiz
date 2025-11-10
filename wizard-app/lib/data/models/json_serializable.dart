@@ -133,5 +133,22 @@ class JsonParser {
     }
     return value;
   }
+
+  /// Safely extracts a required double field
+  static double requireDouble(
+    Map<String, dynamic> json,
+    String key,
+  ) {
+    final value = json[key];
+    if (value == null) {
+      throw FormatException('Required field "$key" is missing');
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    throw FormatException(
+      'Field "$key" must be a number, got ${value.runtimeType}',
+    );
+  }
 }
 
