@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/injection_container.dart' as di;
 import '../../../core/services/onboarding_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../data/models/onboarding_model.dart';
 import '../../../domain/repositories/onboarding_repository.dart';
@@ -211,13 +212,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                   ),
                                   child: Text(
                                     _getNextButtonText(state),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white, // Explicitly set white color
-                                        ),
+                                    style: AppTextStyles.buttonText,
                                   ),
                                 ),
                               ),

@@ -220,6 +220,14 @@ class AppTextStyles {
     letterSpacing: 0.5,
     color: AppColors.textPrimaryDark,
   );
+
+  // Button text styles - CTA buttons
+  static const TextStyle buttonText = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+    color: Colors.white,
+  );
 }
 
 /// Extension to easily access text styles based on theme

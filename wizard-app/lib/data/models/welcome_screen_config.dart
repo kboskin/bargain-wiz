@@ -11,6 +11,7 @@ class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
   final GlassContainerConfig? glassContainer;
   final HighlightWordsConfig? highlightWords;
   final SecondaryActionConfig? secondaryAction;
+  final String? highlightColor; // Optional: Hex color for highlights (defaults to amber)
 
   WelcomeScreenConfig({
     required this.title,
@@ -20,6 +21,7 @@ class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
     this.glassContainer,
     this.highlightWords,
     this.secondaryAction,
+    this.highlightColor,
   });
 
   @override
@@ -41,6 +43,7 @@ class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
           ? SecondaryActionConfig.fromJson(
               json['secondary_action'] as Map<String, dynamic>)
           : null,
+      highlightColor: json['highlight_color'] as String?,
     );
     config.validate();
     return config;
@@ -56,6 +59,7 @@ class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
       if (glassContainer != null) 'glass_container': glassContainer!.toJson(),
       if (highlightWords != null) 'highlight_words': highlightWords!.toJson(),
       if (secondaryAction != null) 'secondary_action': secondaryAction!.toJson(),
+      if (highlightColor != null) 'highlight_color': highlightColor,
     };
   }
 

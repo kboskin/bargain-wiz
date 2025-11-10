@@ -1,6 +1,6 @@
 {
-  "title": "Be a Deal God",
-  "description": "Get the best bargain deals.\nNever overpay again.",
+  "title": "Get the Best Deals",
+  "description": "Powered by a touch of magic.\nOutsmart every price.\nNever overpay again.",
   "visual": null,
   "primary_button_text": "Get Started",
   "glass_container": {
@@ -20,6 +20,7 @@
     "type": "sign_in",
     "text": "Sign in",
     "prefix_text": "Already have an account? "
-  }
+  },
+  "highlight_color": "#C47A00"
 }
 

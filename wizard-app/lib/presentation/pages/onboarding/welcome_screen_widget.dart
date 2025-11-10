@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_html/flutter_html.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../core/di/injection_container.dart' as di;
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/color_helper.dart';
-import '../../../core/widgets/visual_asset_widget.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/visual_asset_widget.dart';
 import '../../../data/models/welcome_screen_config.dart';
 import '../auth/sign_in_modal.dart';
 
@@ -14,10 +16,7 @@ import '../auth/sign_in_modal.dart';
 class WelcomeScreenWidget extends StatefulWidget {
   final WelcomeScreenConfig config;
 
-  const WelcomeScreenWidget({
-    super.key,
-    required this.config,
-  });
+  const WelcomeScreenWidget({super.key, required this.config});
 
   @override
   State<WelcomeScreenWidget> createState() => _WelcomeScreenWidgetState();
@@ -32,7 +31,8 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     _cachedColorHelper ??= di.sl<ColorHelper>();
 
     return Scaffold(
-      backgroundColor: Colors.transparent, // Transparent to show global gradient
+      backgroundColor: Colors.transparent,
+      // Transparent to show global gradient
       body: SafeArea(
         child: Column(
           children: [
@@ -90,8 +90,9 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
               child: Icon(
                 Icons.shopping_bag,
                 size: glassConfig.iconSize,
-                color: AppColors.backgroundDark
-                    .withValues(alpha: glassConfig.iconOpacity),
+                color: AppColors.backgroundDark.withValues(
+                  alpha: glassConfig.iconOpacity,
+                ),
               ),
             ),
           ),
@@ -126,10 +127,10 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
         child: Text(
           widget.config.title,
           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                color: AppColors.backgroundDark,
-                fontWeight: FontWeight.bold,
-                fontSize: 32,
-              ),
+            color: AppColors.backgroundDark,
+            fontWeight: FontWeight.bold,
+            fontSize: 32,
+          ),
           textAlign: TextAlign.center,
         ),
       );
@@ -160,6 +161,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
             hw.toLowerCase().contains(cleanWord),
       );
 
+      final highlightColor = _getHighlightColor();
       textSpans.add(
         TextSpan(
           text: i > 0 ? ' $word' : word,
@@ -170,17 +172,17 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
                   fontSize: 36,
                   shadows: [
                     Shadow(
-                      color: Colors.amber.withValues(alpha: 0.5),
+                      color: highlightColor.withValues(alpha: 0.5),
                       blurRadius: 20,
                       offset: const Offset(0, 0),
                     ),
                   ],
                 )
               : Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    color: AppColors.backgroundDark,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 32,
-                  ),
+                  color: AppColors.backgroundDark,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 32,
+                ),
         ),
       );
     }
@@ -196,6 +198,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     final description = widget.config.description;
     final hasHtml = RegExp(r'<[^>]+>').hasMatch(description);
     final highlightWords = widget.config.highlightWords?.description ?? [];
+    final highlightColor = _getHighlightColor();
 
     // If HTML is present, use HTML parsing (takes precedence)
     if (hasHtml) {
@@ -213,12 +216,12 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
               lineHeight: const LineHeight(1.5),
             ),
             'span.highlight': Style(
-              color: Colors.amber,
+              color: highlightColor,
               fontWeight: FontWeight.bold,
               fontSize: FontSize(20),
             ),
             'strong': Style(
-              color: Colors.amber,
+              color: highlightColor,
               fontWeight: FontWeight.bold,
               fontSize: FontSize(20),
             ),
@@ -231,11 +234,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     if (highlightWords.isNotEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: _buildRichTextDescription(
-          context,
-          description,
-          highlightWords,
-        ),
+        child: _buildRichTextDescription(context, description, highlightWords),
       );
     }
 
@@ -245,10 +244,10 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       child: Text(
         description,
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AppColors.backgroundDark.withValues(alpha: 0.9),
-              height: 1.5,
-              fontSize: 18,
-            ),
+          color: AppColors.backgroundDark.withValues(alpha: 0.9),
+          height: 1.5,
+          fontSize: 18,
+        ),
         textAlign: TextAlign.center,
       ),
     );
@@ -262,6 +261,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
   ) {
     final parts = description.split(' ');
     final textSpans = <TextSpan>[];
+    final highlightColor = _getHighlightColor();
 
     for (final word in parts) {
       final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
@@ -276,15 +276,15 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
           text: '$word ',
           style: isHighlight
               ? TextStyle(
-                  color: Colors.amber,
+                  color: highlightColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
                 )
               : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.backgroundDark.withValues(alpha: 0.9),
-                    height: 1.5,
-                    fontSize: 18,
-                  ),
+                  color: AppColors.backgroundDark.withValues(alpha: 0.9),
+                  height: 1.5,
+                  fontSize: 18,
+                ),
         ),
       );
     }
@@ -293,6 +293,17 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       textAlign: TextAlign.center,
       text: TextSpan(children: textSpans),
     );
+  }
+
+  /// Get highlight color from config or default to amber
+  Color _getHighlightColor() {
+    if (widget.config.highlightColor != null) {
+      return _cachedColorHelper!.getColor(
+        widget.config.highlightColor!,
+        defaultColor: Colors.amber,
+      );
+    }
+    return Colors.amber; // Default color
   }
 
   /// Build primary action button
@@ -316,10 +327,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
           ),
           child: Text(
             widget.config.primaryButtonText,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTextStyles.buttonText,
           ),
         ),
       ),
@@ -335,10 +343,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
         onPressed: () => _showSignInModal(context),
         child: RichText(
           text: TextSpan(
-            style: TextStyle(
-              color: AppColors.backgroundDark,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: AppColors.backgroundDark, fontSize: 14),
             children: [
               TextSpan(text: action.prefixText),
               TextSpan(
@@ -367,4 +372,3 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     );
   }
 }
-
