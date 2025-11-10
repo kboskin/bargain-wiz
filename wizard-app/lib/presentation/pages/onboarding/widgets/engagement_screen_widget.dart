@@ -114,7 +114,7 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
     final hasHtml = RegExp(r'<[^>]+>').hasMatch(description);
     
     if (hasHtml) {
-      // Parse and render HTML with custom styling
+      // Parse and render HTML with custom styling (aligned with welcome screen)
       return Html(
         data: description,
         style: {
@@ -129,19 +129,23 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
           'span.highlight': Style(
             color: Colors.amber,
             fontWeight: FontWeight.bold,
+            fontSize: FontSize(20),
           ),
           'strong': Style(
             color: Colors.amber,
             fontWeight: FontWeight.bold,
+            fontSize: FontSize(20),
           ),
         },
       );
     } else {
-      // Plain text - render as regular text
+      // Plain text - render as regular text (aligned with welcome screen)
       return Text(
         description,
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-          color: AppColors.backgroundDark.withValues(alpha: 0.8),
+          color: AppColors.backgroundDark.withValues(alpha: 0.9),
+          height: 1.5,
+          fontSize: 18,
         ),
         textAlign: TextAlign.center,
       );

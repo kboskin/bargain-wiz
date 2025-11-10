@@ -283,10 +283,13 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
   }
 
   Widget _buildStyledDescription(BuildContext context, String description) {
+    // Aligned with welcome screen description styles
     return Text(
       description,
       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-        color: AppColors.backgroundDark.withValues(alpha: 0.8),
+        color: AppColors.backgroundDark.withValues(alpha: 0.9),
+        height: 1.5,
+        fontSize: 18,
       ),
       textAlign: TextAlign.center,
     );
