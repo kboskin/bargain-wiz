@@ -159,34 +159,6 @@
     "next_button_text": "Continue"
   },
   {
-    "title": "How many deals are you making?",
-    "description": "Tell us about your deal frequency to customize your experience",
-    "type": "slider",
-    "metadata": {
-      "options": [
-        {
-          "value": 1,
-          "label": "1-5 deals",
-          "animation": "assets/lottie/slow.json"
-        },
-        {
-          "value": 10,
-          "label": "5-20 deals",
-          "animation": "assets/lottie/moderate.json"
-        },
-        {
-          "value": 50,
-          "label": "20+ deals",
-          "animation": "assets/lottie/fast.json"
-        }
-      ]
-    },
-    "answer_structure": {
-      "answer_key_name": "deal_count"
-    },
-    "next_button_text": "Next"
-  },
-  {
     "title": "What is the average deal size?",
     "description": "Help us understand your typical transaction size",
     "type": "slider",

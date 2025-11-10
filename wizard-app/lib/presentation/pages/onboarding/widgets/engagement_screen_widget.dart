@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_html/flutter_html.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/visual_asset_widget.dart';
 import '../../../../data/models/onboarding_model.dart';
@@ -109,72 +110,42 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
   }
 
   Widget _buildStyledDescription(BuildContext context, String description) {
-    // Regular engagement screen with keyword highlighting
-    final magicalKeywords = [
-      'deals',
-      'deal',
-      'bargain',
-      'bargains',
-      'AI-powered',
-      'AI',
-      'smart',
-      'magical',
-      'magic',
-      'best',
-      'negotiation',
-      'strategies',
-      'analysis',
-      'help',
-      'get',
-    ];
-
-    // Split description into words and highlight keywords
-    final words = description.split(' ');
-    final textSpans = <TextSpan>[];
-
-    for (final word in words) {
-      // Remove punctuation for comparison
-      final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
-      final isMagical = magicalKeywords.any((keyword) => 
-        cleanWord.contains(keyword.toLowerCase()) || 
-        keyword.toLowerCase().contains(cleanWord)
+    // Check if description contains HTML tags
+    final hasHtml = RegExp(r'<[^>]+>').hasMatch(description);
+    
+    if (hasHtml) {
+      // Parse and render HTML with custom styling
+      return Html(
+        data: description,
+        style: {
+          'body': Style(
+            margin: Margins.zero,
+            padding: HtmlPaddings.zero,
+            textAlign: TextAlign.center,
+            fontSize: FontSize(Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16),
+            color: AppColors.backgroundDark.withValues(alpha: 0.8),
+            lineHeight: const LineHeight(1.5),
+          ),
+          'span.highlight': Style(
+            color: Colors.amber,
+            fontWeight: FontWeight.bold,
+          ),
+          'strong': Style(
+            color: Colors.amber,
+            fontWeight: FontWeight.bold,
+          ),
+        },
       );
-
-      if (isMagical) {
-        // Magical highlight style - amber/yellow with glow effect
-        textSpans.add(
-          TextSpan(
-            text: '$word ',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.amber,
-              fontWeight: FontWeight.bold,
-              shadows: [
-                Shadow(
-                  color: Colors.amber.withValues(alpha: 0.5),
-                  blurRadius: 8,
-                  offset: const Offset(0, 0),
-                ),
-              ],
-            ),
-          ),
-        );
-      } else {
-        // Regular text
-        textSpans.add(
-          TextSpan(
-            text: '$word ',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AppColors.backgroundDark.withValues(alpha: 0.8),
-            ),
-          ),
-        );
-      }
+    } else {
+      // Plain text - render as regular text
+      return Text(
+        description,
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          color: AppColors.backgroundDark.withValues(alpha: 0.8),
+        ),
+        textAlign: TextAlign.center,
+      );
     }
-
-    return RichText(
-      text: TextSpan(children: textSpans),
-      textAlign: TextAlign.center,
-    );
   }
 }
 

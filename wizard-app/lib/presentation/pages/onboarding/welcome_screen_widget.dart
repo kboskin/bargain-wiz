@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_html/flutter_html.dart';
 import '../../../core/di/injection_container.dart' as di;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/color_helper.dart';
@@ -190,38 +191,70 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     );
   }
 
-  /// Build description with optional word highlighting
+  /// Build description with optional HTML or word highlighting
   Widget _buildDescription(BuildContext context) {
+    final description = widget.config.description;
+    final hasHtml = RegExp(r'<[^>]+>').hasMatch(description);
     final highlightWords = widget.config.highlightWords?.description ?? [];
 
-    if (highlightWords.isEmpty) {
-      // Simple description without highlighting
+    // If HTML is present, use HTML parsing (takes precedence)
+    if (hasHtml) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Text(
-          widget.config.description,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.9),
-                height: 1.5,
-                fontSize: 18,
-              ),
-          textAlign: TextAlign.center,
+        child: Html(
+          data: description,
+          style: {
+            'body': Style(
+              margin: Margins.zero,
+              padding: HtmlPaddings.zero,
+              textAlign: TextAlign.center,
+              fontSize: FontSize(18),
+              color: AppColors.backgroundDark.withValues(alpha: 0.9),
+              lineHeight: const LineHeight(1.5),
+            ),
+            'span.highlight': Style(
+              color: Colors.amber,
+              fontWeight: FontWeight.bold,
+              fontSize: FontSize(20),
+            ),
+            'strong': Style(
+              color: Colors.amber,
+              fontWeight: FontWeight.bold,
+              fontSize: FontSize(20),
+            ),
+          },
         ),
       );
     }
 
-    // Rich text description with highlighted words
+    // If highlight words are configured, use keyword-based highlighting
+    if (highlightWords.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: _buildRichTextDescription(
+          context,
+          description,
+          highlightWords,
+        ),
+      );
+    }
+
+    // Simple description without highlighting
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: _buildRichTextDescription(
-        context,
-        widget.config.description,
-        highlightWords,
+      child: Text(
+        description,
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: AppColors.backgroundDark.withValues(alpha: 0.9),
+              height: 1.5,
+              fontSize: 18,
+            ),
+        textAlign: TextAlign.center,
       ),
     );
   }
 
-  /// Build rich text description with highlighted words
+  /// Build rich text description with highlighted words (fallback for non-HTML)
   Widget _buildRichTextDescription(
     BuildContext context,
     String description,
