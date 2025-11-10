@@ -17,7 +17,7 @@
       "best": "#FF6B35",
       "deals": "#4ECDC4"
     },
-    "description": []
+    "description": {}
   },
   "secondary_action": {
     "type": "sign_in",

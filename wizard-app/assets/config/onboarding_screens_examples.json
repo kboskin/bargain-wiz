@@ -11,6 +11,11 @@
         "title": {
           "Bargain": "#FF6B35",
           "Wiz": "#4ECDC4"
+        },
+        "description": {
+          "the": "#FF6B35",
+          "best": "#4ECDC4",
+          "deal": "#FF6B35"
         }
       },
       "highlight_color": "#C47A00"

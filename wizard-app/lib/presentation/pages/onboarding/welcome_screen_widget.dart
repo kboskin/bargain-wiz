@@ -266,10 +266,13 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     }
 
     // If highlight words are configured, use keyword-based highlighting
-    if (highlightWords.isNotEmpty) {
+    final highlightWordsData = widget.config.highlightWords?.description;
+    if (highlightWordsData != null && 
+        !(highlightWordsData is List && highlightWordsData.isEmpty) &&
+        !(highlightWordsData is Map && highlightWordsData.isEmpty)) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: _buildRichTextDescription(context, description, highlightWords),
+        child: _buildRichTextDescription(context, description, highlightWordsData),
       );
     }
 
@@ -289,29 +292,62 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
   }
 
   /// Build rich text description with highlighted words (fallback for non-HTML)
+  /// Supports per-word colors via map: {"the": "#FF6B35", "best": "#4ECDC4", "deal": "#FF6B35"}
+  /// Or simple list for backward compatibility: ["the", "best", "deal"]
   Widget _buildRichTextDescription(
     BuildContext context,
     String description,
-    List<String> highlightWords,
+    dynamic highlightWordsData,
   ) {
     final parts = description.split(' ');
     final textSpans = <TextSpan>[];
-    final highlightColor = _getHighlightColor();
+    final defaultHighlightColor = _getHighlightColor();
+
+    // Parse highlight words - can be a map (word -> color) or list (backward compatibility)
+    Map<String, Color> wordColors = {};
+    List<String> highlightWords = [];
+    
+    if (highlightWordsData is Map) {
+      // Map format: {"the": "#FF6B35", "best": "#4ECDC4", "deal": "#FF6B35"}
+      highlightWordsData.forEach((word, colorValue) {
+        final wordStr = word.toString();
+        highlightWords.add(wordStr);
+        if (colorValue is String) {
+          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
+            colorValue,
+            defaultColor: defaultHighlightColor,
+          );
+        }
+      });
+    } else if (highlightWordsData is List) {
+      // List format: ["the", "best", "deal"] - backward compatibility
+      highlightWords = highlightWordsData.map((item) => item.toString()).toList();
+    }
 
     for (final word in parts) {
       final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
-      final isHighlight = highlightWords.any(
-        (hw) =>
-            cleanWord.contains(hw.toLowerCase()) ||
-            hw.toLowerCase().contains(cleanWord),
-      );
+      
+      // Find matching highlight word
+      String? matchedWord;
+      for (final hw in highlightWords) {
+        final cleanHw = hw.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
+        if (cleanWord.contains(cleanHw) || cleanHw.contains(cleanWord)) {
+          matchedWord = hw;
+          break;
+        }
+      }
+
+      final isHighlight = matchedWord != null;
+      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
+          ? wordColors[matchedWord.toLowerCase()]!
+          : defaultHighlightColor;
 
       textSpans.add(
         TextSpan(
           text: '$word ',
           style: isHighlight
               ? TextStyle(
-                  color: highlightColor,
+                  color: wordColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
                 )

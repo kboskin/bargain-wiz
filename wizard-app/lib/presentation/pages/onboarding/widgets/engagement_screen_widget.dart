@@ -224,10 +224,11 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
   Widget _buildStyledDescription(BuildContext context, String description) {
     // Check if description contains HTML tags
     final hasHtml = RegExp(r'<[^>]+>').hasMatch(description);
+    final highlightWordsData = _getDescriptionHighlightWords();
     final highlightColor = _getHighlightColor();
     
+    // If HTML is present, use HTML parsing (takes precedence)
     if (hasHtml) {
-      // Parse and render HTML with custom styling (aligned with welcome screen)
       return Html(
         data: description,
         style: {
@@ -251,18 +252,111 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
           ),
         },
       );
-    } else {
-      // Plain text - render as regular text (aligned with welcome screen)
-      return Text(
-        description,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-          color: AppColors.backgroundDark.withValues(alpha: 0.9),
-          height: 1.5,
-          fontSize: 18,
+    }
+
+    // If highlight words are configured, use keyword-based highlighting
+    if (highlightWordsData != null && 
+        !(highlightWordsData is List && highlightWordsData.isEmpty) &&
+        !(highlightWordsData is Map && highlightWordsData.isEmpty)) {
+      return _buildRichTextDescription(context, description, highlightWordsData);
+    }
+
+    // Plain text - render as regular text (aligned with welcome screen)
+    return Text(
+      description,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+        color: AppColors.backgroundDark.withValues(alpha: 0.9),
+        height: 1.5,
+        fontSize: 18,
+      ),
+      textAlign: TextAlign.center,
+    );
+  }
+
+  /// Build rich text description with highlighted words (same as welcome screen)
+  /// Supports per-word colors via map: {"the": "#FF6B35", "best": "#4ECDC4", "deal": "#FF6B35"}
+  /// Or simple list for backward compatibility: ["the", "best", "deal"]
+  Widget _buildRichTextDescription(
+    BuildContext context,
+    String description,
+    dynamic highlightWordsData,
+  ) {
+    final parts = description.split(' ');
+    final textSpans = <TextSpan>[];
+    final defaultHighlightColor = _getHighlightColor();
+
+    // Parse highlight words - can be a map (word -> color) or list (backward compatibility)
+    Map<String, Color> wordColors = {};
+    List<String> highlightWords = [];
+    
+    if (highlightWordsData is Map) {
+      // Map format: {"the": "#FF6B35", "best": "#4ECDC4", "deal": "#FF6B35"}
+      highlightWordsData.forEach((word, colorValue) {
+        final wordStr = word.toString();
+        highlightWords.add(wordStr);
+        if (colorValue is String) {
+          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
+            colorValue,
+            defaultColor: defaultHighlightColor,
+          );
+        }
+      });
+    } else if (highlightWordsData is List) {
+      // List format: ["the", "best", "deal"] - backward compatibility
+      highlightWords = highlightWordsData.map((item) => item.toString()).toList();
+    }
+
+    for (final word in parts) {
+      final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
+      
+      // Find matching highlight word
+      String? matchedWord;
+      for (final hw in highlightWords) {
+        final cleanHw = hw.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
+        if (cleanWord.contains(cleanHw) || cleanHw.contains(cleanWord)) {
+          matchedWord = hw;
+          break;
+        }
+      }
+
+      final isHighlight = matchedWord != null;
+      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
+          ? wordColors[matchedWord.toLowerCase()]!
+          : defaultHighlightColor;
+
+      textSpans.add(
+        TextSpan(
+          text: '$word ',
+          style: isHighlight
+              ? TextStyle(
+                  color: wordColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                )
+              : Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.backgroundDark.withValues(alpha: 0.9),
+                  height: 1.5,
+                  fontSize: 18,
+                ),
         ),
-        textAlign: TextAlign.center,
       );
     }
+
+    return RichText(
+      textAlign: TextAlign.center,
+      text: TextSpan(children: textSpans),
+    );
+  }
+
+  /// Get description highlight words from metadata (supports map or list format)
+  dynamic _getDescriptionHighlightWords() {
+    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_words')) {
+      final highlightWordsData = widget.model.metadata!['highlight_words'];
+      if (highlightWordsData is Map<String, dynamic> && highlightWordsData.containsKey('description')) {
+        return highlightWordsData['description'];
+      }
+    }
+    return null;
   }
 
   /// Get highlight color from metadata or default to #C47A00 (matches welcome screen default)

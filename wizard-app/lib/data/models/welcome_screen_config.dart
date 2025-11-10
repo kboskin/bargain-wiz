@@ -161,12 +161,11 @@ class GlassContainerConfig implements JsonSerializable<GlassContainerConfig> {
 }
 
 /// Configuration for words to highlight in title and description
-/// Title can be a Map (word -> color) or List (backward compatibility)
-/// Description remains a List for backward compatibility
+/// Both title and description can be a Map (word -> color) or List (backward compatibility)
 class HighlightWordsConfig
     implements JsonSerializable<HighlightWordsConfig> {
   final dynamic title; // Can be Map<String, String> (word -> color) or List<String>
-  final List<String> description;
+  final dynamic description; // Can be Map<String, String> (word -> color) or List<String>
 
   HighlightWordsConfig({
     required this.title,
@@ -192,13 +191,26 @@ class HighlightWordsConfig
       titleData = <String>[];
     }
 
+    dynamic descriptionData;
+    if (json['description'] != null) {
+      if (json['description'] is Map) {
+        // Map format: {"the": "#FF6B35", "best": "#4ECDC4", "deal": "#FF6B35"}
+        descriptionData = json['description'] as Map<String, dynamic>;
+      } else if (json['description'] is List) {
+        // List format: ["the", "best", "deal"] - backward compatibility
+        descriptionData = JsonParser.requireList<String>(
+          json,
+          'description',
+          (item) => item.toString(),
+        );
+      }
+    } else {
+      descriptionData = <String>[];
+    }
+
     return HighlightWordsConfig(
       title: titleData,
-      description: JsonParser.requireList<String>(
-        json,
-        'description',
-        (item) => item.toString(),
-      ),
+      description: descriptionData,
     );
   }
 
