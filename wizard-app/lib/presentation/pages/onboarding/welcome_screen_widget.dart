@@ -37,27 +37,41 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       backgroundColor: Colors.transparent,
       // Transparent to show global gradient
       body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(),
-            // Visual (Lottie, image, or glass container placeholder)
-            _buildVisual(),
-            const SizedBox(height: 40),
-            // Title with optional highlighting
-            _buildTitle(context),
-            const SizedBox(height: 16),
-            // Description with optional highlighting
-            _buildDescription(context),
-            const SizedBox(height: 40),
-            // Primary action button
-            _buildPrimaryButton(context),
-            const SizedBox(height: 16),
-            // Secondary action (e.g., Sign in link)
-            if (widget.config.secondaryAction != null) ...[
-              _buildSecondaryAction(context),
-            ],
-            const Spacer(),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      const Spacer(flex: 1),
+                      // Visual (Lottie, image, or glass container placeholder)
+                      _buildVisual(),
+                      const SizedBox(height: 32),
+                      // Title with optional highlighting
+                      _buildTitle(context),
+                      const SizedBox(height: 12),
+                      // Description with optional highlighting
+                      _buildDescription(context),
+                      const SizedBox(height: 32),
+                      // Primary action button
+                      _buildPrimaryButton(context),
+                      const SizedBox(height: 12),
+                      // Secondary action (e.g., Sign in link)
+                      if (widget.config.secondaryAction != null) ...[
+                        _buildSecondaryAction(context),
+                      ],
+                      // Add bottom padding to prevent overflow
+                      SizedBox(height: MediaQuery.of(context).padding.bottom),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -66,11 +80,11 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
   /// Build visual element (Lottie/image or glass container placeholder)
   Widget _buildVisual() {
     if (widget.config.visual != null) {
-      // Use VisualAssetWidget for Lottie/images
+      // Use VisualAssetWidget for Lottie/images (reduced size for better visibility of terms)
       return VisualAssetWidget(
         visualPath: widget.config.visual!,
-        width: 200,
-        height: 200,
+        width: 160,
+        height: 160,
       );
     }
 

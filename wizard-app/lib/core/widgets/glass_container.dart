@@ -33,7 +33,6 @@ class GlassContainer extends StatelessWidget {
         margin: margin,
         decoration: BoxDecoration(
           borderRadius: borderRadius ?? BorderRadius.circular(16),
-          border: border,
         ),
         child: ClipRRect(
           borderRadius: borderRadius ?? BorderRadius.circular(16),

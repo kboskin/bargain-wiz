@@ -2,7 +2,9 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../bloc/auth/auth_bloc.dart';
 import '../../bloc/auth/auth_event.dart';
@@ -34,210 +36,278 @@ class SignInModal extends StatelessWidget {
 
         if (state is AuthInitial) {
           return GlassContainer(
-            blurSigma: 15.0,
-            color: Colors.black,
-            opacity: 0.3,
+            blurSigma: 20.0,
+            color: Colors.white,
+            opacity: 0.25,
             borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
+              topLeft: Radius.circular(32),
+              topRight: Radius.circular(32),
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.3),
+              width: 1.5,
             ),
             child: SizedBox(
               height: MediaQuery.of(context).size.height * 0.6,
-              child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 3,
+                ),
+              ),
             ),
           );
         }
 
         return GlassContainer(
-          blurSigma: 15.0,
-          color: Colors.black,
-          opacity: 0.3,
+          blurSigma: 20.0,
+          color: Colors.white,
+          opacity: 0.25,
           borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
+            topLeft: Radius.circular(32),
+            topRight: Radius.circular(32),
           ),
-          padding: const EdgeInsets.all(24.0),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.3),
+            width: 1.5,
+          ),
+          padding: EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 24.0,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24.0,
+          ),
           child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Title and close button
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      AppLocalizations.of(context)!.signIn,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-                const SizedBox(height: 32),
-
-                // Sign in with Google button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: isLoading
-                        ? null
-                        : () {
-                            context.read<AuthBloc>().add(
-                                  const SignInWithGoogleRequested(),
-                                );
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.surfaceLight,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              
+              // Title and close button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    AppLocalizations.of(context)!.signIn,
+                    style: AppTextStyles.headlineMediumDark.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 28,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: Colors.white.withValues(alpha: 0.9),
+                      size: 24,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.1),
+                      padding: const EdgeInsets.all(8),
+                      minimumSize: const Size(40, 40),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      elevation: 0,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              // Sign in with Google button
+              _buildSignInButton(
+                context: context,
+                isLoading: isLoading,
+                onPressed: () {
+                  context.read<AuthBloc>().add(
+                        const SignInWithGoogleRequested(),
+                      );
+                },
+                icon: _buildGoogleIcon(),
+                label: AppLocalizations.of(context)!.signInWithGoogle,
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.backgroundDark,
+              ),
+              const SizedBox(height: 16),
+
+              // Sign in with Apple button (iOS only)
+              if (Platform.isIOS) ...[
+                _buildSignInButton(
+                  context: context,
+                  isLoading: isLoading,
+                  onPressed: () {
+                    context.read<AuthBloc>().add(
+                          const SignInWithAppleRequested(),
+                        );
+                  },
+                  icon: const Icon(
+                    Icons.apple_rounded,
+                    size: 24,
+                    color: Colors.white,
+                  ),
+                  label: AppLocalizations.of(context)!.signInWithApple,
+                  backgroundColor: AppColors.backgroundDark,
+                  foregroundColor: Colors.white,
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // Terms and Privacy Policy
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Center(
+                  child: RichText(
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.visible,
+                    text: TextSpan(
+                      style: AppTextStyles.bodySmallDark.copyWith(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
                       children: [
-                        // Google logo
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Center(
+                        TextSpan(
+                          text: AppLocalizations.of(context)!.agreeToTerms(AppLocalizations.of(context)!.appTitle),
+                        ),
+                        const TextSpan(text: ' '),
+                        WidgetSpan(
+                          child: GestureDetector(
+                            onTap: () {
+                              // TODO: Navigate to Terms and Conditions
+                            },
                             child: Text(
-                              'G',
-                              style: TextStyle(
-                                color: Colors.blue,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                              AppLocalizations.of(context)!.termsAndConditions,
+                              style: AppTextStyles.bodySmallDark.copyWith(
+                                color: Colors.white.withValues(alpha: 0.95),
+                                decoration: TextDecoration.underline,
+                                decorationColor: Colors.white.withValues(alpha: 0.95),
+                                decorationThickness: 1.5,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Text(
-                          AppLocalizations.of(context)!.signInWithGoogle,
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w500,
+                        TextSpan(
+                          text: AppLocalizations.of(context)!.and,
+                        ),
+                        WidgetSpan(
+                          child: GestureDetector(
+                            onTap: () {
+                              // TODO: Navigate to Privacy Policy
+                            },
+                            child: Text(
+                              AppLocalizations.of(context)!.privacyPolicy,
+                              style: AppTextStyles.bodySmallDark.copyWith(
+                                color: Colors.white.withValues(alpha: 0.95),
+                                decoration: TextDecoration.underline,
+                                decorationColor: Colors.white.withValues(alpha: 0.95),
+                                decorationThickness: 1.5,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                // Sign in with Apple button (iOS only)
-                if (Platform.isIOS)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: isLoading
-                          ? null
-                          : () {
-                              context.read<AuthBloc>().add(
-                                    const SignInWithAppleRequested(),
-                                  );
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.surfaceLight,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.apple,
-                            size: 24,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            AppLocalizations.of(context)!.signInWithApple,
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (Platform.isIOS) const SizedBox(height: 24),
-
-                // Terms and Privacy Policy
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey,
-                        ),
-                        children: [
-                          TextSpan(
-                            text: AppLocalizations.of(context)!.agreeToTerms(AppLocalizations.of(context)!.appTitle),
-                          ),
-                          const TextSpan(
-                            text: " ",
-                          ),
-                          WidgetSpan(
-                            child: GestureDetector(
-                              onTap: () {
-                                // TODO: Navigate to Terms and Conditions
-                              },
-                              child: Text(
-                                AppLocalizations.of(context)!.termsAndConditions,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.grey[300],
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: Colors.grey[300],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ),
-                          TextSpan(
-                            text: AppLocalizations.of(context)!.and,
-                          ),
-                          WidgetSpan(
-                            child: GestureDetector(
-                              onTap: () {
-                                // TODO: Navigate to Privacy Policy
-                              },
-                              child: Text(
-                                AppLocalizations.of(context)!.privacyPolicy,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.grey[300],
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: Colors.grey[300],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+
+  /// Build a styled sign-in button
+  Widget _buildSignInButton({
+    required BuildContext context,
+    required bool isLoading,
+    required VoidCallback onPressed,
+    required Widget icon,
+    required String label,
+    required Color backgroundColor,
+    required Color foregroundColor,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        child: ElevatedButton(
+          onPressed: isLoading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: backgroundColor,
+            foregroundColor: foregroundColor,
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
+            shadowColor: Colors.transparent,
+          ).copyWith(
+            overlayColor: WidgetStateProperty.resolveWith<Color?>(
+              (Set<WidgetState> states) {
+                if (states.contains(WidgetState.pressed)) {
+                  return foregroundColor.withValues(alpha: 0.1);
+                }
+                if (states.contains(WidgetState.hovered)) {
+                  return foregroundColor.withValues(alpha: 0.05);
+                }
+                return null;
+              },
+            ),
+          ),
+          child: isLoading
+              ? SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
+                  ),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    icon,
+                    const SizedBox(width: 12),
+                    Text(
+                      label,
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: foregroundColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  /// Build Google icon using FontAwesome Google logo
+  Widget _buildGoogleIcon() {
+    return const FaIcon(
+      FontAwesomeIcons.google,
+      size: 24,
+      color: Color(0xFF4285F4), // Google blue
     );
   }
 }
