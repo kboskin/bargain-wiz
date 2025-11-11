@@ -4,6 +4,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:lottie/lottie.dart'; // Added for Lottie animations
 import '../../../../core/di/injection_container.dart' as di;
+import '../../../../core/services/remote_config_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/asset_path_helper.dart';
 import '../../../../core/utils/color_helper.dart';
@@ -54,6 +55,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   AssetPathHelper? _cachedAssetPathHelper;
   ColorHelper? _cachedColorHelper;
   MultilocaleTextHelper? _cachedMultilocaleTextHelper;
+  RemoteConfigService? _cachedRemoteConfigService;
+  Map<String, String>? _cachedBrandColors;
 
   @override
   void initState() {
@@ -135,6 +138,10 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
     _cachedColorHelper ??= di.sl<ColorHelper>();
     _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
+    _cachedRemoteConfigService ??= di.sl<RemoteConfigService>();
+    
+    // Cache brand colors from remote config
+    _cachedBrandColors ??= _cachedRemoteConfigService!.getBrandColors();
     
     if (widget.model.options.isEmpty) {
       return const SizedBox.shrink();
@@ -671,9 +678,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   }
 
   /// Get brand color for platform/service
-  /// First checks tint_color from remote config, then falls back to hardcoded brand colors
+  /// Priority: 1) tint_color from option, 2) brand_colors from remote config, 3) default
   Color? _getBrandColor(OnboardingOption option, BuildContext context) {
-    // First priority: Check tint_color from remote config
+    // First priority: Check tint_color from option (per-option override)
     if (option.tintColor != null && option.tintColor!.isNotEmpty) {
       return _cachedColorHelper!.getColor(
         option.tintColor,
@@ -681,30 +688,24 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       );
     }
 
-    // Fallback: Use hardcoded brand colors based on option value/label
+    // Second priority: Use brand colors from remote config
     final optionValueText = option.value != null 
         ? _cachedMultilocaleTextHelper!.getText(context, option.value)
         : null;
     final optionLabelText = _cachedMultilocaleTextHelper!.getText(context, option.label);
     final lookupValue = (optionValueText ?? optionLabelText).toLowerCase();
 
-    final brandColors = <String, Color>{
-      'tiktok': const Color(0xFF000000), // TikTok black
-      'youtube': const Color(0xFFFF0000), // YouTube red
-      'google': const Color(0xFF4285F4), // Google blue
-      'playstore': const Color(0xFF00D9FF), // Play Store cyan
-      'facebook': const Color(0xFF1877F2), // Facebook blue
-      'instagram': const Color(0xFFE4405F), // Instagram pink
-      'x': const Color(0xFF000000), // X/Twitter black
-      'ebay': const Color(0xFF0064D2), // eBay blue
-      'amazon': const Color(0xFFFF9900), // Amazon orange
-      'olx': const Color(0xFFFF6600), // OLX orange
-      'craigslist': const Color(0xFF6A2C91), // Craigslist purple
-      'friends_or_family': const Color(0xFF10B981), // Green for people
-      'other': AppColors.backgroundDark, // Default dark
-    };
+    // Get brand color from remote config
+    final brandColorHex = _cachedBrandColors?[lookupValue];
+    if (brandColorHex != null && brandColorHex.isNotEmpty) {
+      return _cachedColorHelper!.getColor(
+        brandColorHex,
+        defaultColor: AppColors.backgroundDark,
+      );
+    }
 
-    return brandColors[lookupValue];
+    // Fallback: Return null (no color) if not found in remote config
+    return null;
   }
 
   /// Get IconData from icon name (Font Awesome or Material Icons)

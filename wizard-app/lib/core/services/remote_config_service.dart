@@ -201,5 +201,37 @@ class RemoteConfigService {
       return null;
     }
   }
+
+  /// Get brand colors map from Remote Config
+  /// Returns a map of brand name (lowercase) to hex color string
+  /// Returns empty map if not configured
+  Map<String, String> getBrandColors() {
+    try {
+      final jsonString = getString('brand_colors');
+      if (jsonString.isEmpty) {
+        _logger.w('Brand colors config is empty, returning empty map');
+        return {};
+      }
+
+      final json = jsonDecode(jsonString);
+      if (json is! Map<String, dynamic>) {
+        _logger.w('Invalid brand_colors format, expected Map');
+        return {};
+      }
+
+      // Convert to Map<String, String> (brand name -> hex color)
+      final brandColors = <String, String>{};
+      json.forEach((key, value) {
+        if (value is String) {
+          brandColors[key.toLowerCase()] = value;
+        }
+      });
+
+      return brandColors;
+    } catch (e, stackTrace) {
+      _logger.e('Error parsing brand colors config', e, stackTrace);
+      return {};
+    }
+  }
 }
 
