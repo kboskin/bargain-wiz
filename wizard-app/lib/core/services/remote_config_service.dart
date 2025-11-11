@@ -233,5 +233,35 @@ class RemoteConfigService {
       return {};
     }
   }
+
+  /// Get Privacy Policy URL from Remote Config
+  /// Returns empty string if not configured
+  String getPrivacyPolicyUrl() {
+    try {
+      final url = getString('privacy_policy_url');
+      if (url.isEmpty) {
+        _logger.w('Privacy policy URL is not configured');
+      }
+      return url;
+    } catch (e, stackTrace) {
+      _logger.e('Error getting privacy policy URL', e, stackTrace);
+      return '';
+    }
+  }
+
+  /// Get Terms of Use URL from Remote Config
+  /// Returns empty string if not configured
+  String getTermsOfUseUrl() {
+    try {
+      final url = getString('terms_of_use_url');
+      if (url.isEmpty) {
+        _logger.w('Terms of use URL is not configured');
+      }
+      return url;
+    } catch (e, stackTrace) {
+      _logger.e('Error getting terms of use URL', e, stackTrace);
+      return '';
+    }
+  }
 }
 

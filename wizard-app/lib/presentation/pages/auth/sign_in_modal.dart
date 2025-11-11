@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/services/remote_config_service.dart';
+import '../../../core/di/injection_container.dart' as di;
 import '../../bloc/auth/auth_bloc.dart';
 import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
@@ -14,8 +17,19 @@ import '../../../l10n/app_localizations.dart';
 class SignInModal extends StatelessWidget {
   const SignInModal({super.key});
 
+  Future<void> _launchUrl(String url) async {
+    if (url.isEmpty) {
+      return;
+    }
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final remoteConfigService = di.sl<RemoteConfigService>();
     return BlocConsumer<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthError) {
@@ -186,7 +200,8 @@ class SignInModal extends StatelessWidget {
                         WidgetSpan(
                           child: GestureDetector(
                             onTap: () {
-                              // TODO: Navigate to Terms and Conditions
+                              final termsUrl = remoteConfigService.getTermsOfUseUrl();
+                              _launchUrl(termsUrl);
                             },
                             child: Text(
                               AppLocalizations.of(context)!.termsAndConditions,
@@ -207,7 +222,8 @@ class SignInModal extends StatelessWidget {
                         WidgetSpan(
                           child: GestureDetector(
                             onTap: () {
-                              // TODO: Navigate to Privacy Policy
+                              final privacyUrl = remoteConfigService.getPrivacyPolicyUrl();
+                              _launchUrl(privacyUrl);
                             },
                             child: Text(
                               AppLocalizations.of(context)!.privacyPolicy,
