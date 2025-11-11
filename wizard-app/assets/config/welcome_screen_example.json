@@ -1,8 +1,17 @@
 {
-  "title": "Get the Best Deals",
-  "description": "Powered by a touch of magic.\nOutsmart every price.\nNever overpay again.",
+  "title": {
+    "en": "Get the Best Deals",
+    "es": "Consigue las Mejores Ofertas"
+  },
+  "description": {
+    "en": "Powered by a touch of magic.\nOutsmart every price.\nNever overpay again.",
+    "es": "Impulsado por un toque de magia.\nSupera cada precio.\nNunca pagues de más."
+  },
   "visual": null,
-  "primary_button_text": "Get Started",
+  "primary_button_text": {
+    "en": "Get Started",
+    "es": "Empezar"
+  },
   "glass_container": {
     "blur_sigma": 10.0,
     "color": "#FFFFFF",
@@ -21,8 +30,14 @@
   },
   "secondary_action": {
     "type": "sign_in",
-    "text": "Sign in",
-    "prefix_text": "Already have an account? "
+    "text": {
+      "en": "Sign in",
+      "es": "Iniciar sesión"
+    },
+    "prefix_text": {
+      "en": "Already have an account? ",
+      "es": "¿Ya tienes una cuenta? "
+    }
   },
   "highlight_color": "#C47A00"
 }

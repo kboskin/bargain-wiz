@@ -6,6 +6,7 @@ import '../../../core/di/injection_container.dart' as di;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/color_helper.dart';
+import '../../../core/utils/multilocale_text_helper.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/visual_asset_widget.dart';
 import '../../../data/models/welcome_screen_config.dart';
@@ -24,11 +25,13 @@ class WelcomeScreenWidget extends StatefulWidget {
 
 class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
   ColorHelper? _cachedColorHelper;
+  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
 
   @override
   Widget build(BuildContext context) {
     // Cache ColorHelper lookup
     _cachedColorHelper ??= di.sl<ColorHelper>();
+    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -118,6 +121,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
 
   /// Build title with optional word highlighting
   Widget _buildTitle(BuildContext context) {
+    final titleText = _cachedMultilocaleTextHelper!.getText(context, widget.config.title);
     final highlightWordsData = widget.config.highlightWords?.title;
 
     if (highlightWordsData == null || 
@@ -127,7 +131,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
         child: Text(
-          widget.config.title,
+          titleText,
           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
             color: AppColors.backgroundDark,
             fontWeight: FontWeight.bold,
@@ -141,7 +145,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     // Rich text title with highlighted words (supports per-word colors)
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: _buildRichTextTitle(context, widget.config.title, highlightWordsData),
+      child: _buildRichTextTitle(context, titleText, highlightWordsData),
     );
   }
 
@@ -193,8 +197,8 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       }
 
       final isHighlight = matchedWord != null;
-      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
-          ? wordColors[matchedWord.toLowerCase()]!
+      final wordColor = isHighlight 
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(
@@ -230,9 +234,9 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
 
   /// Build description with optional HTML or word highlighting
   Widget _buildDescription(BuildContext context) {
-    final description = widget.config.description;
+    final description = _cachedMultilocaleTextHelper!.getText(context, widget.config.description);
     final hasHtml = RegExp(r'<[^>]+>').hasMatch(description);
-    final highlightWords = widget.config.highlightWords?.description ?? [];
+    final highlightWordsData = widget.config.highlightWords?.description;
     final highlightColor = _getHighlightColor();
 
     // If HTML is present, use HTML parsing (takes precedence)
@@ -266,7 +270,6 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     }
 
     // If highlight words are configured, use keyword-based highlighting
-    final highlightWordsData = widget.config.highlightWords?.description;
     if (highlightWordsData != null && 
         !(highlightWordsData is List && highlightWordsData.isEmpty) &&
         !(highlightWordsData is Map && highlightWordsData.isEmpty)) {
@@ -338,8 +341,8 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       }
 
       final isHighlight = matchedWord != null;
-      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
-          ? wordColors[matchedWord.toLowerCase()]!
+      final wordColor = isHighlight 
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(
@@ -397,7 +400,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
             ),
           ),
           child: Text(
-            widget.config.primaryButtonText,
+            _cachedMultilocaleTextHelper!.getText(context, widget.config.primaryButtonText),
             style: AppTextStyles.buttonText,
           ),
         ),
@@ -416,9 +419,9 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
           text: TextSpan(
             style: TextStyle(color: AppColors.backgroundDark, fontSize: 14),
             children: [
-              TextSpan(text: action.prefixText),
+              TextSpan(text: _cachedMultilocaleTextHelper!.getText(context, action.prefixText)),
               TextSpan(
-                text: action.text,
+                text: _cachedMultilocaleTextHelper!.getText(context, action.text),
                 style: TextStyle(
                   color: AppColors.backgroundDark,
                   decoration: TextDecoration.underline,

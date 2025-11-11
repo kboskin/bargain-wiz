@@ -3,6 +3,7 @@ import 'package:flutter_html/flutter_html.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/color_helper.dart';
+import '../../../../core/utils/multilocale_text_helper.dart';
 import '../../../../core/widgets/visual_asset_widget.dart';
 import '../../../../data/models/onboarding_model.dart';
 
@@ -22,11 +23,13 @@ class EngagementScreenWidget extends StatefulWidget {
 
 class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
   ColorHelper? _cachedColorHelper;
+  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
 
   @override
   Widget build(BuildContext context) {
     // Cache ColorHelper lookup
     _cachedColorHelper ??= di.sl<ColorHelper>();
+    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40.0),
       child: Column(
@@ -45,12 +48,20 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
           const SizedBox(height: 48),
 
           // Title
-          _buildStyledTitle(context, widget.model.title),
+          _buildStyledTitle(context, _cachedMultilocaleTextHelper!.getText(context, widget.model.title)),
           const SizedBox(height: 16),
 
           // Description (optional)
-          if (widget.model.description != null && widget.model.description!.isNotEmpty) ...[
-            _buildStyledDescription(context, widget.model.description!),
+          if (widget.model.description != null) ...[
+            Builder(
+              builder: (context) {
+                final descriptionText = _cachedMultilocaleTextHelper!.getText(context, widget.model.description);
+                if (descriptionText.isNotEmpty) {
+                  return _buildStyledDescription(context, descriptionText);
+                }
+                return const SizedBox.shrink();
+              },
+            ),
           ],
         ],
       ),
@@ -175,8 +186,8 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
       }
 
       final isHighlight = matchedWord != null;
-      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
-          ? wordColors[matchedWord.toLowerCase()]!
+      final wordColor = isHighlight 
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(
@@ -320,8 +331,8 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
       }
 
       final isHighlight = matchedWord != null;
-      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
-          ? wordColors[matchedWord.toLowerCase()]!
+      final wordColor = isHighlight 
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(

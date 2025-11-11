@@ -7,6 +7,7 @@ import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/asset_path_helper.dart';
 import '../../../../core/utils/color_helper.dart';
+import '../../../../core/utils/multilocale_text_helper.dart';
 import '../../../../core/widgets/glass_container.dart'; // Added for glass effect
 import '../../../../data/models/onboarding_model.dart';
 
@@ -52,6 +53,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   final Random _random = Random();
   AssetPathHelper? _cachedAssetPathHelper;
   ColorHelper? _cachedColorHelper;
+  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
 
   @override
   void initState() {
@@ -129,6 +131,11 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
 
   @override
   Widget build(BuildContext context) {
+    // Cache DI lookups
+    _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
+    _cachedColorHelper ??= di.sl<ColorHelper>();
+    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
+    
     if (widget.model.options.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -139,13 +146,25 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Title
-          _buildStyledTitle(context, widget.model.title),
+          _buildStyledTitle(context, _cachedMultilocaleTextHelper!.getText(context, widget.model.title)),
           const SizedBox(height: 16),
 
           // Description (optional)
-          if (widget.model.description != null && widget.model.description!.isNotEmpty) ...[
-            _buildStyledDescription(context, widget.model.description!),
-            const SizedBox(height: 32),
+          if (widget.model.description != null) ...[
+            Builder(
+              builder: (context) {
+                final descriptionText = _cachedMultilocaleTextHelper!.getText(context, widget.model.description);
+                if (descriptionText.isNotEmpty) {
+                  return Column(
+                    children: [
+                      _buildStyledDescription(context, descriptionText),
+                      const SizedBox(height: 32),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
           ],
 
           // Scrollable options list with animations
@@ -155,8 +174,15 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
               itemCount: widget.model.options.length,
               itemBuilder: (context, index) {
                 final option = widget.model.options[index];
+                // Extract text from multilocale value/label for comparison
+                final optionValueText = option.value != null 
+                    ? _cachedMultilocaleTextHelper!.getText(context, option.value)
+                    : null;
+                final optionLabelText = _cachedMultilocaleTextHelper!.getText(context, option.label);
                 final isSelected = widget.selectedValue != null &&
-                    (option.value == widget.selectedValue ||
+                    (optionValueText == widget.selectedValue ||
+                        optionLabelText == widget.selectedValue ||
+                        option.value == widget.selectedValue ||
                         option.label == widget.selectedValue);
                 final animation = index < _itemAnimations.length
                     ? _itemAnimations[index]
@@ -178,13 +204,19 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
                   },
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 12.0),
-                    child: _buildOptionButton(
-                      context,
-                      option,
-                      isSelected,
-                      index,
-                      () => widget.onOptionSelected(
-                          option.value ?? option.label),
+                    child: Builder(
+                      builder: (context) {
+                        final selectedValue = option.value != null
+                            ? _cachedMultilocaleTextHelper!.getText(context, option.value)
+                            : _cachedMultilocaleTextHelper!.getText(context, option.label);
+                        return _buildOptionButton(
+                          context,
+                          option,
+                          isSelected,
+                          index,
+                          () => widget.onOptionSelected(selectedValue),
+                        );
+                      },
                     ),
                   ),
                 );
@@ -212,8 +244,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       isFontAwesome = iconResult['isFontAwesome'] as bool;
     }
 
-    // Get brand color for this option
-    final brandColor = _getBrandColor(option.value ?? option.label);
+    // Get brand color for this option (check tint_color first, then fallback to hardcoded)
+    final brandColor = _getBrandColor(option, context);
     final iconColor = isSelected && brandColor != null
         ? brandColor
         : AppColors.backgroundDark;
@@ -275,7 +307,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
               ],
               Expanded(
                 child: Text(
-                  option.label,
+                  _cachedMultilocaleTextHelper!.getText(context, option.label),
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: textColor,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
@@ -639,7 +671,23 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   }
 
   /// Get brand color for platform/service
-  Color? _getBrandColor(String value) {
+  /// First checks tint_color from remote config, then falls back to hardcoded brand colors
+  Color? _getBrandColor(OnboardingOption option, BuildContext context) {
+    // First priority: Check tint_color from remote config
+    if (option.tintColor != null && option.tintColor!.isNotEmpty) {
+      return _cachedColorHelper!.getColor(
+        option.tintColor,
+        defaultColor: AppColors.backgroundDark,
+      );
+    }
+
+    // Fallback: Use hardcoded brand colors based on option value/label
+    final optionValueText = option.value != null 
+        ? _cachedMultilocaleTextHelper!.getText(context, option.value)
+        : null;
+    final optionLabelText = _cachedMultilocaleTextHelper!.getText(context, option.label);
+    final lookupValue = (optionValueText ?? optionLabelText).toLowerCase();
+
     final brandColors = <String, Color>{
       'tiktok': const Color(0xFF000000), // TikTok black
       'youtube': const Color(0xFFFF0000), // YouTube red
@@ -650,12 +698,13 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       'x': const Color(0xFF000000), // X/Twitter black
       'ebay': const Color(0xFF0064D2), // eBay blue
       'amazon': const Color(0xFFFF9900), // Amazon orange
+      'olx': const Color(0xFFFF6600), // OLX orange
       'craigslist': const Color(0xFF6A2C91), // Craigslist purple
       'friends_or_family': const Color(0xFF10B981), // Green for people
       'other': AppColors.backgroundDark, // Default dark
     };
 
-    return brandColors[value.toLowerCase()];
+    return brandColors[lookupValue];
   }
 
   /// Get IconData from icon name (Font Awesome or Material Icons)
@@ -674,6 +723,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       'store': {'icon': FontAwesomeIcons.store, 'isFontAwesome': true},
       'ebay': {'icon': FontAwesomeIcons.ebay, 'isFontAwesome': true},
       'amazon': {'icon': FontAwesomeIcons.amazon, 'isFontAwesome': true},
+      'olx': {'icon': FontAwesomeIcons.store, 'isFontAwesome': true}, // Store icon for OLX
       'craigslist': {'icon': FontAwesomeIcons.peace, 'isFontAwesome': true}, // Peace icon
       'other': {'icon': Icons.auto_awesome, 'isFontAwesome': false}, // Magical sparkles icon
     };
@@ -752,8 +802,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       }
 
       final isHighlight = matchedWord != null;
-      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
-          ? wordColors[matchedWord.toLowerCase()]!
+      final wordColor = isHighlight 
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(
@@ -897,8 +947,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       }
 
       final isHighlight = matchedWord != null;
-      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
-          ? wordColors[matchedWord.toLowerCase()]!
+      final wordColor = isHighlight 
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(

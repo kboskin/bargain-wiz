@@ -1,7 +1,13 @@
 [
   {
-    "title": "Welcome to Bargain Wiz",
-    "description": "We'll help you get the best deals with AI-powered analysis and smart negotiation strategies.",
+    "title": {
+      "en": "Welcome to Bargain Wiz",
+      "es": "Bienvenido a Bargain Wiz"
+    },
+    "description": {
+      "en": "We'll help you get the best deals with AI-powered analysis and smart negotiation strategies.",
+      "es": "Te ayudaremos a conseguir las mejores ofertas con análisis impulsado por IA y estrategias de negociación inteligentes."
+    },
     "type": "engagement",
     "visual": "assets/lottie/wizard_hello.json",
     "metadata": {
@@ -20,15 +26,27 @@
       },
       "highlight_color": "#C47A00"
     },
-    "next_button_text": "Let's Get Started"
+    "next_button_text": {
+      "en": "Let's Get Started",
+      "es": "Empecemos"
+    }
   },
   {
-    "title": "Where do you cast your shopping spells?",
-    "description": "Select your preferred marketplace",
+    "title": {
+      "en": "Where do you cast your shopping spells?",
+      "es": "¿Dónde lanzas tus hechizos de compras?"
+    },
+    "description": {
+      "en": "Select your preferred marketplace",
+      "es": "Selecciona tu mercado preferido"
+    },
     "type": "select",
     "options": [
       {
-        "label": "eBay",
+        "label": {
+          "en": "eBay",
+          "es": "eBay"
+        },
         "value": "ebay",
         "icon": "ebay",
         "metadata": {
@@ -49,6 +67,16 @@
         "label": "Facebook Marketplace",
         "value": "facebook",
         "icon": "facebook",
+        "metadata": {
+          "animation": "assets/lottie/star_anim.json",
+          "animation_color": "#FFC107"
+        }
+      },
+      {
+        "label": "OLX",
+        "value": "olx",
+        "icon": "olx",
+        "tint_color": "#FF6600",
         "metadata": {
           "animation": "assets/lottie/star_anim.json",
           "animation_color": "#FFC107"

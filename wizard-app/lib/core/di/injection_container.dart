@@ -10,6 +10,7 @@ import '../../core/services/firebase_service.dart';
 import '../../core/utils/app_logger.dart';
 import '../../core/utils/color_helper.dart';
 import '../../core/utils/asset_path_helper.dart';
+import '../../core/utils/multilocale_text_helper.dart';
 import '../../data/datasources/onboarding_local_datasource.dart';
 import '../../data/repositories/onboarding_repository_impl.dart';
 import '../../domain/repositories/onboarding_repository.dart';
@@ -44,6 +45,10 @@ Future<void> init() async {
   
   sl.registerLazySingleton<AssetPathHelper>(
     () => AssetPathHelper(),
+  );
+  
+  sl.registerLazySingleton<MultilocaleTextHelper>(
+    () => const MultilocaleTextHelper(),
   );
 
   // Services

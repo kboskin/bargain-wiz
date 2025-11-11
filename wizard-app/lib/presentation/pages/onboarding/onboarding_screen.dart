@@ -8,6 +8,7 @@ import '../../../core/services/onboarding_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/multilocale_text_helper.dart';
 import '../../../data/models/onboarding_model.dart';
 import '../../../domain/repositories/onboarding_repository.dart';
 import '../../../l10n/app_localizations.dart';
@@ -45,6 +46,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   final PageController _pageController = PageController();
   int _currentScreenIndex = 0;
   OnboardingBloc? _cachedBloc;
+  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
 
   @override
   void dispose() {
@@ -71,6 +73,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   Widget build(BuildContext context) {
     // Cache bloc reference to avoid repeated lookups
     _cachedBloc ??= context.read<OnboardingBloc>();
+    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
     
     return BlocConsumer<OnboardingBloc, OnboardingState>(
       listener: (context, state) {
@@ -211,7 +214,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                     ),
                                   ),
                                   child: Text(
-                                    _getNextButtonText(state),
+                                    _getNextButtonText(context, state),
                                     style: AppTextStyles.buttonText,
                                   ),
                                 ),
@@ -317,7 +320,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     return true;
   }
 
-  String _getNextButtonText(OnboardingConfigLoaded state) {
+  String _getNextButtonText(BuildContext context, OnboardingConfigLoaded state) {
     if (_currentScreenIndex >= state.screens.length) {
       return AppLocalizations.of(context)!.next;
     }
@@ -325,9 +328,11 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     final currentScreen = state.screens[_currentScreenIndex];
 
     // Use custom button text from model if provided
-    if (currentScreen.nextButtonText != null &&
-        currentScreen.nextButtonText!.isNotEmpty) {
-      return currentScreen.nextButtonText!;
+    if (currentScreen.nextButtonText != null) {
+      final text = _cachedMultilocaleTextHelper!.getText(context, currentScreen.nextButtonText);
+      if (text.isNotEmpty) {
+        return text;
+      }
     }
 
     // Fallback to default: "Get Started" for last screen, "Next" for others

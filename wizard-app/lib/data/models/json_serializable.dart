@@ -150,5 +150,62 @@ class JsonParser {
       'Field "$key" must be a number, got ${value.runtimeType}',
     );
   }
+
+  /// Safely extracts a multilocale text field
+  /// Supports both Map<String, String> (multilocale) and String (backward compatibility)
+  /// Returns dynamic to allow both formats
+  static dynamic requireMultilocaleText(
+    Map<String, dynamic> json,
+    String key,
+  ) {
+    final value = json[key];
+    if (value == null) {
+      throw FormatException('Required field "$key" is missing');
+    }
+    if (value is String) {
+      return value; // Backward compatibility
+    }
+    if (value is Map<String, dynamic>) {
+      // Validate that all values in the map are strings
+      for (final entry in value.entries) {
+        if (entry.value is! String) {
+          throw FormatException(
+            'Field "$key" multilocale map values must be Strings, got ${entry.value.runtimeType} for key "${entry.key}"',
+          );
+        }
+      }
+      return value; // Multilocale format
+    }
+    throw FormatException(
+      'Field "$key" must be a String or Map<String, String>, got ${value.runtimeType}',
+    );
+  }
+
+  /// Safely extracts an optional multilocale text field
+  /// Supports both Map<String, String> (multilocale) and String (backward compatibility)
+  static dynamic optionalMultilocaleText(
+    Map<String, dynamic> json,
+    String key,
+  ) {
+    final value = json[key];
+    if (value == null) return null;
+    if (value is String) {
+      return value; // Backward compatibility
+    }
+    if (value is Map<String, dynamic>) {
+      // Validate that all values in the map are strings
+      for (final entry in value.entries) {
+        if (entry.value is! String) {
+          throw FormatException(
+            'Field "$key" multilocale map values must be Strings, got ${entry.value.runtimeType} for key "${entry.key}"',
+          );
+        }
+      }
+      return value; // Multilocale format
+    }
+    throw FormatException(
+      'Field "$key" must be a String or Map<String, String> or null, got ${value.runtimeType}',
+    );
+  }
 }
 

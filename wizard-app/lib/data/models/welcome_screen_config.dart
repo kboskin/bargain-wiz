@@ -1,13 +1,12 @@
-import 'package:flutter/material.dart';
 import 'json_serializable.dart';
 
 /// Configuration for the welcome/landing screen
 /// Separate from onboarding flow screens to allow full customization
 class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
-  final String title;
-  final String description;
+  final dynamic title; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  final dynamic description; // Can be Map<String, String> (multilocale) or String (backward compatibility)
   final String? visual; // Optional: Lottie animation path or asset path
-  final String primaryButtonText;
+  final dynamic primaryButtonText; // Can be Map<String, String> (multilocale) or String (backward compatibility)
   final GlassContainerConfig? glassContainer;
   final HighlightWordsConfig? highlightWords;
   final SecondaryActionConfig? secondaryAction;
@@ -27,10 +26,10 @@ class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
   @override
   factory WelcomeScreenConfig.fromJson(Map<String, dynamic> json) {
     final config = WelcomeScreenConfig(
-      title: JsonParser.requireString(json, 'title'),
-      description: JsonParser.requireString(json, 'description'),
+      title: JsonParser.requireMultilocaleText(json, 'title'),
+      description: JsonParser.requireMultilocaleText(json, 'description'),
       visual: json['visual'] as String?,
-      primaryButtonText: JsonParser.requireString(json, 'primary_button_text'),
+      primaryButtonText: JsonParser.requireMultilocaleText(json, 'primary_button_text'),
       glassContainer: json['glass_container'] != null
           ? GlassContainerConfig.fromJson(
               json['glass_container'] as Map<String, dynamic>)
@@ -65,19 +64,63 @@ class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
 
   @override
   void validate() {
-    if (title.isEmpty) {
-      throw FormatException('WelcomeScreenConfig.title cannot be empty');
+    // Validate title - must be non-empty string or non-empty multilocale map
+    if (title is String) {
+      if ((title as String).isEmpty) {
+        throw FormatException('WelcomeScreenConfig.title cannot be empty');
+      }
+    } else if (title is Map<String, dynamic>) {
+      if (title.isEmpty) {
+        throw FormatException('WelcomeScreenConfig.title multilocale map cannot be empty');
+      }
+      if (!title.containsKey('en')) {
+        throw FormatException('WelcomeScreenConfig.title multilocale map must contain "en" key');
+      }
+    } else {
+      throw FormatException('WelcomeScreenConfig.title must be a String or Map<String, String>');
     }
-    if (description.isEmpty) {
-      throw FormatException('WelcomeScreenConfig.description cannot be empty');
+
+    // Validate description - must be non-empty string or non-empty multilocale map
+    if (description is String) {
+      if ((description as String).isEmpty) {
+        throw FormatException('WelcomeScreenConfig.description cannot be empty');
+      }
+    } else if (description is Map<String, dynamic>) {
+      if (description.isEmpty) {
+        throw FormatException('WelcomeScreenConfig.description multilocale map cannot be empty');
+      }
+      if (!description.containsKey('en')) {
+        throw FormatException('WelcomeScreenConfig.description multilocale map must contain "en" key');
+      }
+    } else {
+      throw FormatException('WelcomeScreenConfig.description must be a String or Map<String, String>');
     }
-    if (primaryButtonText.isEmpty) {
-      throw FormatException(
-          'WelcomeScreenConfig.primaryButtonText cannot be empty');
+
+    // Validate primaryButtonText - must be non-empty string or non-empty multilocale map
+    if (primaryButtonText is String) {
+      if ((primaryButtonText as String).isEmpty) {
+        throw FormatException('WelcomeScreenConfig.primaryButtonText cannot be empty');
+      }
+    } else if (primaryButtonText is Map<String, dynamic>) {
+      if (primaryButtonText.isEmpty) {
+        throw FormatException('WelcomeScreenConfig.primaryButtonText multilocale map cannot be empty');
+      }
+      if (!primaryButtonText.containsKey('en')) {
+        throw FormatException('WelcomeScreenConfig.primaryButtonText multilocale map must contain "en" key');
+      }
+    } else {
+      throw FormatException('WelcomeScreenConfig.primaryButtonText must be a String or Map<String, String>');
     }
+
     glassContainer?.validate();
     highlightWords?.validate();
     secondaryAction?.validate();
+    if (highlightColor != null) {
+      final hexCode = highlightColor!.replaceAll('#', '');
+      if (!RegExp(r'^[0-9A-Fa-f]{6}$|^[0-9A-Fa-f]{8}$').hasMatch(hexCode)) {
+        throw FormatException('Invalid hex color format for highlightColor: $highlightColor');
+      }
+    }
   }
 }
 
@@ -232,8 +275,8 @@ class HighlightWordsConfig
 class SecondaryActionConfig
     implements JsonSerializable<SecondaryActionConfig> {
   final String type; // e.g., "sign_in"
-  final String text;
-  final String prefixText;
+  final dynamic text; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  final dynamic prefixText; // Can be Map<String, String> (multilocale) or String (backward compatibility)
 
   SecondaryActionConfig({
     required this.type,
@@ -245,8 +288,8 @@ class SecondaryActionConfig
   factory SecondaryActionConfig.fromJson(Map<String, dynamic> json) {
     final config = SecondaryActionConfig(
       type: JsonParser.requireString(json, 'type'),
-      text: JsonParser.requireString(json, 'text'),
-      prefixText: JsonParser.requireString(json, 'prefix_text'),
+      text: JsonParser.requireMultilocaleText(json, 'text'),
+      prefixText: JsonParser.requireMultilocaleText(json, 'prefix_text'),
     );
     config.validate();
     return config;
@@ -266,8 +309,35 @@ class SecondaryActionConfig
     if (type.isEmpty) {
       throw FormatException('SecondaryActionConfig.type cannot be empty');
     }
-    if (text.isEmpty) {
-      throw FormatException('SecondaryActionConfig.text cannot be empty');
+    // Validate text - must be non-empty string or non-empty multilocale map
+    if (text is String) {
+      if ((text as String).isEmpty) {
+        throw FormatException('SecondaryActionConfig.text cannot be empty');
+      }
+    } else if (text is Map<String, dynamic>) {
+      if (text.isEmpty) {
+        throw FormatException('SecondaryActionConfig.text multilocale map cannot be empty');
+      }
+      if (!text.containsKey('en')) {
+        throw FormatException('SecondaryActionConfig.text multilocale map must contain "en" key');
+      }
+    } else {
+      throw FormatException('SecondaryActionConfig.text must be a String or Map<String, String>');
+    }
+    // Validate prefixText - must be non-empty string or non-empty multilocale map
+    if (prefixText is String) {
+      if ((prefixText as String).isEmpty) {
+        throw FormatException('SecondaryActionConfig.prefixText cannot be empty');
+      }
+    } else if (prefixText is Map<String, dynamic>) {
+      if (prefixText.isEmpty) {
+        throw FormatException('SecondaryActionConfig.prefixText multilocale map cannot be empty');
+      }
+      if (!prefixText.containsKey('en')) {
+        throw FormatException('SecondaryActionConfig.prefixText multilocale map must contain "en" key');
+      }
+    } else {
+      throw FormatException('SecondaryActionConfig.prefixText must be a String or Map<String, String>');
     }
   }
 }

@@ -3,9 +3,9 @@ import 'json_serializable.dart';
 /// Abstract base class for all onboarding screen models
 /// Each screen type (engagement, select, slider) extends this class
 abstract class OnboardingModel implements JsonSerializable<OnboardingModel> {
-  final String title;
-  final String? description; // Made optional
-  final String? nextButtonText;
+  final dynamic title; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  final dynamic description; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
+  final dynamic nextButtonText; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
   final AnswerStructure? answerStructure;
   final bool showTopBar; // Controls visibility of progress bar and back button
 
@@ -44,8 +44,21 @@ abstract class OnboardingModel implements JsonSerializable<OnboardingModel> {
 
   @override
   void validate() {
-    if (title.isEmpty) {
-      throw FormatException('$runtimeType.title cannot be empty');
+    // Validate title - must be non-empty string or non-empty multilocale map
+    if (title is String) {
+      if ((title as String).isEmpty) {
+        throw FormatException('$runtimeType.title cannot be empty');
+      }
+    } else if (title is Map<String, dynamic>) {
+      if (title.isEmpty) {
+        throw FormatException('$runtimeType.title multilocale map cannot be empty');
+      }
+      // Validate that at least 'en' is present
+      if (!title.containsKey('en')) {
+        throw FormatException('$runtimeType.title multilocale map must contain "en" key');
+      }
+    } else {
+      throw FormatException('$runtimeType.title must be a String or Map<String, String>');
     }
     // Description is now optional, so no validation needed
     answerStructure?.validate();
@@ -105,11 +118,11 @@ class EngagementScreenModel extends OnboardingModel {
   @override
   factory EngagementScreenModel.fromJson(Map<String, dynamic> json) {
     final model = EngagementScreenModel(
-      title: JsonParser.requireString(json, 'title'),
-      description: JsonParser.optionalString(json, 'description'),
+      title: JsonParser.requireMultilocaleText(json, 'title'),
+      description: JsonParser.optionalMultilocaleText(json, 'description'),
       visual: JsonParser.optionalString(json, 'visual'),
       metadata: JsonParser.optionalMap(json, 'metadata'),
-      nextButtonText: JsonParser.optionalString(json, 'next_button_text'),
+      nextButtonText: JsonParser.optionalMultilocaleText(json, 'next_button_text'),
       answerStructure: json['answer_structure'] != null
           ? AnswerStructure.fromJson(
               JsonParser.requireMap(json, 'answer_structure'),
@@ -138,24 +151,27 @@ class EngagementScreenModel extends OnboardingModel {
 
 /// Option for select-type screens
 class OnboardingOption implements JsonSerializable<OnboardingOption> {
-  final String label;
-  final String? value;
+  final dynamic label; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  final dynamic value; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
   final String? icon; // Material icon name (e.g., "tiktok", "youtube", "search", "store")
+  final String? tintColor; // Optional hex color string for brand/tint color (e.g., "#FF6600")
   final Map<String, dynamic>? metadata;
 
   OnboardingOption({
     required this.label,
     this.value,
     this.icon,
+    this.tintColor,
     this.metadata,
   });
 
   @override
   factory OnboardingOption.fromJson(Map<String, dynamic> json) {
     final option = OnboardingOption(
-      label: JsonParser.requireString(json, 'label'),
-      value: JsonParser.optionalString(json, 'value'),
+      label: JsonParser.requireMultilocaleText(json, 'label'),
+      value: JsonParser.optionalMultilocaleText(json, 'value'),
       icon: JsonParser.optionalString(json, 'icon'),
+      tintColor: JsonParser.optionalString(json, 'tint_color'),
       metadata: JsonParser.optionalMap(json, 'metadata'),
     );
     option.validate();
@@ -168,14 +184,28 @@ class OnboardingOption implements JsonSerializable<OnboardingOption> {
       'label': label,
       if (value != null) 'value': value,
       if (icon != null) 'icon': icon,
+      if (tintColor != null) 'tint_color': tintColor,
       if (metadata != null) 'metadata': metadata,
     };
   }
 
   @override
   void validate() {
-    if (label.isEmpty) {
-      throw FormatException('OnboardingOption.label cannot be empty');
+    // Validate label - must be non-empty string or non-empty multilocale map
+    if (label is String) {
+      if ((label as String).isEmpty) {
+        throw FormatException('OnboardingOption.label cannot be empty');
+      }
+    } else if (label is Map<String, dynamic>) {
+      if (label.isEmpty) {
+        throw FormatException('OnboardingOption.label multilocale map cannot be empty');
+      }
+      // Validate that at least 'en' is present
+      if (!label.containsKey('en')) {
+        throw FormatException('OnboardingOption.label multilocale map must contain "en" key');
+      }
+    } else {
+      throw FormatException('OnboardingOption.label must be a String or Map<String, String>');
     }
   }
 }
@@ -201,8 +231,8 @@ class SelectScreenModel extends OnboardingModel {
   @override
   factory SelectScreenModel.fromJson(Map<String, dynamic> json) {
     final model = SelectScreenModel(
-      title: JsonParser.requireString(json, 'title'),
-      description: JsonParser.optionalString(json, 'description'),
+      title: JsonParser.requireMultilocaleText(json, 'title'),
+      description: JsonParser.optionalMultilocaleText(json, 'description'),
       options: JsonParser.requireList<OnboardingOption>(
         json,
         'options',
@@ -216,7 +246,7 @@ class SelectScreenModel extends OnboardingModel {
         },
       ),
       metadata: JsonParser.optionalMap(json, 'metadata'),
-      nextButtonText: JsonParser.optionalString(json, 'next_button_text'),
+      nextButtonText: JsonParser.optionalMultilocaleText(json, 'next_button_text'),
       answerStructure: json['answer_structure'] != null
           ? AnswerStructure.fromJson(
               JsonParser.requireMap(json, 'answer_structure'),
@@ -257,7 +287,7 @@ class SelectScreenModel extends OnboardingModel {
 /// Slider option with value, label, and optional animation
 class SliderOption {
   final double value;
-  final String label;
+  final dynamic label; // Can be Map<String, String> (multilocale) or String (backward compatibility)
   final String? animation;
 
   SliderOption({
@@ -276,7 +306,7 @@ class SliderOption {
 
     return SliderOption(
       value: value.toDouble(),
-      label: JsonParser.requireString(json, 'label'),
+      label: JsonParser.requireMultilocaleText(json, 'label'),
       animation: JsonParser.optionalString(json, 'animation'),
     );
   }
@@ -335,11 +365,11 @@ class SliderScreenModel extends OnboardingModel {
     }
 
     final model = SliderScreenModel(
-      title: JsonParser.requireString(json, 'title'),
-      description: JsonParser.optionalString(json, 'description'),
+      title: JsonParser.requireMultilocaleText(json, 'title'),
+      description: JsonParser.optionalMultilocaleText(json, 'description'),
       options: options,
       metadata: metadata,
-      nextButtonText: JsonParser.optionalString(json, 'next_button_text'),
+      nextButtonText: JsonParser.optionalMultilocaleText(json, 'next_button_text'),
       answerStructure: json['answer_structure'] != null
           ? AnswerStructure.fromJson(
               JsonParser.requireMap(json, 'answer_structure'),

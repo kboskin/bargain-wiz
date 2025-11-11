@@ -3,6 +3,7 @@ import 'package:flutter_html/flutter_html.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/color_helper.dart';
+import '../../../../core/utils/multilocale_text_helper.dart';
 import '../../../../core/widgets/visual_asset_widget.dart';
 import '../../../../data/models/onboarding_model.dart';
 
@@ -26,11 +27,13 @@ class SliderScreenWidget extends StatefulWidget {
 
 class _SliderScreenWidgetState extends State<SliderScreenWidget> {
   ColorHelper? _cachedColorHelper;
+  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
 
   @override
   Widget build(BuildContext context) {
     // Cache ColorHelper lookup
     _cachedColorHelper ??= di.sl<ColorHelper>();
+    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
     // Check if this is a discrete slider with options
     if (widget.model.options.isNotEmpty) {
       return _buildDiscreteSlider(context);
@@ -77,13 +80,25 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Title
-          _buildStyledTitle(context, widget.model.title),
+          _buildStyledTitle(context, _cachedMultilocaleTextHelper!.getText(context, widget.model.title)),
           const SizedBox(height: 16),
 
           // Description (optional)
-          if (widget.model.description != null && widget.model.description!.isNotEmpty) ...[
-            _buildStyledDescription(context, widget.model.description!),
-            const SizedBox(height: 48),
+          if (widget.model.description != null) ...[
+            Builder(
+              builder: (context) {
+                final descriptionText = _cachedMultilocaleTextHelper!.getText(context, widget.model.description);
+                if (descriptionText.isNotEmpty) {
+                  return Column(
+                    children: [
+                      _buildStyledDescription(context, descriptionText),
+                      const SizedBox(height: 48),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
           ],
 
           // Selected value display with optional animation (smooth transitions)
@@ -115,7 +130,7 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    currentOption.label,
+                    _cachedMultilocaleTextHelper!.getText(context, currentOption.label),
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       color: AppColors.backgroundDark,
                       fontWeight: FontWeight.bold,
@@ -348,8 +363,8 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
       }
 
       final isHighlight = matchedWord != null;
-      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
-          ? wordColors[matchedWord.toLowerCase()]!
+      final wordColor = isHighlight 
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(
@@ -493,8 +508,8 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
       }
 
       final isHighlight = matchedWord != null;
-      final wordColor = isHighlight && wordColors.containsKey(matchedWord!.toLowerCase())
-          ? wordColors[matchedWord.toLowerCase()]!
+      final wordColor = isHighlight 
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(
