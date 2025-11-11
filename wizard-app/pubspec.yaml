@@ -99,6 +99,10 @@ dev_dependencies:
   
   # Native splash screen generator
   flutter_native_splash: ^2.4.1
+  
+  # Testing
+  mockito: ^5.4.4
+  build_runner: ^2.4.9
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
