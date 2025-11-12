@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
+import 'package:lottie/lottie.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/asset_path_helper.dart';
 import '../../../../core/utils/color_helper.dart';
 import '../../../../core/utils/multilocale_text_helper.dart';
 import '../../../../core/widgets/visual_asset_widget.dart';
@@ -25,15 +28,37 @@ class SliderScreenWidget extends StatefulWidget {
   State<SliderScreenWidget> createState() => _SliderScreenWidgetState();
 }
 
-class _SliderScreenWidgetState extends State<SliderScreenWidget> {
+class _SliderScreenWidgetState extends State<SliderScreenWidget>
+    with SingleTickerProviderStateMixin {
   ColorHelper? _cachedColorHelper;
   MultilocaleTextHelper? _cachedMultilocaleTextHelper;
+  AssetPathHelper? _cachedAssetPathHelper;
+  AnimationController? _staticFrameController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Create a controller for static frames (paused at 0)
+    _staticFrameController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+    _staticFrameController!.value = 0.0; // Set to first frame
+    _staticFrameController!.stop(); // Stop animation
+  }
+
+  @override
+  void dispose() {
+    _staticFrameController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     // Cache ColorHelper lookup
     _cachedColorHelper ??= di.sl<ColorHelper>();
     _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
+    _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
     // Check if this is a discrete slider with options
     if (widget.model.options.isNotEmpty) {
       return _buildDiscreteSlider(context);
@@ -77,9 +102,9 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40.0),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          // Title
+          // Title at the top
           _buildStyledTitle(context, _cachedMultilocaleTextHelper!.getText(context, widget.model.title)),
           const SizedBox(height: 16),
 
@@ -92,7 +117,7 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
                   return Column(
                     children: [
                       _buildStyledDescription(context, descriptionText),
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 32),
                     ],
                   );
                 }
@@ -101,49 +126,57 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
             ),
           ],
 
-          // Selected value display with optional animation (smooth transitions)
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (Widget child, Animation<double> animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.9, end: 1.0).animate(
-                    CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                  ),
-                  child: child,
-                ),
-              );
-            },
-            child: Column(
-              key: ValueKey<int>(currentOptionIndex),
-              children: [
-                // Show animation if available for selected option
-                if (currentOption.animation != null) ...[
-                  _buildVisual(currentOption.animation!, width: 100, height: 100),
-                  const SizedBox(height: 16),
-                ],
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
-                  decoration: BoxDecoration(
-                    color: AppColors.backgroundDark.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    _cachedMultilocaleTextHelper!.getText(context, currentOption.label),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: AppColors.backgroundDark,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 48),
+          // Spacer to push content to center
+          const Spacer(),
 
-          // Animations above slider (if provided) with smooth transitions
+          // Big middle animation with smooth transitions (animation only, text is separate)
+          Column(
+            children: [
+              // Animated visual only with smooth cross-fade transition
+              if (currentOption.animation != null)
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 400),
+                  switchInCurve: Curves.easeInOut,
+                  switchOutCurve: Curves.easeInOut,
+                  transitionBuilder: (Widget child, Animation<double> animation) {
+                    // Simple smooth cross-fade
+                    return FadeTransition(
+                      opacity: animation,
+                      child: child,
+                    );
+                  },
+                  child: _buildVisual(
+                    currentOption.animation!,
+                    width: 250,
+                    height: 250,
+                    key: ValueKey<String>('${currentOption.animation}_$currentOptionIndex'),
+                  ),
+                ),
+              const SizedBox(height: 24),
+              // Text always visible (not animated, just updates)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundDark.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  _cachedMultilocaleTextHelper!.getText(context, currentOption.label),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppColors.backgroundDark,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+
+          // Spacer to push slider to bottom
+          const Spacer(),
+
+          // Static indicators above slider (no animations, greyed out if not selected)
           if (sliderOptions.any((opt) => opt.animation != null)) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0),
@@ -157,29 +190,28 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
                   return Expanded(
                     child: Center(
                       child: opt.animation != null
-                          ? AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 300),
-                              transitionBuilder: (Widget child, Animation<double> animation) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: ScaleTransition(
-                                    scale: Tween<double>(begin: 0.8, end: 1.0).animate(
-                                      CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                                    ),
-                                    child: child,
-                                  ),
-                                );
-                              },
-                              child: _buildVisual(
-                                opt.animation!,
-                                width: 60,
-                                height: 60,
-                                key: ValueKey<String>('${opt.animation}_$optIndex'),
+                          ? Opacity(
+                              opacity: isSelected ? 1.0 : 0.3,
+                              child: ColorFiltered(
+                                colorFilter: isSelected
+                                    ? const ColorFilter.mode(
+                                        Colors.transparent,
+                                        BlendMode.dst,
+                                      )
+                                    : const ColorFilter.matrix([
+                                        0.2126, 0.7152, 0.0722, 0, 0, // Red channel
+                                        0.2126, 0.7152, 0.0722, 0, 0, // Green channel
+                                        0.2126, 0.7152, 0.0722, 0, 0, // Blue channel
+                                        0, 0, 0, 1, 0, // Alpha channel
+                                      ]),
+                                child: _buildStaticVisual(
+                                  opt.animation!,
+                                  width: 60,
+                                  height: 60,
+                                ),
                               ),
                             )
-                          : AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut,
+                          : Container(
                               width: 60,
                               height: 60,
                               decoration: BoxDecoration(
@@ -188,18 +220,12 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
                                     : AppColors.backgroundDark.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: AnimatedDefaultTextStyle(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? AppColors.backgroundDark
-                                      : AppColors.backgroundDark.withValues(alpha: 0.5),
-                                ),
-                                child: const Icon(
-                                  Icons.circle,
-                                  size: 30,
-                                ),
+                              child: Icon(
+                                Icons.circle,
+                                size: 30,
+                                color: isSelected
+                                    ? AppColors.backgroundDark
+                                    : AppColors.backgroundDark.withValues(alpha: 0.3),
                               ),
                             ),
                     ),
@@ -243,7 +269,7 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
                 activeColor: AppColors.backgroundDark,
                 inactiveColor: AppColors.backgroundDark.withValues(alpha: 0.3),
               ),
-              // Labels below slider with smooth color/weight transitions
+              // Labels below slider with smooth color/weight transitions (bigger text)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
                 child: Row(
@@ -257,15 +283,15 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
                         child: AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: isSelected
                                 ? AppColors.backgroundDark
-                                : AppColors.backgroundDark.withValues(alpha: 0.6),
+                                : AppColors.backgroundDark.withValues(alpha: 0.3),
                             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                            fontSize: 11,
+                            fontSize: 14,
                           ) ?? const TextStyle(),
                           child: Text(
-                            opt.label,
+                            _cachedMultilocaleTextHelper!.getText(context, opt.label),
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -289,6 +315,60 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget> {
       visualPath: visualPath,
       width: width,
       height: height,
+    );
+  }
+
+  /// Build static visual (no animation) for unselected options
+  Widget _buildStaticVisual(String visualPath, {double width = 60, double height = 60}) {
+    final lowerPath = visualPath.toLowerCase();
+    final isLottie = lowerPath.endsWith('.json');
+    final isSvg = lowerPath.endsWith('.svg');
+    final normalizedPath = _cachedAssetPathHelper!.normalizeAssetPath(visualPath);
+    final isNetworkUrl = _cachedAssetPathHelper!.isNetworkUrl(visualPath);
+
+    Widget visualWidget;
+
+    if (isNetworkUrl) {
+      if (isLottie) {
+        // Static Lottie - show first frame only, no animation
+        // Use controller paused at 0 to show static first frame
+        visualWidget = Lottie.network(
+          visualPath,
+          controller: _staticFrameController,
+          fit: BoxFit.contain,
+          repeat: false,
+          frameRate: FrameRate(60),
+          options: LottieOptions(enableMergePaths: true),
+        );
+      } else if (isSvg) {
+        visualWidget = SvgPicture.network(visualPath, fit: BoxFit.contain);
+      } else {
+        visualWidget = Image.network(visualPath, fit: BoxFit.contain);
+      }
+    } else {
+      // Local asset
+      if (isLottie) {
+        // Static Lottie - show first frame only, no animation
+        // Use controller paused at 0 to show static first frame
+        visualWidget = Lottie.asset(
+          normalizedPath,
+          controller: _staticFrameController,
+          fit: BoxFit.contain,
+          repeat: false,
+          frameRate: FrameRate(60),
+          options: LottieOptions(enableMergePaths: true),
+        );
+      } else if (isSvg) {
+        visualWidget = SvgPicture.asset(normalizedPath, fit: BoxFit.contain);
+      } else {
+        visualWidget = Image.asset(normalizedPath, fit: BoxFit.contain);
+      }
+    }
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: visualWidget,
     );
   }
 

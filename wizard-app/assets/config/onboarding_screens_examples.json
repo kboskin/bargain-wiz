@@ -206,18 +206,18 @@
       "options": [
         {
           "value": 50,
-          "label": "Below 100 bucks",
-          "animation": "assets/lottie/small_deal.json"
+          "label": "0-100$",
+          "animation": "assets/lottie/onboarding_small.json"
         },
         {
           "value": 550,
-          "label": "100-1000 bucks",
-          "animation": "assets/lottie/medium_deal.json"
+          "label": "100$-1000$",
+          "animation": "assets/lottie/onboarding_small.json"
         },
         {
           "value": 5000,
-          "label": "1000+ bucks",
-          "animation": "assets/lottie/large_deal.json"
+          "label": "1000$+",
+          "animation": "assets/lottie/onboarding_small.json"
         }
       ]
     },
