@@ -129,52 +129,52 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
           // Spacer to push content to center
           const Spacer(),
 
-          // Big middle animation with smooth transitions (animation only, text is separate)
-          Column(
-            children: [
-              // Animated visual only with smooth cross-fade transition
-              if (currentOption.animation != null)
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 400),
-                  switchInCurve: Curves.easeInOut,
-                  switchOutCurve: Curves.easeInOut,
-                  transitionBuilder: (Widget child, Animation<double> animation) {
-                    // Simple smooth cross-fade
-                    return FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    );
-                  },
-                  child: _buildVisual(
-                    currentOption.animation!,
-                    width: 250,
-                    height: 250,
-                    key: ValueKey<String>('${currentOption.animation}_$currentOptionIndex'),
-                  ),
-                ),
-              const SizedBox(height: 24),
-              // Text always visible (not animated, just updates)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundDark.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  _cachedMultilocaleTextHelper!.getText(context, currentOption.label),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.backgroundDark,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
+          // Big middle animation
+          Center(
+            child: currentOption.animation != null
+                ? AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    switchInCurve: Curves.easeInOut,
+                    switchOutCurve: Curves.easeInOut,
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      // Simple smooth cross-fade
+                      return FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      );
+                    },
+                    child: _buildVisual(
+                      currentOption.animation!,
+                      width: currentOption.animationWidth ?? 250,
+                      height: currentOption.animationHeight ?? 250,
+                      fit: BoxFit.cover,
+                      key: ValueKey<String>('${currentOption.animation}_$currentOptionIndex'),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
 
           // Spacer to push slider to bottom
           const Spacer(),
+
+          // Text pinned to top of slider
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
+            decoration: BoxDecoration(
+              color: AppColors.backgroundDark.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              _cachedMultilocaleTextHelper!.getText(context, currentOption.label),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.backgroundDark,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // Static indicators above slider (no animations, greyed out if not selected)
           if (sliderOptions.any((opt) => opt.animation != null)) ...[
@@ -309,12 +309,13 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
     );
   }
 
-  Widget _buildVisual(String visualPath, {double width = 200, double height = 200, Key? key}) {
+  Widget _buildVisual(String visualPath, {double width = 200, double height = 200, BoxFit fit = BoxFit.contain, Key? key}) {
     return VisualAssetWidget(
       key: key,
       visualPath: visualPath,
       width: width,
       height: height,
+      fit: fit,
     );
   }
 

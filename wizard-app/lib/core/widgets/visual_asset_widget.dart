@@ -10,12 +10,14 @@ class VisualAssetWidget extends StatefulWidget {
   final String visualPath;
   final double width;
   final double height;
+  final BoxFit fit;
 
   const VisualAssetWidget({
     super.key,
     required this.visualPath,
     this.width = 200,
     this.height = 200,
+    this.fit = BoxFit.contain,
   });
 
   @override
@@ -47,37 +49,39 @@ class _VisualAssetWidgetState extends State<VisualAssetWidget> {
       if (isLottie) {
         visualWidget = Lottie.network(
           widget.visualPath,
-          fit: BoxFit.contain,
-          frameRate: FrameRate(60),
+          fit: widget.fit,
+          frameRate: const FrameRate(60),
           options: LottieOptions(enableMergePaths: true),
         );
       } else if (isSvg) {
-        visualWidget = SvgPicture.network(widget.visualPath, fit: BoxFit.contain);
+        visualWidget = SvgPicture.network(widget.visualPath, fit: widget.fit);
       } else {
         // PNG/JPG from network
-        visualWidget = Image.network(widget.visualPath, fit: BoxFit.contain);
+        visualWidget = Image.network(widget.visualPath, fit: widget.fit);
       }
     } else {
       // Local asset
       if (isLottie) {
         visualWidget = Lottie.asset(
           normalizedPath,
-          fit: BoxFit.contain,
+          fit: widget.fit,
           frameRate: FrameRate(60),
           options: LottieOptions(enableMergePaths: true),
         );
       } else if (isSvg) {
-        visualWidget = SvgPicture.asset(normalizedPath, fit: BoxFit.contain);
+        visualWidget = SvgPicture.asset(normalizedPath, fit: widget.fit);
       } else {
         // PNG/JPG from assets
-        visualWidget = Image.asset(normalizedPath, fit: BoxFit.contain);
+        visualWidget = Image.asset(normalizedPath, fit: widget.fit);
       }
     }
 
     return SizedBox(
       width: widget.width,
       height: widget.height,
-      child: visualWidget,
+      child: Center(
+        child: visualWidget,
+      ),
     );
   }
 }

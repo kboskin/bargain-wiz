@@ -289,11 +289,15 @@ class SliderOption {
   final double value;
   final dynamic label; // Can be Map<String, String> (multilocale) or String (backward compatibility)
   final String? animation;
+  final double? animationWidth;
+  final double? animationHeight;
 
   SliderOption({
     required this.value,
     required this.label,
     this.animation,
+    this.animationWidth,
+    this.animationHeight,
   });
 
   factory SliderOption.fromJson(Map<String, dynamic> json) {
@@ -304,10 +308,28 @@ class SliderOption {
       );
     }
 
+    // Parse optional animation dimensions
+    double? animationWidth;
+    double? animationHeight;
+    if (json.containsKey('animation_width')) {
+      final width = json['animation_width'];
+      if (width is num) {
+        animationWidth = width.toDouble();
+      }
+    }
+    if (json.containsKey('animation_height')) {
+      final height = json['animation_height'];
+      if (height is num) {
+        animationHeight = height.toDouble();
+      }
+    }
+
     return SliderOption(
       value: value.toDouble(),
       label: JsonParser.requireMultilocaleText(json, 'label'),
       animation: JsonParser.optionalString(json, 'animation'),
+      animationWidth: animationWidth,
+      animationHeight: animationHeight,
     );
   }
 
@@ -316,6 +338,8 @@ class SliderOption {
       'value': value,
       'label': label,
       if (animation != null) 'animation': animation,
+      if (animationWidth != null) 'animation_width': animationWidth,
+      if (animationHeight != null) 'animation_height': animationHeight,
     };
   }
 }
