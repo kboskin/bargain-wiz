@@ -1,11 +1,11 @@
 import 'package:flutter/services.dart';
 import 'dart:convert';
-import '../utils/app_logger.dart';
-import 'firebase_service.dart';
-import '../../data/models/onboarding_model.dart';
-import '../../data/models/json_serializable.dart';
-import '../../data/models/gradient_background_config.dart';
-import '../../data/models/welcome_screen_config.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/core/services/firebase_service.dart';
+import 'package:appwizard/data/models/onboarding_model.dart';
+import 'package:appwizard/data/models/json_serializable.dart';
+import 'package:appwizard/data/models/gradient_background_config.dart';
+import 'package:appwizard/data/models/welcome_screen_config.dart';
 
 /// Service for managing Firebase Remote Config values
 /// Always fetches fresh values from Remote Config (no caching)

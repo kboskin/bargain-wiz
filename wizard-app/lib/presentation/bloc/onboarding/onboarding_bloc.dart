@@ -1,11 +1,11 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../base_bloc.dart';
+import 'package:appwizard/presentation/bloc/base_bloc.dart';
 import 'onboarding_event.dart';
 import 'onboarding_state.dart';
-import '../../../domain/repositories/onboarding_repository.dart';
-import '../../../core/services/onboarding_service.dart';
-import '../../../core/utils/app_logger.dart';
-import '../../../domain/entities/onboarding_data_entity.dart';
+import 'package:appwizard/domain/repositories/onboarding_repository.dart';
+import 'package:appwizard/core/services/onboarding_service.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
 
 /// Onboarding BLoC
 class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {

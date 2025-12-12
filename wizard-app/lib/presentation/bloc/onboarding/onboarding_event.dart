@@ -1,4 +1,4 @@
-import '../base_bloc.dart';
+import 'package:appwizard/presentation/bloc/base_bloc.dart';
 
 /// Onboarding events
 abstract class OnboardingEvent extends BaseEvent {

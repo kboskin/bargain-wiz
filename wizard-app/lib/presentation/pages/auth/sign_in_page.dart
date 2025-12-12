@@ -2,12 +2,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/glass_container.dart';
-import '../../bloc/auth/auth_bloc.dart';
-import '../../bloc/auth/auth_event.dart';
-import '../../bloc/auth/auth_state.dart';
-import '../../../l10n/app_localizations.dart';
+import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/core/widgets/glass_container.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_bloc.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_event.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_state.dart';
+import 'package:appwizard/l10n/app_localizations.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});

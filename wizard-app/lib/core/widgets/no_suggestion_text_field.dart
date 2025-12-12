@@ -2,21 +2,6 @@ import 'package:flutter/material.dart';
 
 /// Text field that disables keyboard suggestions and toolbar
 class NoSuggestionTextField extends StatelessWidget {
-  final TextEditingController? controller;
-  final String? hintText;
-  final String? labelText;
-  final bool obscureText;
-  final TextInputType? keyboardType;
-  final ValueChanged<String>? onChanged;
-  final FormFieldValidator<String>? validator;
-  final int? maxLines;
-  final int? maxLength;
-  final Widget? suffixIcon;
-  final Widget? prefixIcon;
-  final bool enabled;
-  final bool readOnly;
-  final VoidCallback? onTap;
-
   const NoSuggestionTextField({
     super.key,
     this.controller,
@@ -34,6 +19,21 @@ class NoSuggestionTextField extends StatelessWidget {
     this.readOnly = false,
     this.onTap,
   });
+
+  final TextEditingController? controller;
+  final String? hintText;
+  final String? labelText;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+  final ValueChanged<String>? onChanged;
+  final FormFieldValidator<String>? validator;
+  final int? maxLines;
+  final int? maxLength;
+  final Widget? suffixIcon;
+  final Widget? prefixIcon;
+  final bool enabled;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

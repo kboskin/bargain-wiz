@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../core/di/injection_container.dart' as di;
-import '../../../core/services/remote_config_service.dart';
-import '../../../core/theme/app_colors.dart';
-import 'welcome_screen_widget.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/presentation/pages/onboarding/welcome_screen_widget.dart';
 
 /// Page that loads and displays the welcome screen from remote config
 class WelcomeScreenPage extends StatefulWidget {

@@ -1,11 +1,12 @@
-import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
-import 'firebase_options.dart';
+import 'package:flutter/foundation.dart';
+
 import '../config/app_config.dart';
+import 'package:appwizard/core/services/firebase_options.dart';
 
 /// Firebase service for initializing and managing Firebase services
 class FirebaseService {
@@ -60,14 +61,7 @@ class FirebaseService {
 
       // Initialize Messaging
       _messaging = FirebaseMessaging.instance;
-      
-      // Request notification permissions
-      final settings = await _messaging!.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      debugPrint('[INFO] Firebase Messaging permission: ${settings.authorizationStatus}');
+      debugPrint('[INFO] Firebase Messaging initialized');
 
       // Initialize Remote Config
       _remoteConfig = FirebaseRemoteConfig.instance;
@@ -90,6 +84,30 @@ class FirebaseService {
       _crashlytics?.recordError(e, stackTrace, fatal: false);
       debugPrint('[ERROR] Error initializing Firebase: $e');
       rethrow;
+    }
+  }
+
+  /// Request notification permission
+  /// This triggers the native Android/iOS permission dialog
+  /// Returns the NotificationSettings with authorization status
+  static Future<NotificationSettings?> requestNotificationPermission() async {
+    try {
+      if (_messaging == null) {
+        debugPrint('[WARN] Firebase Messaging not initialized');
+        return null;
+      }
+
+      final settings = await _messaging!.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      debugPrint('[INFO] Notification permission result: ${settings.authorizationStatus}');
+      return settings;
+    } catch (e, stackTrace) {
+      _crashlytics?.recordError(e, stackTrace, fatal: false);
+      debugPrint('[ERROR] Error requesting notification permission: $e');
+      return null;
     }
   }
 

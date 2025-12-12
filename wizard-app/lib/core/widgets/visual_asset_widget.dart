@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../di/injection_container.dart' as di;
-import '../utils/asset_path_helper.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/utils/asset_path_helper.dart';
 
 /// Helper widget for rendering visual assets (Lottie, SVG, or Images)
 /// Supports both network URLs and local assets
 class VisualAssetWidget extends StatefulWidget {
-  final String visualPath;
-  final double width;
-  final double height;
-  final BoxFit fit;
-
   const VisualAssetWidget({
     super.key,
     required this.visualPath,
@@ -19,6 +14,11 @@ class VisualAssetWidget extends StatefulWidget {
     this.height = 200,
     this.fit = BoxFit.contain,
   });
+
+  final String visualPath;
+  final double width;
+  final double height;
+  final BoxFit fit;
 
   @override
   State<VisualAssetWidget> createState() => _VisualAssetWidgetState();

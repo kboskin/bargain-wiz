@@ -1,14 +1,9 @@
 import 'json_serializable.dart';
+import 'onboarding_screen_config.dart';
 
 /// Abstract base class for all onboarding screen models
 /// Each screen type (engagement, select, slider) extends this class
 abstract class OnboardingModel implements JsonSerializable<OnboardingModel> {
-  final dynamic title; // Can be Map<String, String> (multilocale) or String (backward compatibility)
-  final dynamic description; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
-  final dynamic nextButtonText; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
-  final AnswerStructure? answerStructure;
-  final bool showTopBar; // Controls visibility of progress bar and back button
-
   OnboardingModel({
     required this.title,
     this.description, // Made optional
@@ -19,22 +14,30 @@ abstract class OnboardingModel implements JsonSerializable<OnboardingModel> {
 
   /// Factory constructor that parses JSON and returns the appropriate model type
   factory OnboardingModel.fromJson(Map<String, dynamic> json) {
-    final type = json['type'] as String?;
-    if (type == null) {
+    final typeString = json['type'] as String?;
+    if (typeString == null) {
       throw FormatException('Required field "type" is missing');
     }
 
-    switch (type.toLowerCase()) {
-      case 'engagement':
+    final screenType = OnboardingScreenType.fromString(typeString);
+
+    switch (screenType) {
+      case OnboardingScreenType.engagement:
         return EngagementScreenModel.fromJson(json);
-      case 'select':
+      case OnboardingScreenType.select:
         return SelectScreenModel.fromJson(json);
-      case 'slider':
+      case OnboardingScreenType.slider:
         return SliderScreenModel.fromJson(json);
-      default:
-        throw FormatException('Unknown screen type: $type');
+      case OnboardingScreenType.permission:
+        return PermissionScreenModel.fromJson(json);
     }
   }
+
+  final dynamic title; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  final dynamic description; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
+  final dynamic nextButtonText; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
+  final AnswerStructure? answerStructure;
+  final bool showTopBar; // Controls visibility of progress bar and back button
 
   /// Get the screen type as a string
   String get type;
@@ -435,6 +438,92 @@ class SliderScreenModel extends OnboardingModel {
       if (option.label.isEmpty) {
         throw FormatException('SliderOption.label cannot be empty');
       }
+    }
+  }
+}
+
+/// Model for permission-type onboarding screens
+class PermissionScreenModel extends OnboardingModel {
+  final String subtype; // e.g., "notifications"
+  final Map<String, dynamic>? metadata; // Optional metadata for button styling, etc.
+
+  PermissionScreenModel({
+    required super.title,
+    super.description,
+    required this.subtype,
+    this.metadata,
+    super.nextButtonText,
+    super.answerStructure,
+    super.showTopBar,
+  });
+
+  @override
+  String get type => 'permission';
+
+  @override
+  factory PermissionScreenModel.fromJson(Map<String, dynamic> json) {
+    final model = PermissionScreenModel(
+      title: JsonParser.requireMultilocaleText(json, 'title'),
+      description: JsonParser.optionalMultilocaleText(json, 'description'),
+      subtype: JsonParser.requireString(json, 'subtype'),
+      metadata: JsonParser.optionalMap(json, 'metadata'),
+      nextButtonText: JsonParser.optionalMultilocaleText(json, 'next_button_text'),
+      answerStructure: json['answer_structure'] != null
+          ? AnswerStructure.fromJson(
+              JsonParser.requireMap(json, 'answer_structure'),
+            )
+          : null,
+      showTopBar: json['show_top_bar'] as bool? ?? true,
+    );
+    model.validate();
+    return model;
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'type': type,
+      if (description != null) 'description': description,
+      'subtype': subtype,
+      if (metadata != null) 'metadata': metadata,
+      if (nextButtonText != null) 'next_button_text': nextButtonText,
+      if (answerStructure != null) 'answer_structure': answerStructure!.toJson(),
+      if (!showTopBar) 'show_top_bar': showTopBar,
+    };
+  }
+
+  @override
+  void validate() {
+    super.validate();
+    if (subtype.isEmpty) {
+      throw FormatException('PermissionScreenModel.subtype cannot be empty');
+    }
+  }
+}
+
+/// Extension for pattern matching with when-like syntax
+extension OnboardingModelWhen<T> on OnboardingModel {
+  /// Pattern matching method similar to Kotlin's when expression
+  /// Provides type-safe pattern matching for all screen types
+  T when<T>({
+    required T Function(EngagementScreenModel) engagement,
+    required T Function(SelectScreenModel) select,
+    required T Function(SliderScreenModel) slider,
+    required T Function(PermissionScreenModel) permission,
+    T Function()? orElse,
+  }) {
+    if (this is EngagementScreenModel) {
+      return engagement(this as EngagementScreenModel);
+    } else if (this is SelectScreenModel) {
+      return select(this as SelectScreenModel);
+    } else if (this is SliderScreenModel) {
+      return slider(this as SliderScreenModel);
+    } else if (this is PermissionScreenModel) {
+      return permission(this as PermissionScreenModel);
+    } else {
+      return orElse?.call() ?? 
+        (throw FormatException('Unknown screen type: ${runtimeType}')) as T;
     }
   }
 }

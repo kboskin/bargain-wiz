@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/di/injection_container.dart' as di;
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/utils/color_helper.dart';
-import '../../../core/utils/multilocale_text_helper.dart';
-import '../../../core/widgets/glass_container.dart';
-import '../../../core/widgets/visual_asset_widget.dart';
-import '../../../data/models/welcome_screen_config.dart';
-import '../auth/sign_in_modal.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/core/theme/app_text_styles.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
+import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/widgets/glass_container.dart';
+import 'package:appwizard/core/widgets/visual_asset_widget.dart';
+import 'package:appwizard/data/models/welcome_screen_config.dart';
+import 'package:appwizard/presentation/pages/auth/sign_in_modal.dart';
 
 /// Widget for the welcome/landing screen
 /// Displays title, description, visual, and action buttons based on remote config

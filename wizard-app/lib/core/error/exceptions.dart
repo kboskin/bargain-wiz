@@ -1,8 +1,8 @@
 /// Base class for all exceptions
 abstract class AppException implements Exception {
-  final String message;
-
   const AppException(this.message);
+
+  final String message;
 }
 
 /// Server exception - when API calls fail

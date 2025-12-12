@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:dartz/dartz.dart';
-import '../error/failures.dart';
+import 'package:appwizard/core/error/failures.dart';
 
 // Note: Either<Failure, T> is from dartz package
 // Left = Failure, Right = Success

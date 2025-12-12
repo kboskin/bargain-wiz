@@ -4,15 +4,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/glass_container.dart';
-import '../../../core/services/remote_config_service.dart';
-import '../../../core/di/injection_container.dart' as di;
-import '../../bloc/auth/auth_bloc.dart';
-import '../../bloc/auth/auth_event.dart';
-import '../../bloc/auth/auth_state.dart';
-import '../../../l10n/app_localizations.dart';
+import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/core/theme/app_text_styles.dart';
+import 'package:appwizard/core/widgets/glass_container.dart';
+import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/presentation/bloc/auth/auth_bloc.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_event.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_state.dart';
+import 'package:appwizard/l10n/app_localizations.dart';
 
 class SignInModal extends StatelessWidget {
   const SignInModal({super.key});

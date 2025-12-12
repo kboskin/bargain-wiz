@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:lottie/lottie.dart'; // Added for Lottie animations
-import '../../../../core/di/injection_container.dart' as di;
-import '../../../../core/services/remote_config_service.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/asset_path_helper.dart';
-import '../../../../core/utils/color_helper.dart';
-import '../../../../core/utils/multilocale_text_helper.dart';
-import '../../../../core/widgets/glass_container.dart'; // Added for glass effect
-import '../../../../data/models/onboarding_model.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/core/utils/asset_path_helper.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
+import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/widgets/glass_container.dart'; // Added for glass effect
+import 'package:appwizard/data/models/onboarding_model.dart';
 
 /// Widget for select-type onboarding screens
 /// Displays title, description, and selectable options

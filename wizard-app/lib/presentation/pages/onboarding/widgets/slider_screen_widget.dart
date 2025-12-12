@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../../../../core/di/injection_container.dart' as di;
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/asset_path_helper.dart';
-import '../../../../core/utils/color_helper.dart';
-import '../../../../core/utils/multilocale_text_helper.dart';
-import '../../../../core/widgets/visual_asset_widget.dart';
-import '../../../../data/models/onboarding_model.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/core/utils/asset_path_helper.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
+import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/widgets/visual_asset_widget.dart';
+import 'package:appwizard/data/models/onboarding_model.dart';
 
 /// Widget for slider-type onboarding screens
 /// Supports discrete labeled options with optional animations

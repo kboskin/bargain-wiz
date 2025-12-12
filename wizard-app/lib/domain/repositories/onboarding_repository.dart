@@ -1,6 +1,6 @@
 import 'package:dartz/dartz.dart';
-import '../../core/error/failures.dart';
-import '../entities/onboarding_data_entity.dart';
+import 'package:appwizard/core/error/failures.dart';
+import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
 
 /// Repository interface for onboarding data
 abstract class OnboardingRepository {

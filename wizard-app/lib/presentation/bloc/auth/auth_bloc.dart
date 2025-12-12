@@ -1,10 +1,10 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../base_bloc.dart';
+import 'package:appwizard/presentation/bloc/base_bloc.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
-import '../../../core/services/auth_service.dart';
-import '../../../core/utils/app_logger.dart';
+import 'package:appwizard/core/services/auth_service.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
 
 /// Authentication BLoC
 class AuthBloc extends BaseBloc<AuthEvent, AuthState> {

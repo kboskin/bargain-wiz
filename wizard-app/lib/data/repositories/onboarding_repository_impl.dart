@@ -1,9 +1,9 @@
 import 'package:dartz/dartz.dart';
-import '../../core/error/failures.dart';
-import '../../domain/repositories/onboarding_repository.dart';
-import '../../domain/entities/onboarding_data_entity.dart';
-import '../datasources/onboarding_local_datasource.dart';
-import '../models/onboarding_data.dart';
+import 'package:appwizard/core/error/failures.dart';
+import 'package:appwizard/domain/repositories/onboarding_repository.dart';
+import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
+import 'package:appwizard/data/datasources/onboarding_local_datasource.dart';
+import 'package:appwizard/data/models/onboarding_data.dart';
 
 /// Implementation of OnboardingRepository
 class OnboardingRepositoryImpl implements OnboardingRepository {

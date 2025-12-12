@@ -3,21 +3,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/di/injection_container.dart' as di;
-import '../../../core/services/onboarding_service.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/utils/app_logger.dart';
-import '../../../core/utils/multilocale_text_helper.dart';
-import '../../../data/models/onboarding_model.dart';
-import '../../../domain/repositories/onboarding_repository.dart';
-import '../../../l10n/app_localizations.dart';
-import '../../bloc/onboarding/onboarding_bloc.dart';
-import '../../bloc/onboarding/onboarding_event.dart';
-import '../../bloc/onboarding/onboarding_state.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/services/onboarding_service.dart';
+import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/core/theme/app_text_styles.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/data/models/onboarding_model.dart';
+import 'package:appwizard/domain/repositories/onboarding_repository.dart';
+import 'package:appwizard/l10n/app_localizations.dart';
+import 'package:appwizard/presentation/bloc/onboarding/onboarding_bloc.dart';
+import 'package:appwizard/presentation/bloc/onboarding/onboarding_event.dart';
+import 'package:appwizard/presentation/bloc/onboarding/onboarding_state.dart';
 import 'widgets/engagement_screen_widget.dart';
 import 'widgets/select_screen_widget.dart';
 import 'widgets/slider_screen_widget.dart';
+import 'widgets/permission_screen_widget.dart';
 
 class OnboardingFlowPage extends StatelessWidget {
   const OnboardingFlowPage({super.key});
@@ -296,7 +297,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
     final currentScreen = state.screens[_currentScreenIndex];
 
-    if (currentScreen.type == 'select') {
+    if (currentScreen is SelectScreenModel) {
       if (state.answers[_currentScreenIndex] == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -306,7 +307,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
         );
         return false;
       }
-    } else if (currentScreen.type == 'slider') {
+    } else if (currentScreen is SliderScreenModel) {
       if (state.answers[_currentScreenIndex] == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -358,51 +359,51 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       );
     }
 
-    // Map each screen type to its dedicated widget using polymorphism
-    if (screen is EngagementScreenModel) {
-      return EngagementScreenWidget(model: screen);
-    } else if (screen is SelectScreenModel) {
-      return SelectScreenWidget(
-        model: screen,
+    // Map each screen type to its dedicated widget using when pattern matching
+    return screen.when<Widget>(
+      engagement: (model) => EngagementScreenWidget(model: model),
+      select: (model) => SelectScreenWidget(
+        model: model,
         selectedValue: state.answers[index],
         onOptionSelected: (value) {
           bloc.add(
             OnboardingAnswerChanged(
               screenIndex: index,
-              screenTitle: screen.title,
-              screenType: screen.type,
-              answerKey: screen.answerStructure?.answerKeyName,
+              screenTitle: model.title,
+              screenType: model.type,
+              answerKey: model.answerStructure?.answerKeyName,
               answer: value,
             ),
           );
         },
-      );
-    } else if (screen is SliderScreenModel) {
-      return SliderScreenWidget(
-        model: screen,
+      ),
+      slider: (model) => SliderScreenWidget(
+        model: model,
         selectedValue: state.answers[index],
         onValueChanged: (value) {
           bloc.add(
             OnboardingAnswerChanged(
               screenIndex: index,
-              screenTitle: screen.title,
-              screenType: screen.type,
-              answerKey: screen.answerStructure?.answerKeyName,
+              screenTitle: model.title,
+              screenType: model.type,
+              answerKey: model.answerStructure?.answerKeyName,
               answer: value,
             ),
           );
         },
-      );
-    } else {
-      return Center(
+      ),
+      permission: (model) => PermissionScreenWidget(
+        model: model,
+      ),
+      orElse: () => Center(
         child: Text(
           'Unknown screen type: ${screen.runtimeType}',
           style: Theme.of(
             context,
           ).textTheme.bodyLarge?.copyWith(color: AppColors.backgroundDark),
         ),
-      );
-    }
+      ),
+    );
   }
 
 }

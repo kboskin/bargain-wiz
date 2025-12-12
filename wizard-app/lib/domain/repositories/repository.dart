@@ -1,5 +1,5 @@
 import 'package:dartz/dartz.dart';
-import '../../core/error/failures.dart';
+import 'package:appwizard/core/error/failures.dart';
 
 /// Base repository interface
 /// T - Entity type

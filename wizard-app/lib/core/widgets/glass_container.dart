@@ -4,15 +4,6 @@ import 'package:flutter/material.dart';
 /// Glassmorphism container widget
 /// Creates a frosted glass effect with blur and transparency
 class GlassContainer extends StatelessWidget {
-  final Widget child;
-  final double blurSigma;
-  final Color? color;
-  final double opacity;
-  final BorderRadius? borderRadius;
-  final Border? border;
-  final EdgeInsetsGeometry? padding;
-  final EdgeInsetsGeometry? margin;
-
   const GlassContainer({
     super.key,
     required this.child,
@@ -24,6 +15,15 @@ class GlassContainer extends StatelessWidget {
     this.padding,
     this.margin,
   });
+
+  final Widget child;
+  final double blurSigma;
+  final Color? color;
+  final double opacity;
+  final BorderRadius? borderRadius;
+  final Border? border;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
 
   @override
   Widget build(BuildContext context) {

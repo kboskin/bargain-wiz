@@ -1,12 +1,12 @@
-import 'package:flutter/foundation.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 
 /// Logger utility that logs errors to Crashlytics
 /// Provided through dependency injection
 class AppLogger {
-  final FirebaseCrashlytics? _crashlytics;
-
   AppLogger(this._crashlytics);
+
+  final FirebaseCrashlytics? _crashlytics;
 
   void d(String message) {
     if (kDebugMode) {

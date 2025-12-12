@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../models/onboarding_data.dart';
-import '../../core/utils/app_logger.dart';
+import 'package:appwizard/data/models/onboarding_data.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
 
 /// Local data source for onboarding data
 abstract class OnboardingLocalDataSource {
@@ -11,11 +11,11 @@ abstract class OnboardingLocalDataSource {
 }
 
 class OnboardingLocalDataSourceImpl implements OnboardingLocalDataSource {
+  OnboardingLocalDataSourceImpl(this._prefs, this._logger);
+
   static const String _onboardingDataKey = 'onboarding_data';
   final SharedPreferences _prefs;
   final AppLogger _logger;
-
-  OnboardingLocalDataSourceImpl(this._prefs, this._logger);
 
   @override
   Future<void> saveOnboardingData(OnboardingData data) async {

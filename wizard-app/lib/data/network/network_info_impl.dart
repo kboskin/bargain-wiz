@@ -1,4 +1,4 @@
-import '../../core/network/network_info.dart';
+import 'package:appwizard/core/network/network_info.dart';
 import 'package:connectivity_plus/connectivity_plus.dart' as connectivity;
 
 class NetworkInfoImpl implements NetworkInfo {

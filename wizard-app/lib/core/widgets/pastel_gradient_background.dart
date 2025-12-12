@@ -1,21 +1,21 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../di/injection_container.dart' as di;
-import '../services/remote_config_service.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/services/remote_config_service.dart';
 
 /// Gradient background widget for the entire application
 /// Configurable via Remote Config with optional blur/glass effect
 class PastelGradientBackground extends StatelessWidget {
-  final Widget child;
-  final bool showNoiseTexture;
-  final double blurSigma; // Blur intensity (0.0 = no blur, higher = more blur)
-
   const PastelGradientBackground({
     super.key,
     required this.child,
     this.showNoiseTexture = false,
     this.blurSigma = 0.0, // Default no blur
   });
+
+  final Widget child;
+  final bool showNoiseTexture;
+  final double blurSigma; // Blur intensity (0.0 = no blur, higher = more blur)
 
   /// Default gradient colors (fallback if Remote Config not available)
   /// Purple to Gold theme: Soft purple → Bright yellow → Warm gold

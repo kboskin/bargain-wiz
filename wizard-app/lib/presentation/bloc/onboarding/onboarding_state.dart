@@ -1,5 +1,5 @@
-import '../base_bloc.dart';
-import '../../../data/models/onboarding_model.dart';
+import 'package:appwizard/presentation/bloc/base_bloc.dart';
+import 'package:appwizard/data/models/onboarding_model.dart';
 
 /// Onboarding states
 abstract class OnboardingState extends BaseState {

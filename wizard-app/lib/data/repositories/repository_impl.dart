@@ -1,8 +1,8 @@
 import 'package:dartz/dartz.dart';
-import '../../core/error/failures.dart';
-import '../../core/error/exceptions.dart';
-import '../../core/network/network_info.dart';
-import '../../domain/repositories/repository.dart';
+import 'package:appwizard/core/error/failures.dart';
+import 'package:appwizard/core/error/exceptions.dart';
+import 'package:appwizard/core/network/network_info.dart';
+import 'package:appwizard/domain/repositories/repository.dart';
 
 /// Base implementation for repositories
 /// This follows the Repository pattern from Clean Architecture

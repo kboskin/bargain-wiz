@@ -1,24 +1,14 @@
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/utils/color_helper.dart';
+import 'package:appwizard/data/models/json_serializable.dart';
 import 'package:flutter/material.dart';
-import '../../core/di/injection_container.dart' as di;
-import '../../core/utils/color_helper.dart';
-import 'json_serializable.dart';
 
 /// Configuration for the app's gradient background
 class GradientBackgroundConfig implements JsonSerializable<GradientBackgroundConfig> {
-  final List<String> colors; // Hex color strings like ["#F3E5F5", "#E8EAF6", "#E0F2F1"]
-  final List<double> stops; // Gradient stops like [0.0, 0.5, 1.0]
-
   GradientBackgroundConfig({
     required this.colors,
     required this.stops,
   });
-
-  /// Get colors as Color objects
-  /// Supports hex colors with optional opacity (6 or 8 characters)
-  List<Color> get colorObjects {
-    final colorHelper = di.sl<ColorHelper>();
-    return colors.map((c) => colorHelper.parseHexColor(c)).toList();
-  }
 
   @override
   factory GradientBackgroundConfig.fromJson(Map<String, dynamic> json) {
@@ -50,6 +40,16 @@ class GradientBackgroundConfig implements JsonSerializable<GradientBackgroundCon
     );
     config.validate();
     return config;
+  }
+
+  final List<String> colors; // Hex color strings like ["#F3E5F5", "#E8EAF6", "#E0F2F1"]
+  final List<double> stops; // Gradient stops like [0.0, 0.5, 1.0]
+
+  /// Get colors as Color objects
+  /// Supports hex colors with optional opacity (6 or 8 characters)
+  List<Color> get colorObjects {
+    final colorHelper = di.sl<ColorHelper>();
+    return colors.map((c) => colorHelper.parseHexColor(c)).toList();
   }
 
   @override

@@ -5,7 +5,8 @@ import 'json_serializable.dart';
 enum OnboardingScreenType {
   select,
   slider,
-  engagement;
+  engagement,
+  permission;
 
   static OnboardingScreenType fromString(String value) {
     switch (value.toLowerCase()) {
@@ -15,6 +16,8 @@ enum OnboardingScreenType {
         return OnboardingScreenType.slider;
       case 'engagement':
         return OnboardingScreenType.engagement;
+      case 'permission':
+        return OnboardingScreenType.permission;
       default:
         return OnboardingScreenType.engagement;
     }
