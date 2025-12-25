@@ -9,7 +9,7 @@ import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/multilocale_text_helper.dart';
 import 'package:appwizard/core/widgets/glass_container.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
-import 'package:appwizard/data/models/welcome_screen_config.dart';
+import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
 import 'package:appwizard/presentation/pages/auth/sign_in_modal.dart';
 
 /// Widget for the welcome/landing screen
@@ -95,10 +95,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
         padding: const EdgeInsets.symmetric(horizontal: 40),
         child: GlassContainer(
           blurSigma: glassConfig.blurSigma,
-          color: _cachedColorHelper!.getColor(
-            glassConfig.color,
-            defaultColor: Colors.white,
-          ),
+          color: _cachedColorHelper!.getColor(glassConfig.color) ?? Colors.white,
           opacity: glassConfig.opacity,
           borderRadius: BorderRadius.circular(glassConfig.borderRadius),
           child: SizedBox(
@@ -185,10 +182,10 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
         final wordStr = word.toString();
         highlightWords.add(wordStr);
         if (colorValue is String) {
-          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
-            colorValue,
-            defaultColor: defaultHighlightColor,
-          );
+          final color = _cachedColorHelper!.getColor(colorValue);
+          if (color != null) {
+            wordColors[wordStr.toLowerCase()] = color;
+          }
         }
       });
     } else if (highlightWordsData is List) {
@@ -225,7 +222,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
                   fontSize: 36,
                   shadows: [
                     Shadow(
-                      color: wordColor.withValues(alpha: 0.5),
+                      color: wordColor?.withValues(alpha: 0.5) ?? Colors.transparent,
                       blurRadius: 20,
                       offset: const Offset(0, 0),
                     ),
@@ -330,10 +327,10 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
         final wordStr = word.toString();
         highlightWords.add(wordStr);
         if (colorValue is String) {
-          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
-            colorValue,
-            defaultColor: defaultHighlightColor,
-          );
+          final color = _cachedColorHelper!.getColor(colorValue);
+          if (color != null) {
+            wordColors[wordStr.toLowerCase()] = color;
+          }
         }
       });
     } else if (highlightWordsData is List) {
@@ -383,15 +380,13 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     );
   }
 
-  /// Get highlight color from config or default to amber
-  Color _getHighlightColor() {
+  /// Get highlight color from config
+  /// Returns null if no valid color is found
+  Color? _getHighlightColor() {
     if (widget.config.highlightColor != null) {
-      return _cachedColorHelper!.getColor(
-        widget.config.highlightColor!,
-        defaultColor: Colors.amber,
-      );
+      return _cachedColorHelper!.getColor(widget.config.highlightColor!);
     }
-    return Colors.amber; // Default color
+    return null; // No color if not found
   }
 
   /// Build primary action button

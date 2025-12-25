@@ -1,4 +1,5 @@
 import 'package:appwizard/presentation/bloc/base_bloc.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
 
 /// Onboarding events
 abstract class OnboardingEvent extends BaseEvent {
@@ -14,7 +15,7 @@ class LoadOnboardingConfigRequested extends OnboardingEvent {
 class OnboardingAnswerChanged extends OnboardingEvent {
   final int screenIndex;
   final String screenTitle;
-  final String screenType;
+  final OnboardingScreenType screenType;
   final String? answerKey; // Key from answerStructure in screen config
   final dynamic answer;
 

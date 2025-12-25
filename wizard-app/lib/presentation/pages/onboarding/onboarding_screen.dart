@@ -9,7 +9,7 @@ import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/utils/multilocale_text_helper.dart';
-import 'package:appwizard/data/models/onboarding_model.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:appwizard/presentation/bloc/onboarding/onboarding_bloc.dart';
@@ -81,12 +81,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
         if (state is OnboardingCompleted) {
           context.go('/');
         } else if (state is OnboardingError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          // Error state - navigation will be handled by the error UI
         }
       },
       builder: (context, state) {
@@ -299,22 +294,12 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
     if (currentScreen is SelectScreenModel) {
       if (state.answers[_currentScreenIndex] == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.pleaseSelectOption),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        // Validation failed - just return false without snackbar
         return false;
       }
     } else if (currentScreen is SliderScreenModel) {
       if (state.answers[_currentScreenIndex] == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.pleaseSelectValue),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        // Validation failed - just return false without snackbar
         return false;
       }
     }
@@ -394,6 +379,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       ),
       permission: (model) => PermissionScreenWidget(
         model: model,
+        onContinue: () => _handleNext(state, _cachedBloc!),
       ),
       orElse: () => Center(
         child: Text(

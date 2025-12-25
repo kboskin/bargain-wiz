@@ -1,4 +1,5 @@
-/// Model for storing onboarding user data
+/// Data Transfer Object (DTO) for local storage of onboarding data
+/// Used by OnboardingLocalDataSource for SharedPreferences persistence
 /// Answers are stored abstractly based on answerKey from screen configuration
 class OnboardingData {
   OnboardingData({

@@ -4,6 +4,7 @@ import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
 import 'package:appwizard/data/datasources/onboarding_local_datasource.dart';
 import 'package:appwizard/data/models/onboarding_data.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
 
 /// Implementation of OnboardingRepository
 class OnboardingRepositoryImpl implements OnboardingRepository {
@@ -88,7 +89,9 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
           answers.add(OnboardingAnswer(
             screenIndex: index,
             screenTitle: answerValue['screenTitle'] as String? ?? '',
-            screenType: answerValue['screenType'] as String? ?? '',
+            screenType: answerValue['screenType'] != null
+                ? OnboardingScreenType.fromString(answerValue['screenType'] as String)
+                : OnboardingScreenType.engagement,
             answerKey: answerValue['answerKey'] as String?,
             answer: answerValue['answer'],
           ));
@@ -102,7 +105,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
           answers.add(OnboardingAnswer(
             screenIndex: index,
             screenTitle: '', // Will be filled from config when available
-            screenType: '', // Will be filled from config when available
+            screenType: OnboardingScreenType.engagement, // Default fallback
             answerKey: key.startsWith('screen_') ? null : key,
             answer: answerValue,
           ));

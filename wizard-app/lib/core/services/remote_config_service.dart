@@ -2,10 +2,9 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/services/firebase_service.dart';
-import 'package:appwizard/data/models/onboarding_model.dart';
-import 'package:appwizard/data/models/json_serializable.dart';
-import 'package:appwizard/data/models/gradient_background_config.dart';
-import 'package:appwizard/data/models/welcome_screen_config.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/data/models/remote_config/gradient_background_config.dart';
+import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
 
 /// Service for managing Firebase Remote Config values
 /// Always fetches fresh values from Remote Config (no caching)
@@ -103,9 +102,14 @@ class RemoteConfigService {
       }
       
       // Use strict parsing with validation - returns polymorphic OnboardingModel instances
-      final screens = json.mapToModel<OnboardingModel>(
-        (item) => OnboardingModel.fromJson(item),
-      );
+      final screens = json.map((final item) {
+        if (item is! Map<String, dynamic>) {
+          throw FormatException(
+            'Expected Map<String, dynamic> for screen, got ${item.runtimeType}',
+          );
+        }
+        return OnboardingModel.fromJson(item);
+      }).toList();
       
       _logger.i('Loaded ${screens.length} onboarding screens from Remote Config');
       return screens;
@@ -199,38 +203,6 @@ class RemoteConfigService {
     } catch (e, stackTrace) {
       _logger.e('Error parsing welcome screen config', e, stackTrace);
       return null;
-    }
-  }
-
-  /// Get brand colors map from Remote Config
-  /// Returns a map of brand name (lowercase) to hex color string
-  /// Returns empty map if not configured
-  Map<String, String> getBrandColors() {
-    try {
-      final jsonString = getString('brand_colors');
-      if (jsonString.isEmpty) {
-        _logger.w('Brand colors config is empty, returning empty map');
-        return {};
-      }
-
-      final json = jsonDecode(jsonString);
-      if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid brand_colors format, expected Map');
-        return {};
-      }
-
-      // Convert to Map<String, String> (brand name -> hex color)
-      final brandColors = <String, String>{};
-      json.forEach((key, value) {
-        if (value is String) {
-          brandColors[key.toLowerCase()] = value;
-        }
-      });
-
-      return brandColors;
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing brand colors config', e, stackTrace);
-      return {};
     }
   }
 

@@ -33,12 +33,7 @@ class SignInModal extends StatelessWidget {
     return BlocConsumer<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: Colors.red,
-            ),
-          );
+          // Error state - UI will handle display
         } else if (state is AuthAuthenticated) {
           // Close modal and navigate to home
           Navigator.of(context).pop();

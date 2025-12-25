@@ -10,7 +10,7 @@ import 'package:appwizard/core/utils/asset_path_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/multilocale_text_helper.dart';
 import 'package:appwizard/core/widgets/glass_container.dart'; // Added for glass effect
-import 'package:appwizard/data/models/onboarding_model.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 
 /// Widget for select-type onboarding screens
 /// Displays title, description, and selectable options
@@ -56,7 +56,6 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   ColorHelper? _cachedColorHelper;
   MultilocaleTextHelper? _cachedMultilocaleTextHelper;
   RemoteConfigService? _cachedRemoteConfigService;
-  Map<String, String>? _cachedBrandColors;
 
   @override
   void initState() {
@@ -139,9 +138,6 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     _cachedColorHelper ??= di.sl<ColorHelper>();
     _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
     _cachedRemoteConfigService ??= di.sl<RemoteConfigService>();
-    
-    // Cache brand colors from remote config
-    _cachedBrandColors ??= _cachedRemoteConfigService!.getBrandColors();
     
     if (widget.model.options.isEmpty) {
       return const SizedBox.shrink();
@@ -359,26 +355,33 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     final animationPath = _getAnimationPath(option);
     final normalizedPath = _cachedAssetPathHelper!.normalizeAssetPath(animationPath);
     
-    // Get animation color from option metadata or use default
+    // Get animation color from option metadata (no default - if not provided, no color applied)
     final animationColorString = option.metadata?['animation_color'] as String?;
-    final animationColor = _cachedColorHelper!.getColor(animationColorString, defaultColor: Colors.amber);
+    final animationColor = _cachedColorHelper!.getColor(animationColorString);
     
     // Single star animation (no waterfall)
-    return SizedBox(
-      width: 32,
-      height: 32,
-      child: ColorFiltered(
+    Widget animationWidget = Lottie.asset(
+      normalizedPath,
+      fit: BoxFit.contain,
+      frameRate: FrameRate(60),
+      options: LottieOptions(enableMergePaths: true),
+    );
+    
+    // Apply color filter only if color is provided
+    if (animationColor != null) {
+      animationWidget = ColorFiltered(
         colorFilter: ColorFilter.mode(
           animationColor,
           BlendMode.srcATop,
         ),
-        child: Lottie.asset(
-          normalizedPath,
-          fit: BoxFit.contain,
-          frameRate: FrameRate(60),
-          options: LottieOptions(enableMergePaths: true),
-        ),
-      ),
+        child: animationWidget,
+      );
+    }
+    
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: animationWidget,
     );
   }
 
@@ -678,33 +681,23 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   }
 
   /// Get brand color for platform/service
-  /// Priority: 1) tint_color from option, 2) brand_colors from remote config, 3) default
+  /// Priority: 1) tint_color from option, 2) color from metadata
+  /// Returns null if no valid color is found
   Color? _getBrandColor(OnboardingOption option, BuildContext context) {
     // First priority: Check tint_color from option (per-option override)
     if (option.tintColor != null && option.tintColor!.isNotEmpty) {
-      return _cachedColorHelper!.getColor(
-        option.tintColor,
-        defaultColor: AppColors.backgroundDark,
-      );
+      return _cachedColorHelper!.getColor(option.tintColor);
     }
 
-    // Second priority: Use brand colors from remote config
-    final optionValueText = option.value != null 
-        ? _cachedMultilocaleTextHelper!.getText(context, option.value)
-        : null;
-    final optionLabelText = _cachedMultilocaleTextHelper!.getText(context, option.label);
-    final lookupValue = (optionValueText ?? optionLabelText).toLowerCase();
-
-    // Get brand color from remote config
-    final brandColorHex = _cachedBrandColors?[lookupValue];
-    if (brandColorHex != null && brandColorHex.isNotEmpty) {
-      return _cachedColorHelper!.getColor(
-        brandColorHex,
-        defaultColor: AppColors.backgroundDark,
-      );
+    // Second priority: Use color from metadata
+    if (option.metadata != null && option.metadata!.containsKey('color')) {
+      final colorHex = option.metadata!['color'] as String?;
+      if (colorHex != null && colorHex.isNotEmpty) {
+        return _cachedColorHelper!.getColor(colorHex);
+      }
     }
 
-    // Fallback: Return null (no color) if not found in remote config
+    // Return null (no color) if not found
     return null;
   }
 
@@ -777,10 +770,10 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
         final wordStr = word.toString();
         highlightWords.add(wordStr);
         if (colorValue is String) {
-          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
-            colorValue,
-            defaultColor: defaultHighlightColor,
-          );
+          final color = _cachedColorHelper!.getColor(colorValue);
+          if (color != null) {
+            wordColors[wordStr.toLowerCase()] = color;
+          }
         }
       });
     } else if (highlightWordsData is List) {
@@ -817,7 +810,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
                   fontSize: 36,
                   shadows: [
                     Shadow(
-                      color: wordColor.withValues(alpha: 0.5),
+                      color: wordColor?.withValues(alpha: 0.5) ?? Colors.transparent,
                       blurRadius: 20,
                       offset: const Offset(0, 0),
                     ),
@@ -923,10 +916,10 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
         final wordStr = word.toString();
         highlightWords.add(wordStr);
         if (colorValue is String) {
-          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
-            colorValue,
-            defaultColor: defaultHighlightColor,
-          );
+          final color = _cachedColorHelper!.getColor(colorValue);
+          if (color != null) {
+            wordColors[wordStr.toLowerCase()] = color;
+          }
         }
       });
     } else if (highlightWordsData is List) {
@@ -987,18 +980,16 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     return null;
   }
 
-  /// Get highlight color from metadata or default to #C47A00 (matches welcome screen default)
-  Color _getHighlightColor() {
+  /// Get highlight color from metadata
+  /// Returns null if no valid color is found
+  Color? _getHighlightColor() {
     if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_color')) {
       final colorString = widget.model.metadata!['highlight_color'] as String?;
       if (colorString != null && colorString.isNotEmpty) {
-        return _cachedColorHelper!.getColor(
-          colorString,
-          defaultColor: const Color(0xFFC47A00), // Default to #C47A00
-        );
+        return _cachedColorHelper!.getColor(colorString);
       }
     }
-    return const Color(0xFFC47A00); // Default color matching welcome screen
+    return null; // No color if not found
   }
 }
 

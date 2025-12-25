@@ -1,15 +1,23 @@
-import 'json_serializable.dart';
+import 'package:json_annotation/json_annotation.dart';
+
+part 'welcome_screen_config.g.dart';
 
 /// Configuration for the welcome/landing screen
 /// Separate from onboarding flow screens to allow full customization
-class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
+@JsonSerializable()
+class WelcomeScreenConfig {
   final dynamic title; // Can be Map<String, String> (multilocale) or String (backward compatibility)
   final dynamic description; // Can be Map<String, String> (multilocale) or String (backward compatibility)
   final String? visual; // Optional: Lottie animation path or asset path
+  @JsonKey(name: 'primary_button_text')
   final dynamic primaryButtonText; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  @JsonKey(name: 'glass_container')
   final GlassContainerConfig? glassContainer;
+  @JsonKey(name: 'highlight_words')
   final HighlightWordsConfig? highlightWords;
+  @JsonKey(name: 'secondary_action')
   final SecondaryActionConfig? secondaryAction;
+  @JsonKey(name: 'highlight_color')
   final String? highlightColor; // Optional: Hex color for highlights (defaults to amber)
 
   WelcomeScreenConfig({
@@ -23,46 +31,11 @@ class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
     this.highlightColor,
   });
 
-  @override
-  factory WelcomeScreenConfig.fromJson(Map<String, dynamic> json) {
-    final config = WelcomeScreenConfig(
-      title: JsonParser.requireMultilocaleText(json, 'title'),
-      description: JsonParser.requireMultilocaleText(json, 'description'),
-      visual: json['visual'] as String?,
-      primaryButtonText: JsonParser.requireMultilocaleText(json, 'primary_button_text'),
-      glassContainer: json['glass_container'] != null
-          ? GlassContainerConfig.fromJson(
-              json['glass_container'] as Map<String, dynamic>)
-          : null,
-      highlightWords: json['highlight_words'] != null
-          ? HighlightWordsConfig.fromJson(
-              json['highlight_words'] as Map<String, dynamic>)
-          : null,
-      secondaryAction: json['secondary_action'] != null
-          ? SecondaryActionConfig.fromJson(
-              json['secondary_action'] as Map<String, dynamic>)
-          : null,
-      highlightColor: json['highlight_color'] as String?,
-    );
-    config.validate();
-    return config;
-  }
+  factory WelcomeScreenConfig.fromJson(Map<String, dynamic> json) =>
+      _$WelcomeScreenConfigFromJson(json);
 
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'description': description,
-      if (visual != null) 'visual': visual,
-      'primary_button_text': primaryButtonText,
-      if (glassContainer != null) 'glass_container': glassContainer!.toJson(),
-      if (highlightWords != null) 'highlight_words': highlightWords!.toJson(),
-      if (secondaryAction != null) 'secondary_action': secondaryAction!.toJson(),
-      if (highlightColor != null) 'highlight_color': highlightColor,
-    };
-  }
+  Map<String, dynamic> toJson() => _$WelcomeScreenConfigToJson(this);
 
-  @override
   void validate() {
     // Validate title - must be non-empty string or non-empty multilocale map
     if (title is String) {
@@ -125,13 +98,18 @@ class WelcomeScreenConfig implements JsonSerializable<WelcomeScreenConfig> {
 }
 
 /// Configuration for the glass container placeholder
-class GlassContainerConfig implements JsonSerializable<GlassContainerConfig> {
+@JsonSerializable()
+class GlassContainerConfig {
+  @JsonKey(name: 'blur_sigma')
   final double blurSigma;
   final String color; // Hex color string
   final double opacity;
+  @JsonKey(name: 'border_radius')
   final double borderRadius;
   final double height;
+  @JsonKey(name: 'icon_size')
   final double iconSize;
+  @JsonKey(name: 'icon_opacity')
   final double iconOpacity;
 
   GlassContainerConfig({
@@ -144,46 +122,20 @@ class GlassContainerConfig implements JsonSerializable<GlassContainerConfig> {
     required this.iconOpacity,
   });
 
-  @override
-  factory GlassContainerConfig.fromJson(Map<String, dynamic> json) {
-    final config = GlassContainerConfig(
-      blurSigma: JsonParser.requireDouble(json, 'blur_sigma'),
-      color: JsonParser.requireString(json, 'color'),
-      opacity: JsonParser.requireDouble(json, 'opacity'),
-      borderRadius: JsonParser.requireDouble(json, 'border_radius'),
-      height: JsonParser.requireDouble(json, 'height'),
-      iconSize: JsonParser.requireDouble(json, 'icon_size'),
-      iconOpacity: JsonParser.requireDouble(json, 'icon_opacity'),
-    );
-    config.validate();
-    return config;
-  }
+  factory GlassContainerConfig.fromJson(Map<String, dynamic> json) =>
+      _$GlassContainerConfigFromJson(json);
 
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'blur_sigma': blurSigma,
-      'color': color,
-      'opacity': opacity,
-      'border_radius': borderRadius,
-      'height': height,
-      'icon_size': iconSize,
-      'icon_opacity': iconOpacity,
-    };
-  }
+  Map<String, dynamic> toJson() => _$GlassContainerConfigToJson(this);
 
-  @override
   void validate() {
     if (blurSigma < 0) {
       throw FormatException('GlassContainerConfig.blurSigma must be >= 0');
     }
     if (opacity < 0 || opacity > 1) {
-      throw FormatException(
-          'GlassContainerConfig.opacity must be between 0 and 1');
+      throw FormatException('GlassContainerConfig.opacity must be between 0 and 1');
     }
     if (borderRadius < 0) {
-      throw FormatException(
-          'GlassContainerConfig.borderRadius must be >= 0');
+      throw FormatException('GlassContainerConfig.borderRadius must be >= 0');
     }
     if (height <= 0) {
       throw FormatException('GlassContainerConfig.height must be > 0');
@@ -192,8 +144,7 @@ class GlassContainerConfig implements JsonSerializable<GlassContainerConfig> {
       throw FormatException('GlassContainerConfig.iconSize must be > 0');
     }
     if (iconOpacity < 0 || iconOpacity > 1) {
-      throw FormatException(
-          'GlassContainerConfig.iconOpacity must be between 0 and 1');
+      throw FormatException('GlassContainerConfig.iconOpacity must be between 0 and 1');
     }
     // Validate hex color
     final hexCode = color.replaceAll('#', '');
@@ -205,8 +156,8 @@ class GlassContainerConfig implements JsonSerializable<GlassContainerConfig> {
 
 /// Configuration for words to highlight in title and description
 /// Both title and description can be a Map (word -> color) or List (backward compatibility)
-class HighlightWordsConfig
-    implements JsonSerializable<HighlightWordsConfig> {
+@JsonSerializable()
+class HighlightWordsConfig {
   final dynamic title; // Can be Map<String, String> (word -> color) or List<String>
   final dynamic description; // Can be Map<String, String> (word -> color) or List<String>
 
@@ -215,20 +166,13 @@ class HighlightWordsConfig
     required this.description,
   });
 
-  @override
   factory HighlightWordsConfig.fromJson(Map<String, dynamic> json) {
     dynamic titleData;
     if (json['title'] != null) {
       if (json['title'] is Map) {
-        // Map format: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
         titleData = json['title'] as Map<String, dynamic>;
       } else if (json['title'] is List) {
-        // List format: ["best", "deals"] - backward compatibility
-        titleData = JsonParser.requireList<String>(
-          json,
-          'title',
-          (item) => item.toString(),
-        );
+        titleData = (json['title'] as List).map((item) => item.toString()).toList();
       }
     } else {
       titleData = <String>[];
@@ -237,15 +181,9 @@ class HighlightWordsConfig
     dynamic descriptionData;
     if (json['description'] != null) {
       if (json['description'] is Map) {
-        // Map format: {"the": "#FF6B35", "best": "#4ECDC4", "deal": "#FF6B35"}
         descriptionData = json['description'] as Map<String, dynamic>;
       } else if (json['description'] is List) {
-        // List format: ["the", "best", "deal"] - backward compatibility
-        descriptionData = JsonParser.requireList<String>(
-          json,
-          'description',
-          (item) => item.toString(),
-        );
+        descriptionData = (json['description'] as List).map((item) => item.toString()).toList();
       }
     } else {
       descriptionData = <String>[];
@@ -257,25 +195,19 @@ class HighlightWordsConfig
     );
   }
 
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'description': description,
-    };
-  }
+  Map<String, dynamic> toJson() => _$HighlightWordsConfigToJson(this);
 
-  @override
   void validate() {
     // No validation needed - empty lists/maps are allowed
   }
 }
 
 /// Configuration for secondary action (e.g., Sign in link)
-class SecondaryActionConfig
-    implements JsonSerializable<SecondaryActionConfig> {
+@JsonSerializable()
+class SecondaryActionConfig {
   final String type; // e.g., "sign_in"
   final dynamic text; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  @JsonKey(name: 'prefix_text')
   final dynamic prefixText; // Can be Map<String, String> (multilocale) or String (backward compatibility)
 
   SecondaryActionConfig({
@@ -284,27 +216,11 @@ class SecondaryActionConfig
     required this.prefixText,
   });
 
-  @override
-  factory SecondaryActionConfig.fromJson(Map<String, dynamic> json) {
-    final config = SecondaryActionConfig(
-      type: JsonParser.requireString(json, 'type'),
-      text: JsonParser.requireMultilocaleText(json, 'text'),
-      prefixText: JsonParser.requireMultilocaleText(json, 'prefix_text'),
-    );
-    config.validate();
-    return config;
-  }
+  factory SecondaryActionConfig.fromJson(Map<String, dynamic> json) =>
+      _$SecondaryActionConfigFromJson(json);
 
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'type': type,
-      'text': text,
-      'prefix_text': prefixText,
-    };
-  }
+  Map<String, dynamic> toJson() => _$SecondaryActionConfigToJson(this);
 
-  @override
   void validate() {
     if (type.isEmpty) {
       throw FormatException('SecondaryActionConfig.type cannot be empty');
@@ -341,4 +257,3 @@ class SecondaryActionConfig
     }
   }
 }
-

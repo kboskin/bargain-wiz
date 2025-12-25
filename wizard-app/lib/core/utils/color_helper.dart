@@ -7,17 +7,14 @@ class ColorHelper {
   /// - 6 characters: "#FFC107" or "FFC107" (RGB, full opacity)
   /// - 8 characters: "#80FFC107" or "80FFC107" (ARGB with alpha channel)
   /// 
-  /// Returns the parsed Color, or [defaultColor] if parsing fails
-  Color parseHexColor(
-    String colorString, {
-    Color defaultColor = const Color(0xFFFFC107), // Amber as default
-  }) {
+  /// Returns the parsed Color, or null if parsing fails
+  Color? parseHexColor(String colorString) {
     // Remove # if present and trim whitespace
     final hexCode = colorString.replaceAll('#', '').trim();
 
     // Validate hex format (6 or 8 characters)
     if (!RegExp(r'^[0-9A-Fa-f]{6}$|^[0-9A-Fa-f]{8}$').hasMatch(hexCode)) {
-      return defaultColor;
+      return null;
     }
 
     try {
@@ -26,20 +23,17 @@ class ColorHelper {
       final fullHex = hexCode.length == 6 ? 'FF$hexCode' : hexCode;
       return Color(int.parse(fullHex, radix: 16));
     } catch (e) {
-      return defaultColor;
+      return null;
     }
   }
 
-  /// Get color from string (hex code) with optional default color
-  /// Convenience method that wraps parseHexColor
-  Color getColor(
-    String? colorString, {
-    Color defaultColor = const Color(0xFFFFC107), // Amber as default
-  }) {
+  /// Get color from string (hex code)
+  /// Returns null if colorString is null, empty, or parsing fails
+  Color? getColor(String? colorString) {
     if (colorString == null || colorString.isEmpty) {
-      return defaultColor;
+      return null;
     }
-    return parseHexColor(colorString, defaultColor: defaultColor);
+    return parseHexColor(colorString);
   }
 }
 

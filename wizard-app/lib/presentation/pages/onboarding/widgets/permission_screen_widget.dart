@@ -4,18 +4,22 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/multilocale_text_helper.dart';
-import 'package:appwizard/data/models/onboarding_model.dart';
+import 'package:appwizard/data/models/remote_config/button_config.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 
 /// Widget for permission-type onboarding screens
 /// Displays title, description, and permission request button with attractive styling
 class PermissionScreenWidget extends StatefulWidget {
   final PermissionScreenModel model;
+  final VoidCallback? onContinue;
 
   const PermissionScreenWidget({
     super.key,
     required this.model,
+    this.onContinue,
   });
 
   @override
@@ -66,25 +70,11 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
           _isRequesting = false;
         });
 
-        // Show brief feedback message
-        if (settings != null) {
-          final message = settings.authorizationStatus == AuthorizationStatus.authorized
-              ? 'Notifications enabled!'
-              : settings.authorizationStatus == AuthorizationStatus.denied
-                  ? 'Notifications disabled'
-                  : null;
-          
-          if (message != null && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(message),
-                duration: const Duration(seconds: 2),
-                backgroundColor: settings.authorizationStatus == AuthorizationStatus.authorized
-                    ? Colors.green
-                    : Colors.orange,
-              ),
-            );
-          }
+        // Auto-continue if permission was granted
+        if (settings != null &&
+            settings.authorizationStatus == AuthorizationStatus.authorized &&
+            mounted) {
+          widget.onContinue?.call();
         }
       }
     } catch (e) {
@@ -135,8 +125,8 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
             ),
           ],
 
-          // Permission request button
-          _buildPermissionButton(context),
+          // Permission buttons (configurable array)
+          _buildPermissionButtons(context),
         ],
       ),
     );
@@ -153,10 +143,10 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
       return Text(
         title,
         style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-              color: AppColors.backgroundDark,
-              fontWeight: FontWeight.bold,
-              fontSize: 32,
-            ),
+          color: AppColors.backgroundDark,
+          fontWeight: FontWeight.bold,
+          fontSize: 32,
+        ),
         textAlign: TextAlign.center,
       );
     }
@@ -176,25 +166,27 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words - can be a map (word -> color) or list (backward compatibility)
-    Map<String, Color> wordColors = {};
-    List<String> highlightWords = [];
+    var wordColors = <String, Color>{};
+    var highlightWords = <String>[];
 
     if (highlightWordsData is Map) {
       highlightWordsData.forEach((word, colorValue) {
         final wordStr = word.toString();
         highlightWords.add(wordStr);
         if (colorValue is String) {
-          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
-            colorValue,
-            defaultColor: defaultHighlightColor,
-          );
+          final color = _cachedColorHelper!.getColor(colorValue);
+          if (color != null) {
+            wordColors[wordStr.toLowerCase()] = color;
+          }
         }
       });
     } else if (highlightWordsData is List) {
-      highlightWords = highlightWordsData.map((item) => item.toString()).toList();
+      highlightWords = highlightWordsData
+          .map((item) => item.toString())
+          .toList();
     }
 
-    for (int i = 0; i < parts.length; i++) {
+    for (var i = 0; i < parts.length; i++) {
       final word = parts[i];
       final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
 
@@ -210,7 +202,8 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
 
       final isHighlight = matchedWord != null;
       final wordColor = isHighlight
-          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ??
+                defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(
@@ -223,17 +216,19 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
                   fontSize: 36,
                   shadows: [
                     Shadow(
-                      color: wordColor.withValues(alpha: 0.5),
+                      color:
+                          wordColor?.withValues(alpha: 0.5) ??
+                          Colors.transparent,
                       blurRadius: 20,
                       offset: const Offset(0, 0),
                     ),
                   ],
                 )
               : Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    color: AppColors.backgroundDark,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 32,
-                  ),
+                  color: AppColors.backgroundDark,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 32,
+                ),
         ),
       );
     }
@@ -281,17 +276,21 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     if (highlightWordsData != null &&
         !(highlightWordsData is List && highlightWordsData.isEmpty) &&
         !(highlightWordsData is Map && highlightWordsData.isEmpty)) {
-      return _buildRichTextDescription(context, description, highlightWordsData);
+      return _buildRichTextDescription(
+        context,
+        description,
+        highlightWordsData,
+      );
     }
 
     // Plain text
     return Text(
       description,
       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: AppColors.backgroundDark.withValues(alpha: 0.9),
-            height: 1.5,
-            fontSize: 18,
-          ),
+        color: AppColors.backgroundDark.withValues(alpha: 0.9),
+        height: 1.5,
+        fontSize: 18,
+      ),
       textAlign: TextAlign.center,
     );
   }
@@ -315,14 +314,16 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
         final wordStr = word.toString();
         highlightWords.add(wordStr);
         if (colorValue is String) {
-          wordColors[wordStr.toLowerCase()] = _cachedColorHelper!.getColor(
-            colorValue,
-            defaultColor: defaultHighlightColor,
-          );
+          final color = _cachedColorHelper!.getColor(colorValue);
+          if (color != null) {
+            wordColors[wordStr.toLowerCase()] = color;
+          }
         }
       });
     } else if (highlightWordsData is List) {
-      highlightWords = highlightWordsData.map((item) => item.toString()).toList();
+      highlightWords = highlightWordsData
+          .map((item) => item.toString())
+          .toList();
     }
 
     for (final word in parts) {
@@ -339,7 +340,8 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
 
       final isHighlight = matchedWord != null;
       final wordColor = isHighlight
-          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
+          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ??
+                defaultHighlightColor)
           : defaultHighlightColor;
 
       textSpans.add(
@@ -352,10 +354,10 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
                   fontSize: 20,
                 )
               : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.backgroundDark.withValues(alpha: 0.9),
-                    height: 1.5,
-                    fontSize: 18,
-                  ),
+                  color: AppColors.backgroundDark.withValues(alpha: 0.9),
+                  height: 1.5,
+                  fontSize: 18,
+                ),
         ),
       );
     }
@@ -366,32 +368,103 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     );
   }
 
-  Widget _buildPermissionButton(BuildContext context) {
-    // Get button configuration from metadata
+  Widget _buildPermissionButtons(BuildContext context) {
+    final buttons = _getButtons();
+
+    if (buttons.isEmpty) {
+      // Fallback to single button for backward compatibility
+      return _buildSingleButton(context);
+    }
+
+    // Render multiple buttons side by side
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: buttons.asMap().entries.map((entry) {
+        final index = entry.key;
+        final buttonConfig = entry.value;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: index > 0 ? 8 : 0,
+              right: index < buttons.length - 1 ? 8 : 0,
+            ),
+            child: _buildButton(context, buttonConfig),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSingleButton(BuildContext context) {
+    // Legacy single button support
     final buttonText = _getButtonText();
     final buttonColor = _getButtonColor();
     final glowColor = _getGlowColor();
     final glowIntensity = _getGlowIntensity();
     final buttonStyle = _getButtonStyle();
 
-    // Determine if button should be enabled
-    final isEnabled = !_isRequesting &&
-        _permissionStatus != AuthorizationStatus.authorized;
+    final isEnabled =
+        !_isRequesting && _permissionStatus != AuthorizationStatus.authorized;
 
-    // Build button with glow effect
-    Widget button = ElevatedButton(
+    return _buildStyledButton(
+      context: context,
+      text: buttonText,
       onPressed: isEnabled ? _requestPermission : null,
+      buttonColor: buttonColor,
+      glowColor: glowColor,
+      glowIntensity: glowIntensity,
+      buttonStyle: buttonStyle,
+      isLoading: _isRequesting,
+    );
+  }
+
+  Widget _buildButton(final BuildContext context, ButtonConfig buttonConfig) {
+    final text = _getTextFromButtonConfig(buttonConfig);
+    final action = buttonConfig.action;
+    final buttonColor = _getColorFromString(buttonConfig.buttonColor);
+    final glowColor = _getColorFromString(buttonConfig.glowColor);
+    final glowIntensity = buttonConfig.glowIntensity ?? 0.6;
+    final buttonStyle = buttonConfig.buttonStyle;
+
+    // Determine if button should be enabled based on action
+    final isEnabled = action == ButtonAction.requestPermission
+        ? (!_isRequesting &&
+              _permissionStatus != AuthorizationStatus.authorized)
+        : !_isRequesting;
+
+    return _buildStyledButton(
+      context: context,
+      text: text,
+      onPressed: isEnabled ? () => _handleButtonAction(action) : null,
+      buttonColor: buttonColor,
+      glowColor: glowColor,
+      glowIntensity: glowIntensity,
+      buttonStyle: buttonStyle,
+      isLoading: _isRequesting && action == ButtonAction.requestPermission,
+    );
+  }
+
+  Widget _buildStyledButton({
+    required BuildContext context,
+    required String text,
+    required VoidCallback? onPressed,
+    required Color? buttonColor,
+    required Color? glowColor,
+    required double glowIntensity,
+    required ButtonVisualStyle buttonStyle,
+    required bool isLoading,
+  }) {
+    Widget button = ElevatedButton(
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: buttonColor,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
-        disabledBackgroundColor: buttonColor.withValues(alpha: 0.5),
+        disabledBackgroundColor: buttonColor?.withValues(alpha: 0.5),
       ),
-      child: _isRequesting
+      child: isLoading
           ? const SizedBox(
               width: 20,
               height: 20,
@@ -401,97 +474,182 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
               ),
             )
           : Text(
-              buttonText,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              text,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
     );
 
-    // Apply glow effect if configured
-    if (buttonStyle == 'glow' && isEnabled) {
-      button = Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: glowColor.withValues(alpha: glowIntensity),
-              blurRadius: 20,
-              spreadRadius: 4,
+    // Apply styling based on button style enum
+    switch (buttonStyle) {
+      case ButtonVisualStyle.glow:
+        if (onPressed != null && glowColor != null) {
+          button = Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: glowColor.withValues(alpha: glowIntensity),
+                  blurRadius: 20,
+                  spreadRadius: 4,
+                ),
+                BoxShadow(
+                  color: glowColor.withValues(alpha: glowIntensity * 0.6),
+                  blurRadius: 40,
+                  spreadRadius: 8,
+                ),
+              ],
             ),
-            BoxShadow(
-              color: glowColor.withValues(alpha: glowIntensity * 0.6),
-              blurRadius: 40,
-              spreadRadius: 8,
-            ),
-          ],
-        ),
-        child: button,
-      );
+            child: button,
+          );
+        }
+        break;
+      case ButtonVisualStyle.gradient:
+        // TODO: Implement gradient style if needed
+        break;
+      case ButtonVisualStyle.flat:
+        // Flat style - no special effects
+        break;
+      case ButtonVisualStyle.outlined:
+        // TODO: Implement outlined style if needed
+        break;
     }
 
     return button;
   }
 
+  void _handleButtonAction(ButtonAction action) {
+    switch (action) {
+      case ButtonAction.requestPermission:
+        _requestPermission();
+        break;
+      case ButtonAction.skip:
+      case ButtonAction.dontAllow:
+      case ButtonAction.continueAction:
+        // Continue to next step
+        widget.onContinue?.call();
+        break;
+    }
+  }
+
+  List<ButtonConfig> _getButtons() {
+    if (widget.model.metadata != null &&
+        widget.model.metadata!.containsKey('buttons')) {
+      final buttonsData = widget.model.metadata!['buttons'];
+      if (buttonsData is List) {
+        return buttonsData
+            .whereType<Map<String, dynamic>>()
+            .map((buttonJson) => ButtonConfig.fromJson(buttonJson))
+            .toList();
+      }
+    }
+    return [];
+  }
+
+  /// Get text from ButtonConfig (supports both string and multilocale)
+  String _getTextFromButtonConfig(ButtonConfig config) {
+    if (config.text == null) {
+      return 'Button';
+    }
+    if (config.text is String) {
+      return config.text as String;
+    } else if (config.text is Map<String, dynamic>) {
+      return _cachedMultilocaleTextHelper!.getText(context, config.text);
+    }
+    return 'Button';
+  }
+
+  /// Get color from hex string
+  Color? _getColorFromString(String? colorString) {
+    if (colorString == null || colorString.isEmpty) {
+      return null;
+    }
+    return _cachedColorHelper!.getColor(colorString);
+  }
+
+  /// Get text from config map (supports both string and multilocale) - legacy method
+  String _getTextFromConfig(
+    Map<String, dynamic> config,
+    String key,
+    String defaultValue,
+  ) {
+    if (config.containsKey(key)) {
+      final textData = config[key];
+      if (textData is String) {
+        return textData;
+      } else if (textData is Map<String, dynamic>) {
+        return _cachedMultilocaleTextHelper!.getText(context, textData);
+      }
+    }
+    return defaultValue;
+  }
+
+  /// Get color from config map (returns null if not found)
+  Color? _getColorFromConfig(Map<String, dynamic> config, String key) {
+    if (config.containsKey(key)) {
+      final colorString = config[key] as String?;
+      if (colorString != null && colorString.isNotEmpty) {
+        return _cachedColorHelper!.getColor(colorString);
+      }
+    }
+    return null;
+  }
+
+  /// Get double value from config map
+  double _getDoubleFromConfig(
+    Map<String, dynamic> config,
+    String key,
+    double defaultValue,
+  ) {
+    if (config.containsKey(key)) {
+      final value = config[key];
+      if (value is num) {
+        return value.toDouble().clamp(0.0, 1.0);
+      }
+    }
+    return defaultValue;
+  }
+
+  /// Get button style from config map
+  ButtonVisualStyle _getButtonStyleFromConfig(Map<String, dynamic> config) {
+    if (config.containsKey('button_style')) {
+      final styleString = config['button_style'] as String?;
+      if (styleString != null && styleString.isNotEmpty) {
+        return ButtonVisualStyle.fromString(styleString);
+      }
+    }
+    return ButtonVisualStyle.glow; // Default style
+  }
+
+  // Legacy methods for backward compatibility (single button config)
   String _getButtonText() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('button_text')) {
-      final buttonTextData = widget.model.metadata!['button_text'];
-      if (buttonTextData is String) {
-        return buttonTextData;
-      } else if (buttonTextData is Map<String, dynamic>) {
-        return _cachedMultilocaleTextHelper!.getText(context, buttonTextData);
-      }
+    if (widget.model.metadata != null) {
+      return _getTextFromConfig(
+        widget.model.metadata!,
+        'button_text',
+        'Enable Notifications',
+      );
     }
-    return 'Enable Notifications'; // Default
+    return 'Enable Notifications';
   }
 
-  Color _getButtonColor() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('button_color')) {
-      final colorString = widget.model.metadata!['button_color'] as String?;
-      if (colorString != null && colorString.isNotEmpty) {
-        return _cachedColorHelper!.getColor(
-          colorString,
-          defaultColor: const Color(0xFF4ECDC4),
-        );
-      }
-    }
-    return const Color(0xFF4ECDC4); // Default teal color
+  Color? _getButtonColor() {
+    return _getColorFromConfig(widget.model.metadata ?? {}, 'button_color');
   }
 
-  Color _getGlowColor() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('glow_color')) {
-      final colorString = widget.model.metadata!['glow_color'] as String?;
-      if (colorString != null && colorString.isNotEmpty) {
-        return _cachedColorHelper!.getColor(
-          colorString,
-          defaultColor: const Color(0xFF4ECDC4),
-        );
-      }
-    }
-    return const Color(0xFF4ECDC4); // Default teal color
+  Color? _getGlowColor() {
+    return _getColorFromConfig(widget.model.metadata ?? {}, 'glow_color');
   }
 
   double _getGlowIntensity() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('glow_intensity')) {
-      final intensity = widget.model.metadata!['glow_intensity'];
-      if (intensity is num) {
-        return intensity.toDouble().clamp(0.0, 1.0);
-      }
-    }
-    return 0.6; // Default intensity
+    return _getDoubleFromConfig(
+      widget.model.metadata ?? {},
+      'glow_intensity',
+      0.6,
+    );
   }
 
-  String _getButtonStyle() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('button_style')) {
-      return widget.model.metadata!['button_style'] as String? ?? 'glow';
-    }
-    return 'glow'; // Default style
+  ButtonVisualStyle _getButtonStyle() {
+    return _getButtonStyleFromConfig(widget.model.metadata ?? {});
   }
 
   /// Get highlight words from metadata
@@ -520,19 +678,16 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     return null;
   }
 
-  /// Get highlight color from metadata or default
-  Color _getHighlightColor() {
+  /// Get highlight color from metadata
+  /// Returns null if no valid color is found
+  Color? _getHighlightColor() {
     if (widget.model.metadata != null &&
         widget.model.metadata!.containsKey('highlight_color')) {
       final colorString = widget.model.metadata!['highlight_color'] as String?;
       if (colorString != null && colorString.isNotEmpty) {
-        return _cachedColorHelper!.getColor(
-          colorString,
-          defaultColor: const Color(0xFFC47A00),
-        );
+        return _cachedColorHelper!.getColor(colorString);
       }
     }
-    return const Color(0xFFC47A00); // Default color
+    return null; // No color if not found
   }
 }
-

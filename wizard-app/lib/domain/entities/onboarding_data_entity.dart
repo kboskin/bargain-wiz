@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
 
 /// Domain entity for onboarding data
 /// This represents the business logic layer entity
@@ -29,7 +30,7 @@ class OnboardingDataEntity extends Equatable {
 class OnboardingAnswer extends Equatable {
   final int screenIndex;
   final String screenTitle;
-  final String screenType;
+  final OnboardingScreenType screenType;
   final String? answerKey; // Key from answerStructure in screen config
   final dynamic answer;
 
@@ -45,7 +46,7 @@ class OnboardingAnswer extends Equatable {
     return {
       'screenIndex': screenIndex,
       'screenTitle': screenTitle,
-      'screenType': screenType,
+      'screenType': screenType.name,
       'answerKey': answerKey,
       'answer': answer,
     };
@@ -55,7 +56,7 @@ class OnboardingAnswer extends Equatable {
     return OnboardingAnswer(
       screenIndex: json['screenIndex'] as int,
       screenTitle: json['screenTitle'] as String,
-      screenType: json['screenType'] as String,
+      screenType: OnboardingScreenType.fromString(json['screenType'] as String),
       answerKey: json['answerKey'] as String?,
       answer: json['answer'],
     );
