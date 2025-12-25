@@ -16,6 +16,8 @@ class ButtonConfig {
   final String? glowColor; // Hex color string
   @JsonKey(name: 'glow_intensity')
   final double? glowIntensity; // 0.0 to 1.0
+  @JsonKey(name: 'glow_pulse')
+  final bool? glowPulse; // Whether glow should pulse/animate
   @JsonKey(name: 'button_style', fromJson: _buttonStyleFromJson, toJson: _buttonStyleToJson)
   final ButtonVisualStyle buttonStyle; // Visual style enum
 
@@ -25,6 +27,7 @@ class ButtonConfig {
     this.buttonColor,
     this.glowColor,
     this.glowIntensity,
+    this.glowPulse,
     this.buttonStyle = ButtonVisualStyle.glow,
   });
 

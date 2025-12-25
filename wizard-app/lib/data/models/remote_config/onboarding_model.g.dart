@@ -137,6 +137,7 @@ PermissionScreenModel _$PermissionScreenModelFromJson(
   title: json['title'],
   description: json['description'],
   subtype: json['subtype'] as String,
+  visual: json['visual'] as String?,
   metadata: json['metadata'] as Map<String, dynamic>?,
   nextButtonText: json['nextButtonText'],
   answerStructure: json['answerStructure'] == null
@@ -156,5 +157,6 @@ Map<String, dynamic> _$PermissionScreenModelToJson(
   'answerStructure': instance.answerStructure,
   'showTopBar': instance.showTopBar,
   'subtype': instance.subtype,
+  'visual': instance.visual,
   'metadata': instance.metadata,
 };

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_html/flutter_html.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:appwizard/core/di/injection_container.dart' as di;
@@ -7,6 +6,8 @@ import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/utils/text_highlight_helper.dart';
+import 'package:appwizard/core/widgets/styled_description_widget.dart';
 import 'package:appwizard/core/widgets/glass_container.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
@@ -26,12 +27,14 @@ class WelcomeScreenWidget extends StatefulWidget {
 class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
   ColorHelper? _cachedColorHelper;
   MultilocaleTextHelper? _cachedMultilocaleTextHelper;
+  TextHighlightHelper? _cachedTextHighlightHelper;
 
   @override
   Widget build(BuildContext context) {
     // Cache ColorHelper lookup
     _cachedColorHelper ??= di.sl<ColorHelper>();
     _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
+    _cachedTextHighlightHelper ??= TextHighlightHelper(_cachedColorHelper!);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -172,57 +175,24 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     final textSpans = <TextSpan>[];
     final defaultHighlightColor = _getHighlightColor();
 
-    // Parse highlight words - can be a map (word -> color) or list (backward compatibility)
-    Map<String, Color> wordColors = {};
-    List<String> highlightWords = [];
-    
-    if (highlightWordsData is Map) {
-      // Map format: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
-      highlightWordsData.forEach((word, colorValue) {
-        final wordStr = word.toString();
-        highlightWords.add(wordStr);
-        if (colorValue is String) {
-          final color = _cachedColorHelper!.getColor(colorValue);
-          if (color != null) {
-            wordColors[wordStr.toLowerCase()] = color;
-          }
-        }
-      });
-    } else if (highlightWordsData is List) {
-      // List format: ["best", "deals"] - backward compatibility
-      highlightWords = highlightWordsData.map((item) => item.toString()).toList();
-    }
+    // Parse highlight words using helper
+    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
 
     for (int i = 0; i < parts.length; i++) {
       final word = parts[i];
-      final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
-      
-      // Find matching highlight word
-      String? matchedWord;
-      for (final hw in highlightWords) {
-        final cleanHw = hw.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
-        if (cleanWord.contains(cleanHw) || cleanHw.contains(cleanWord)) {
-          matchedWord = hw;
-          break;
-        }
-      }
-
-      final isHighlight = matchedWord != null;
-      final wordColor = isHighlight 
-          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
-          : defaultHighlightColor;
+      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
           text: i > 0 ? ' $word' : word,
-          style: isHighlight
+          style: result.isHighlight
               ? TextStyle(
                   color: AppColors.backgroundDark,
                   fontWeight: FontWeight.w900,
                   fontSize: 36,
                   shadows: [
                     Shadow(
-                      color: wordColor?.withValues(alpha: 0.5) ?? Colors.transparent,
+                      color: result.wordColor?.withValues(alpha: 0.5) ?? Colors.transparent,
                       blurRadius: 20,
                       offset: const Offset(0, 0),
                     ),
@@ -246,62 +216,16 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
   /// Build description with optional HTML or word highlighting
   Widget _buildDescription(BuildContext context) {
     final description = _cachedMultilocaleTextHelper!.getText(context, widget.config.description);
-    final hasHtml = RegExp(r'<[^>]+>').hasMatch(description);
     final highlightWordsData = widget.config.highlightWords?.description;
     final highlightColor = _getHighlightColor();
 
-    // If HTML is present, use HTML parsing (takes precedence)
-    if (hasHtml) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Html(
-          data: description,
-          style: {
-            'body': Style(
-              margin: Margins.zero,
-              padding: HtmlPaddings.zero,
-              textAlign: TextAlign.center,
-              fontSize: FontSize(18),
-              color: AppColors.backgroundDark.withValues(alpha: 0.9),
-              lineHeight: const LineHeight(1.5),
-            ),
-            'span.highlight': Style(
-              color: highlightColor,
-              fontWeight: FontWeight.bold,
-              fontSize: FontSize(20),
-            ),
-            'strong': Style(
-              color: highlightColor,
-              fontWeight: FontWeight.bold,
-              fontSize: FontSize(20),
-            ),
-          },
-        ),
-      );
-    }
-
-    // If highlight words are configured, use keyword-based highlighting
-    if (highlightWordsData != null && 
-        !(highlightWordsData is List && highlightWordsData.isEmpty) &&
-        !(highlightWordsData is Map && highlightWordsData.isEmpty)) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: _buildRichTextDescription(context, description, highlightWordsData),
-      );
-    }
-
-    // Simple description without highlighting
-    return Padding(
+    return StyledDescriptionWidget(
+      description: description,
+      highlightWordsData: highlightWordsData,
+      highlightColor: highlightColor,
+      textHighlightHelper: _cachedTextHighlightHelper!,
       padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: Text(
-        description,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-          color: AppColors.backgroundDark.withValues(alpha: 0.9),
-          height: 1.5,
-          fontSize: 18,
-        ),
-        textAlign: TextAlign.center,
-      ),
+      onRichTextDescription: _buildRichTextDescription,
     );
   }
 
@@ -317,51 +241,18 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     final textSpans = <TextSpan>[];
     final defaultHighlightColor = _getHighlightColor();
 
-    // Parse highlight words - can be a map (word -> color) or list (backward compatibility)
-    Map<String, Color> wordColors = {};
-    List<String> highlightWords = [];
-    
-    if (highlightWordsData is Map) {
-      // Map format: {"the": "#FF6B35", "best": "#4ECDC4", "deal": "#FF6B35"}
-      highlightWordsData.forEach((word, colorValue) {
-        final wordStr = word.toString();
-        highlightWords.add(wordStr);
-        if (colorValue is String) {
-          final color = _cachedColorHelper!.getColor(colorValue);
-          if (color != null) {
-            wordColors[wordStr.toLowerCase()] = color;
-          }
-        }
-      });
-    } else if (highlightWordsData is List) {
-      // List format: ["the", "best", "deal"] - backward compatibility
-      highlightWords = highlightWordsData.map((item) => item.toString()).toList();
-    }
+    // Parse highlight words using helper
+    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
 
     for (final word in parts) {
-      final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
-      
-      // Find matching highlight word
-      String? matchedWord;
-      for (final hw in highlightWords) {
-        final cleanHw = hw.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();
-        if (cleanWord.contains(cleanHw) || cleanHw.contains(cleanWord)) {
-          matchedWord = hw;
-          break;
-        }
-      }
-
-      final isHighlight = matchedWord != null;
-      final wordColor = isHighlight 
-          ? (wordColors[matchedWord?.toLowerCase() ?? ''] ?? defaultHighlightColor)
-          : defaultHighlightColor;
+      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
           text: '$word ',
-          style: isHighlight
+          style: result.isHighlight
               ? TextStyle(
-                  color: wordColor,
+                  color: result.wordColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
                 )

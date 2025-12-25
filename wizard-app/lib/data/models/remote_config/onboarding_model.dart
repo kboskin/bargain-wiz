@@ -443,12 +443,14 @@ class SliderScreenModel extends OnboardingModel {
 @JsonSerializable()
 class PermissionScreenModel extends OnboardingModel {
   final String subtype; // e.g., "notifications"
-  final Map<String, dynamic>? metadata; // Optional metadata for button styling, etc.
+  final String? visual; // Optional Lottie resource path or asset path for frame/animation
+  final Map<String, dynamic>? metadata; // Optional metadata for button styling, visual configuration, etc.
 
   PermissionScreenModel({
     required super.title,
     super.description,
     required this.subtype,
+    this.visual,
     this.metadata,
     super.nextButtonText,
     super.answerStructure,
@@ -463,6 +465,7 @@ class PermissionScreenModel extends OnboardingModel {
       title: JsonHelpers.requireMultilocaleText(json, 'title'),
       description: JsonHelpers.optionalMultilocaleText(json, 'description'),
       subtype: JsonHelpers.requireString(json, 'subtype'),
+      visual: JsonHelpers.optionalString(json, 'visual'),
       metadata: JsonHelpers.optionalMap(json, 'metadata'),
       nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
       answerStructure: json['answer_structure'] != null
