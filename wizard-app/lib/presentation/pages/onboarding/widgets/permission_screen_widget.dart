@@ -452,6 +452,13 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
         // Continue to next step
         widget.onContinue?.call();
         break;
+      case ButtonAction.copy:
+      case ButtonAction.copyCode:
+      case ButtonAction.share:
+      case ButtonAction.shareCode:
+        // These actions are not applicable for permission screens
+        // They are handled in ReferralCodeScreenWidget
+        break;
     }
   }
 
@@ -467,27 +474,6 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
       }
     }
     return [];
-  }
-
-  /// Get text from ButtonConfig (supports both string and multilocale)
-  String _getTextFromButtonConfig(ButtonConfig config) {
-    if (config.text == null) {
-      return 'Button';
-    }
-    if (config.text is String) {
-      return config.text as String;
-    } else if (config.text is Map<String, dynamic>) {
-      return _cachedMultilocaleTextHelper!.getText(context, config.text);
-    }
-    return 'Button';
-  }
-
-  /// Get color from hex string
-  Color? _getColorFromString(String? colorString) {
-    if (colorString == null || colorString.isEmpty) {
-      return null;
-    }
-    return _cachedColorHelper!.getColor(colorString);
   }
 
   /// Get text from config map (supports both string and multilocale) - legacy method

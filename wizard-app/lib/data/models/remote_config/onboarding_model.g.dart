@@ -160,3 +160,59 @@ Map<String, dynamic> _$PermissionScreenModelToJson(
   'visual': instance.visual,
   'metadata': instance.metadata,
 };
+
+ImageListScreenModel _$ImageListScreenModelFromJson(
+  Map<String, dynamic> json,
+) => ImageListScreenModel(
+  title: json['title'],
+  description: json['description'],
+  images: (json['images'] as List<dynamic>).map((e) => e as String).toList(),
+  metadata: json['metadata'] as Map<String, dynamic>?,
+  nextButtonText: json['nextButtonText'],
+  answerStructure: json['answerStructure'] == null
+      ? null
+      : AnswerStructure.fromJson(
+          json['answerStructure'] as Map<String, dynamic>,
+        ),
+  showTopBar: json['showTopBar'] as bool? ?? true,
+);
+
+Map<String, dynamic> _$ImageListScreenModelToJson(
+  ImageListScreenModel instance,
+) => <String, dynamic>{
+  'title': instance.title,
+  'description': instance.description,
+  'nextButtonText': instance.nextButtonText,
+  'answerStructure': instance.answerStructure,
+  'showTopBar': instance.showTopBar,
+  'images': instance.images,
+  'metadata': instance.metadata,
+};
+
+ReferralCodeScreenModel _$ReferralCodeScreenModelFromJson(
+  Map<String, dynamic> json,
+) => ReferralCodeScreenModel(
+  title: json['title'],
+  description: json['description'],
+  referralCode: json['referralCode'] as String?,
+  metadata: json['metadata'] as Map<String, dynamic>?,
+  nextButtonText: json['nextButtonText'],
+  answerStructure: json['answerStructure'] == null
+      ? null
+      : AnswerStructure.fromJson(
+          json['answerStructure'] as Map<String, dynamic>,
+        ),
+  showTopBar: json['showTopBar'] as bool? ?? true,
+);
+
+Map<String, dynamic> _$ReferralCodeScreenModelToJson(
+  ReferralCodeScreenModel instance,
+) => <String, dynamic>{
+  'title': instance.title,
+  'description': instance.description,
+  'nextButtonText': instance.nextButtonText,
+  'answerStructure': instance.answerStructure,
+  'showTopBar': instance.showTopBar,
+  'referralCode': instance.referralCode,
+  'metadata': instance.metadata,
+};

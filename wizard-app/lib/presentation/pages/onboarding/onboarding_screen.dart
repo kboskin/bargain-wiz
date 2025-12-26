@@ -16,6 +16,8 @@ import 'package:appwizard/presentation/bloc/onboarding/onboarding_bloc.dart';
 import 'package:appwizard/presentation/bloc/onboarding/onboarding_event.dart';
 import 'package:appwizard/presentation/bloc/onboarding/onboarding_state.dart';
 import 'widgets/engagement_screen_widget.dart';
+import 'widgets/image_list_screen_widget.dart';
+import 'widgets/referral_code_screen_widget.dart';
 import 'widgets/select_screen_widget.dart';
 import 'widgets/slider_screen_widget.dart';
 import 'widgets/permission_screen_widget.dart';
@@ -195,10 +197,14 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton(
-                                  onPressed: () => _handleNext(
-                                    state,
-                                    _cachedBloc!,
-                                  ),
+                                  onPressed: () {
+                                    // Dismiss keyboard
+                                    FocusScope.of(context).unfocus();
+                                    _handleNext(
+                                      state,
+                                      _cachedBloc!,
+                                    );
+                                  },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.backgroundDark,
                                     foregroundColor: Colors.white,
@@ -380,6 +386,22 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       permission: (model) => PermissionScreenWidget(
         model: model,
         onContinue: () => _handleNext(state, _cachedBloc!),
+      ),
+      imageList: (model) => ImageListScreenWidget(model: model),
+      referralCode: (model) => ReferralCodeScreenWidget(
+        model: model,
+        selectedValue: state.answers[index] as String?,
+        onValueChanged: (value) {
+          bloc.add(
+            OnboardingAnswerChanged(
+              screenIndex: index,
+              screenTitle: model.title,
+              screenType: model.type,
+              answerKey: model.answerStructure?.answerKeyName,
+              answer: value,
+            ),
+          );
+        },
       ),
       orElse: () => Center(
         child: Text(

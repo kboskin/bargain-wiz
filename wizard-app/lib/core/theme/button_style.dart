@@ -32,7 +32,11 @@ enum ButtonAction {
   requestPermission,
   skip,
   dontAllow,
-  continueAction;
+  continueAction,
+  copy,
+  copyCode,
+  share,
+  shareCode;
 
   /// Convert from string (for Remote Config compatibility)
   static ButtonAction fromString(String value) {
@@ -45,6 +49,14 @@ enum ButtonAction {
         return ButtonAction.dontAllow;
       case 'continue':
         return ButtonAction.continueAction;
+      case 'copy':
+        return ButtonAction.copy;
+      case 'copy_code':
+        return ButtonAction.copyCode;
+      case 'share':
+        return ButtonAction.share;
+      case 'share_code':
+        return ButtonAction.shareCode;
       default:
         return ButtonAction.continueAction; // Default
     }
@@ -61,6 +73,14 @@ enum ButtonAction {
         return 'dont_allow';
       case ButtonAction.continueAction:
         return 'continue';
+      case ButtonAction.copy:
+        return 'copy';
+      case ButtonAction.copyCode:
+        return 'copy_code';
+      case ButtonAction.share:
+        return 'share';
+      case ButtonAction.shareCode:
+        return 'share_code';
     }
   }
 }

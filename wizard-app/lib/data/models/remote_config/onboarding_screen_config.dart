@@ -8,7 +8,9 @@ enum OnboardingScreenType {
   select,
   slider,
   engagement,
-  permission;
+  permission,
+  imageList,
+  referralCode;
 
   static OnboardingScreenType fromString(String value) {
     switch (value.toLowerCase()) {
@@ -20,6 +22,12 @@ enum OnboardingScreenType {
         return OnboardingScreenType.engagement;
       case 'permission':
         return OnboardingScreenType.permission;
+      case 'imagelist':
+      case 'image_list':
+        return OnboardingScreenType.imageList;
+      case 'referralcode':
+      case 'referral_code':
+        return OnboardingScreenType.referralCode;
       default:
         return OnboardingScreenType.engagement;
     }

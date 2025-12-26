@@ -59,6 +59,10 @@ abstract class OnboardingModel {
         return SliderScreenModel.fromJson(json);
       case OnboardingScreenType.permission:
         return PermissionScreenModel.fromJson(json);
+      case OnboardingScreenType.imageList:
+        return ImageListScreenModel.fromJson(json);
+      case OnboardingScreenType.referralCode:
+        return ReferralCodeScreenModel.fromJson(json);
     }
   }
 
@@ -496,6 +500,126 @@ class PermissionScreenModel extends OnboardingModel {
   }
 }
 
+/// Model for image list-type onboarding screens
+/// Displays a title and scrollable list of images
+@JsonSerializable()
+class ImageListScreenModel extends OnboardingModel {
+  final List<String> images; // List of image paths (Lottie, SVG, or regular images)
+  final Map<String, dynamic>? metadata; // Optional metadata for image configuration (spacing, size, etc.)
+
+  ImageListScreenModel({
+    required super.title,
+    super.description,
+    required this.images,
+    this.metadata,
+    super.nextButtonText,
+    super.answerStructure,
+    super.showTopBar,
+  });
+
+  @override
+  OnboardingScreenType get type => OnboardingScreenType.imageList;
+
+  factory ImageListScreenModel.fromJson(Map<String, dynamic> json) {
+    final imagesList = json['images'];
+    if (imagesList is! List) {
+      throw FormatException(
+        'Expected List for images, got ${imagesList.runtimeType}',
+      );
+    }
+
+    final model = ImageListScreenModel(
+      title: JsonHelpers.requireMultilocaleText(json, 'title'),
+      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
+      images: imagesList
+          .map((item) {
+            if (item is! String) {
+              throw FormatException(
+                'Expected String for image path, got ${item.runtimeType}',
+              );
+            }
+            return item;
+          })
+          .toList(),
+      metadata: JsonHelpers.optionalMap(json, 'metadata'),
+      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
+      answerStructure: json['answer_structure'] != null
+          ? AnswerStructure.fromJson(
+              JsonHelpers.requireMap(json, 'answer_structure'),
+            )
+          : null,
+      showTopBar: json['show_top_bar'] as bool? ?? true,
+    );
+    model.validate();
+    return model;
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = _$ImageListScreenModelToJson(this);
+    return _fixOnboardingModelJsonKeys(json, type);
+  }
+
+  @override
+  void validate() {
+    super.validate();
+    if (images.isEmpty) {
+      throw FormatException('ImageListScreenModel.images cannot be empty');
+    }
+  }
+}
+
+/// Model for referral code-type onboarding screens
+/// Displays a referral code that users can copy or share
+@JsonSerializable()
+class ReferralCodeScreenModel extends OnboardingModel {
+  final String? referralCode; // The referral code to display (can be null if fetched from service)
+  final Map<String, dynamic>? metadata; // Optional metadata for button styling, share message, etc.
+
+  ReferralCodeScreenModel({
+    required super.title,
+    super.description,
+    this.referralCode,
+    this.metadata,
+    super.nextButtonText,
+    super.answerStructure,
+    super.showTopBar,
+  });
+
+  @override
+  OnboardingScreenType get type => OnboardingScreenType.referralCode;
+
+  factory ReferralCodeScreenModel.fromJson(Map<String, dynamic> json) {
+    final model = ReferralCodeScreenModel(
+      title: JsonHelpers.requireMultilocaleText(json, 'title'),
+      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
+      referralCode: JsonHelpers.optionalString(json, 'referral_code'),
+      metadata: JsonHelpers.optionalMap(json, 'metadata'),
+      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
+      answerStructure: json['answer_structure'] != null
+          ? AnswerStructure.fromJson(
+              JsonHelpers.requireMap(json, 'answer_structure'),
+            )
+          : null,
+      showTopBar: json['show_top_bar'] as bool? ?? true,
+    );
+    model.validate();
+    return model;
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = _$ReferralCodeScreenModelToJson(this);
+    return _fixOnboardingModelJsonKeys(json, type);
+  }
+
+  @override
+  void validate() {
+    super.validate();
+    // Referral code can be null if it's fetched from a service
+  }
+}
+
 /// Extension for pattern matching with when-like syntax
 extension OnboardingModelWhen<T> on OnboardingModel {
   /// Pattern matching method similar to Kotlin's when expression
@@ -505,6 +629,8 @@ extension OnboardingModelWhen<T> on OnboardingModel {
     required T Function(SelectScreenModel) select,
     required T Function(SliderScreenModel) slider,
     required T Function(PermissionScreenModel) permission,
+    required T Function(ImageListScreenModel) imageList,
+    required T Function(ReferralCodeScreenModel) referralCode,
     T Function()? orElse,
   }) {
     if (this is EngagementScreenModel) {
@@ -515,6 +641,10 @@ extension OnboardingModelWhen<T> on OnboardingModel {
       return slider(this as SliderScreenModel);
     } else if (this is PermissionScreenModel) {
       return permission(this as PermissionScreenModel);
+    } else if (this is ImageListScreenModel) {
+      return imageList(this as ImageListScreenModel);
+    } else if (this is ReferralCodeScreenModel) {
+      return referralCode(this as ReferralCodeScreenModel);
     } else {
       return orElse?.call() ?? 
         (throw FormatException('Unknown screen type: ${runtimeType}')) as T;

@@ -47,6 +47,15 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
     );
     _staticFrameController!.value = 0.0; // Set to first frame
     _staticFrameController!.stop(); // Stop animation
+    
+    // Set default value to first option if no value is selected
+    if (widget.selectedValue == null && widget.model.options.isNotEmpty) {
+      // Use WidgetsBinding to schedule the callback after the current frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final firstOption = widget.model.options.first;
+        widget.onValueChanged(firstOption.value);
+      });
+    }
   }
 
   @override
