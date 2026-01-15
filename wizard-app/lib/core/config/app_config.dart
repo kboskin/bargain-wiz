@@ -29,5 +29,23 @@ class AppConfig {
 
   // Logging level
   static bool get verboseLogging => isDev;
+
+  // Payment provider type
+  static PaymentProviderType get paymentProviderType {
+    // Can be overridden via environment variable
+    const provider = String.fromEnvironment(
+      'PAYMENT_PROVIDER',
+      defaultValue: 'iap',
+    );
+    return provider == 'stripe'
+        ? PaymentProviderType.stripe
+        : PaymentProviderType.iap;
+  }
+}
+
+/// Payment provider type enum
+enum PaymentProviderType {
+  iap,
+  stripe,
 }
 

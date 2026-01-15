@@ -5,6 +5,7 @@ import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/data/models/remote_config/gradient_background_config.dart';
 import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
+import 'package:appwizard/data/models/remote_config/subscription_config.dart';
 
 /// Service for managing Firebase Remote Config values
 /// Always fetches fresh values from Remote Config (no caching)
@@ -233,6 +234,29 @@ class RemoteConfigService {
     } catch (e, stackTrace) {
       _logger.e('Error getting terms of use URL', e, stackTrace);
       return '';
+    }
+  }
+
+  /// Get subscription configuration from Remote Config
+  /// Returns null if not configured
+  SubscriptionConfig? getSubscriptionConfig() {
+    try {
+      final jsonString = getString('subscription_config');
+      if (jsonString.isEmpty) {
+        _logger.w('Subscription config is empty');
+        return null;
+      }
+
+      final json = jsonDecode(jsonString);
+      if (json is! Map<String, dynamic>) {
+        _logger.w('Invalid subscription_config format');
+        return null;
+      }
+
+      return SubscriptionConfig.fromJson(json);
+    } catch (e, stackTrace) {
+      _logger.e('Error parsing subscription config', e, stackTrace);
+      return null;
     }
   }
 }

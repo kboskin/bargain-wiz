@@ -4,5 +4,6 @@
   "api_url": "",
   "gradient_background_config": "{\"colors\":[\"#E8D5FF\",\"#FFE5B4\",\"#E0F7FA\"],\"stops\":[0.0,0.5,1.0]}",
   "privacy_policy_url": "https://example.com/privacy-policy",
-  "terms_of_use_url": "https://example.com/terms-of-use"
+  "terms_of_use_url": "https://example.com/terms-of-use",
+  "subscription_config": "{\"products\":[{\"tier\":\"basic\",\"product_id\":{\"ios\":\"com.bargain.wiz.basic\",\"android\":\"com.bargain.wiz.basic\"},\"title\":{\"en\":\"Basic\",\"es\":\"Básico\"},\"description\":{\"en\":\"Access to text-only bargain model\",\"es\":\"Acceso al modelo de ofertas solo texto\"},\"features\":[\"text_model_access\"],\"display_order\":1},{\"tier\":\"premium\",\"product_id\":{\"ios\":\"com.bargain.wiz.premium\",\"android\":\"com.bargain.wiz.premium\"},\"title\":{\"en\":\"Premium\",\"es\":\"Premium\"},\"description\":{\"en\":\"Full access including text model and image recognition\",\"es\":\"Acceso completo incluyendo modelo de texto y reconocimiento de imagen\"},\"features\":[\"text_model_access\",\"image_recognition\"],\"display_order\":2}]}"
 }

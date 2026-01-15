@@ -91,6 +91,9 @@ dependencies:
   
   # Share functionality
   share_plus: ^10.1.2
+  
+  # In-app purchases
+  in_app_purchase: ^3.2.3
 
 dev_dependencies:
   flutter_test:
