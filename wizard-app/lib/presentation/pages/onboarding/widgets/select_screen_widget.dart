@@ -359,7 +359,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     final normalizedPath = _cachedAssetPathHelper!.normalizeAssetPath(animationPath);
     
     // Get animation color from option metadata (no default - if not provided, no color applied)
-    final animationColorString = option.metadata?['animation_color'] as String?;
+    final animationColorString = option.metadata?.animationColor;
     final animationColor = _cachedColorHelper!.getColor(animationColorString);
     
     // Single star animation (no waterfall)
@@ -390,11 +390,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
 
   /// Get animation path from option metadata or default to star_anim.json
   String _getAnimationPath(OnboardingOption option) {
-    if (option.metadata != null && option.metadata!.containsKey('animation')) {
-      final animation = option.metadata!['animation'];
-      if (animation is String && animation.isNotEmpty) {
-        return animation;
-      }
+    final animation = option.metadata?.animation;
+    if (animation != null && animation.isNotEmpty) {
+      return animation;
     }
     return 'assets/lottie/star_anim.json'; // Default path
   }
@@ -693,11 +691,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     }
 
     // Second priority: Use color from metadata
-    if (option.metadata != null && option.metadata!.containsKey('color')) {
-      final colorHex = option.metadata!['color'] as String?;
-      if (colorHex != null && colorHex.isNotEmpty) {
-        return _cachedColorHelper!.getColor(colorHex);
-      }
+    final colorHex = option.metadata?.color;
+    if (colorHex != null && colorHex.isNotEmpty) {
+      return _cachedColorHelper!.getColor(colorHex);
     }
 
     // Return null (no color) if not found
@@ -803,11 +799,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
 
   /// Get highlight words from metadata (supports map or list format)
   dynamic _getHighlightWords() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_words')) {
-      final highlightWordsData = widget.model.metadata!['highlight_words'];
-      if (highlightWordsData is Map<String, dynamic> && highlightWordsData.containsKey('title')) {
-        return highlightWordsData['title'];
-      }
+    final highlightWordsData = widget.model.metadata?.highlightWords;
+    if (highlightWordsData != null && highlightWordsData.containsKey('title')) {
+      return highlightWordsData['title'];
     }
     return null;
   }
@@ -869,11 +863,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
 
   /// Get description highlight words from metadata (supports map or list format)
   dynamic _getDescriptionHighlightWords() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_words')) {
-      final highlightWordsData = widget.model.metadata!['highlight_words'];
-      if (highlightWordsData is Map<String, dynamic> && highlightWordsData.containsKey('description')) {
-        return highlightWordsData['description'];
-      }
+    final highlightWordsData = widget.model.metadata?.highlightWords;
+    if (highlightWordsData != null && highlightWordsData.containsKey('description')) {
+      return highlightWordsData['description'];
     }
     return null;
   }
@@ -881,11 +873,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   /// Get highlight color from metadata
   /// Returns null if no valid color is found
   Color? _getHighlightColor() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_color')) {
-      final colorString = widget.model.metadata!['highlight_color'] as String?;
-      if (colorString != null && colorString.isNotEmpty) {
-        return _cachedColorHelper!.getColor(colorString);
-      }
+    final colorString = widget.model.metadata?.highlightColor;
+    if (colorString != null && colorString.isNotEmpty) {
+      return _cachedColorHelper!.getColor(colorString);
     }
     return null; // No color if not found
   }

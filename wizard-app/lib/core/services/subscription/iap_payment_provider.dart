@@ -1,17 +1,18 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase/in_app_purchase.dart' hide PurchaseDetails;
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:in_app_purchase_platform_interface/in_app_purchase_platform_interface.dart' as iap_interface;
 
 /// IAP Payment Provider implementation using in_app_purchase package
 class IAPPaymentProvider extends PaymentProvider {
   final InAppPurchase _iap = InAppPurchase.instance;
   final StreamController<PurchaseUpdate> _purchaseUpdateController =
       StreamController<PurchaseUpdate>.broadcast();
-  StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
+  StreamSubscription<List<iap_interface.PurchaseDetails>>? _purchaseSubscription;
   bool _isInitialized = false;
 
   IAPPaymentProvider(super.logger);
@@ -60,7 +61,7 @@ class IAPPaymentProvider extends PaymentProvider {
     try {
       logger.i('Loading products: $productIds');
 
-      final response = await _iap.queryProductDetails(productIds);
+      final response = await _iap.queryProductDetails(productIds.toSet());
 
       if (response.notFoundIDs.isNotEmpty) {
         logger.w('Products not found: ${response.notFoundIDs}');
@@ -135,7 +136,7 @@ class IAPPaymentProvider extends PaymentProvider {
   @override
   Stream<PurchaseUpdate> get purchaseUpdates => _purchaseUpdateController.stream;
 
-  void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
+  void _handlePurchaseUpdates(List<iap_interface.PurchaseDetails> purchaseDetailsList) {
     for (final purchaseDetails in purchaseDetailsList) {
       switch (purchaseDetails.status) {
         case PurchaseStatus.pending:
@@ -173,25 +174,36 @@ class IAPPaymentProvider extends PaymentProvider {
     }
   }
 
-  PurchaseDetails _convertPurchaseDetails(PurchaseDetails iapDetails) {
+  PurchaseDetails _convertPurchaseDetails(iap_interface.PurchaseDetails iapDetails) {
     String receiptData = '';
     String? originalTransactionId;
 
     if (Platform.isIOS) {
       final appStoreDetails = iapDetails as AppStorePurchaseDetails;
       receiptData = appStoreDetails.verificationData.serverVerificationData;
-      originalTransactionId =
-          appStoreDetails.verificationData.originalTransactionIdentifier;
+      // For iOS, the original transaction ID is in the purchaseID field
+      originalTransactionId = appStoreDetails.purchaseID;
     } else if (Platform.isAndroid) {
       final googleDetails = iapDetails as GooglePlayPurchaseDetails;
       receiptData = googleDetails.verificationData.serverVerificationData;
+    }
+
+    // Handle transactionDate which may be null or a String on some platforms
+    DateTime transactionDate = DateTime.now();
+    if (iapDetails.transactionDate != null) {
+      final dateValue = iapDetails.transactionDate!;
+      if (dateValue is DateTime) {
+        transactionDate = dateValue as DateTime;
+      } else if (dateValue is String) {
+        transactionDate = DateTime.tryParse(dateValue) ?? DateTime.now();
+      }
     }
 
     return PurchaseDetails(
       productId: iapDetails.productID,
       transactionId: iapDetails.purchaseID ?? '',
       originalTransactionId: originalTransactionId,
-      transactionDate: iapDetails.transactionDate ?? DateTime.now(),
+      transactionDate: transactionDate,
       receiptData: receiptData,
       platform: Platform.isIOS ? 'ios' : 'android',
     );

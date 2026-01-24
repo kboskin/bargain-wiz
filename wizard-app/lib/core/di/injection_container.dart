@@ -8,6 +8,9 @@ import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/core/services/onboarding_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/services/analytics_service.dart';
+import 'package:appwizard/core/routing/app_router.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_bloc.dart';
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
 import 'package:appwizard/core/services/subscription/iap_payment_provider.dart';
 import 'package:appwizard/core/services/subscription/stripe_payment_provider.dart';
@@ -57,6 +60,8 @@ Future<void> init() async {
     ..registerLazySingleton<AppLogger>(
       () => AppLogger(sl<FirebaseCrashlytics>()),
     )
+    // Routing
+    ..registerLazySingleton<AppRouter>(AppRouter.new)
 
   // Utils
 
@@ -73,6 +78,9 @@ Future<void> init() async {
     )
     ..registerLazySingleton<RemoteConfigService>(
       () => RemoteConfigService(sl<AppLogger>()),
+    )
+    ..registerLazySingleton<AnalyticsService>(
+      () => AnalyticsService(logger: sl<AppLogger>()),
     )
     ..registerLazySingleton<OnboardingService>(
       () => OnboardingService(
@@ -141,6 +149,14 @@ Future<void> init() async {
   sl.registerFactory<SubscriptionBloc>(
     () => SubscriptionBloc(
       repository: sl<SubscriptionRepository>(),
+      logger: sl<AppLogger>(),
+    ),
+  );
+
+  // Auth BLoC
+  sl.registerFactory<AuthBloc>(
+    () => AuthBloc(
+      authService: sl<AuthService>(),
       logger: sl<AppLogger>(),
     ),
   );

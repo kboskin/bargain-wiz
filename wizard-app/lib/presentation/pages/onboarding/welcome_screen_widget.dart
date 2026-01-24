@@ -12,6 +12,7 @@ import 'package:appwizard/core/widgets/glass_container.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
 import 'package:appwizard/presentation/pages/auth/sign_in_modal.dart';
+import 'package:appwizard/core/routing/app_routes.dart';
 
 /// Widget for the welcome/landing screen
 /// Displays title, description, visual, and action buttons based on remote config
@@ -289,7 +290,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
         child: ElevatedButton(
           onPressed: () {
             // Navigate to onboarding flow
-            context.push('/onboarding');
+            context.push(AppRoutes.onboarding);
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.backgroundDark,

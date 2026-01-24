@@ -75,4 +75,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get continueButton => 'Continue';
+
+  @override
+  String get restorePurchases => 'Restore Purchases';
+
+  @override
+  String get terms => 'Terms';
+
+  @override
+  String get privacy => 'Privacy';
+
+  @override
+  String get productNotAvailable => 'Product not available. Please try again.';
+
+  @override
+  String get subscriptionActivated => 'Subscription activated!';
+
+  @override
+  String get skipForNow => 'Skip for now';
 }

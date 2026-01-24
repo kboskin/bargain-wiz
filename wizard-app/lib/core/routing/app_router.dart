@@ -6,15 +6,19 @@ import '../../presentation/bloc/auth/auth_state.dart';
 import '../../presentation/pages/home/home_page.dart';
 import '../../presentation/pages/onboarding/onboarding_screen.dart';
 import '../../presentation/pages/onboarding/welcome_screen_page.dart';
+import '../../presentation/pages/paywall/paywall_page.dart';
+import '../../presentation/bloc/subscription/subscription_bloc.dart';
+import '../di/injection_container.dart' as di;
+import 'app_routes.dart';
 
 /// App router configuration
 class AppRouter {
-  static final GoRouter router = GoRouter(
-    initialLocation: '/',
+  late final GoRouter router = GoRouter(
+    initialLocation: AppRoutes.home,
     redirect: (BuildContext context, GoRouterState state) {
       final authBloc = context.read<AuthBloc>();
       final authState = authBloc.state;
-      final isGoingToHome = state.matchedLocation == '/';
+      final isGoingToHome = state.matchedLocation == AppRoutes.home;
 
       // If authenticated and trying to go to home, allow it
       if (authState is AuthAuthenticated) {
@@ -35,8 +39,8 @@ class AppRouter {
     },
     routes: [
       GoRoute(
-        path: '/',
-        name: 'home',
+        path: AppRoutes.home,
+        name: AppRoutes.homeName,
         pageBuilder: (context, state) {
           return CustomTransitionPage(
             key: state.pageKey,
@@ -82,8 +86,8 @@ class AppRouter {
         },
       ),
       GoRoute(
-        path: '/onboarding',
-        name: 'onboarding',
+        path: AppRoutes.onboarding,
+        name: AppRoutes.onboardingName,
         pageBuilder: (context, state) {
           return CustomTransitionPage(
             key: state.pageKey,
@@ -111,6 +115,14 @@ class AppRouter {
             transitionDuration: const Duration(milliseconds: 300),
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutes.paywall,
+        name: AppRoutes.paywallName,
+        builder: (context, state) => BlocProvider<SubscriptionBloc>(
+          create: (_) => di.sl<SubscriptionBloc>(),
+          child: const PaywallPage(),
+        ),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

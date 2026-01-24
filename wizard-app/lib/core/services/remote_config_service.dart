@@ -6,6 +6,7 @@ import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/data/models/remote_config/gradient_background_config.dart';
 import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
 import 'package:appwizard/data/models/remote_config/subscription_config.dart';
+import 'package:appwizard/data/models/remote_config/paywall_config.dart';
 
 /// Service for managing Firebase Remote Config values
 /// Always fetches fresh values from Remote Config (no caching)
@@ -256,6 +257,32 @@ class RemoteConfigService {
       return SubscriptionConfig.fromJson(json);
     } catch (e, stackTrace) {
       _logger.e('Error parsing subscription config', e, stackTrace);
+      return null;
+    }
+  }
+
+  /// Get paywall configuration from Remote Config
+  /// Returns null if not configured or parsing fails
+  /// Uses defaults from remote_config_defaults.json if available
+  PaywallConfig? getPaywallConfig({String? configKey}) {
+    try {
+      final key = configKey ?? 'paywall_config';
+      final jsonString = getString(key);
+      
+      if (jsonString.isEmpty) {
+        _logger.w('Paywall config is empty for key: $key');
+        return null;
+      }
+
+      final json = jsonDecode(jsonString);
+      if (json is! Map<String, dynamic>) {
+        _logger.w('Invalid paywall config format for key: $key');
+        return null;
+      }
+
+      return PaywallConfig.fromJson(json);
+    } catch (e, stackTrace) {
+      _logger.e('Error parsing paywall config', e, stackTrace);
       return null;
     }
   }

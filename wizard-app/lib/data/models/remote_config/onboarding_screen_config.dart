@@ -10,7 +10,9 @@ enum OnboardingScreenType {
   engagement,
   permission,
   imageList,
-  referralCode;
+  referralCode,
+  paywall,
+  warmup;
 
   static OnboardingScreenType fromString(String value) {
     switch (value.toLowerCase()) {
@@ -28,6 +30,10 @@ enum OnboardingScreenType {
       case 'referralcode':
       case 'referral_code':
         return OnboardingScreenType.referralCode;
+      case 'paywall':
+        return OnboardingScreenType.paywall;
+      case 'warmup':
+        return OnboardingScreenType.warmup;
       default:
         return OnboardingScreenType.engagement;
     }

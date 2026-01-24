@@ -228,6 +228,64 @@ class AppTextStyles {
     letterSpacing: 0,
     color: Colors.white,
   );
+
+  // Custom heading styles for paywall
+  static const TextStyle heading1 = TextStyle(
+    fontSize: 34,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0,
+    color: AppColors.textPrimary,
+  );
+
+  static const TextStyle heading2 = TextStyle(
+    fontSize: 28,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+    color: AppColors.textPrimary,
+  );
+
+  static const TextStyle heading3 = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+    color: AppColors.textPrimary,
+  );
+
+  static const TextStyle caption = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.5,
+    color: AppColors.textPrimary,
+  );
+
+  // Dark theme variants for custom headings
+  static const TextStyle heading1Dark = TextStyle(
+    fontSize: 34,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle heading2Dark = TextStyle(
+    fontSize: 28,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle heading3Dark = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+    color: AppColors.textPrimaryDark,
+  );
+
+  static const TextStyle captionDark = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.5,
+    color: AppColors.textPrimaryDark,
+  );
 }
 
 /// Extension to easily access text styles based on theme

@@ -73,24 +73,12 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
 
   /// Get visual width from metadata or default to 200
   double _getVisualWidth() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('width')) {
-      final width = widget.model.metadata!['width'];
-      if (width is num) {
-        return width.toDouble();
-      }
-    }
-    return 200.0; // Default width
+    return widget.model.metadata?.width ?? 200.0;
   }
 
   /// Get visual height from metadata or default to 200
   double _getVisualHeight() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('height')) {
-      final height = widget.model.metadata!['height'];
-      if (height is num) {
-        return height.toDouble();
-      }
-    }
-    return 200.0; // Default height
+    return widget.model.metadata?.height ?? 200.0;
   }
 
   Widget _buildVisual(String visualPath, {double width = 200, double height = 200}) {
@@ -193,11 +181,9 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
 
   /// Get highlight words from metadata (supports map or list format)
   dynamic _getHighlightWords() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_words')) {
-      final highlightWordsData = widget.model.metadata!['highlight_words'];
-      if (highlightWordsData is Map<String, dynamic> && highlightWordsData.containsKey('title')) {
-        return highlightWordsData['title'];
-      }
+    final highlightWordsData = widget.model.metadata?.highlightWords;
+    if (highlightWordsData != null && highlightWordsData.containsKey('title')) {
+      return highlightWordsData['title'];
     }
     return null;
   }
@@ -259,11 +245,9 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
 
   /// Get description highlight words from metadata (supports map or list format)
   dynamic _getDescriptionHighlightWords() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_words')) {
-      final highlightWordsData = widget.model.metadata!['highlight_words'];
-      if (highlightWordsData is Map<String, dynamic> && highlightWordsData.containsKey('description')) {
-        return highlightWordsData['description'];
-      }
+    final highlightWordsData = widget.model.metadata?.highlightWords;
+    if (highlightWordsData != null && highlightWordsData.containsKey('description')) {
+      return highlightWordsData['description'];
     }
     return null;
   }
@@ -271,11 +255,9 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
   /// Get highlight color from metadata
   /// Returns null if no valid color is found
   Color? _getHighlightColor() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_color')) {
-      final colorString = widget.model.metadata!['highlight_color'] as String?;
-      if (colorString != null && colorString.isNotEmpty) {
-        return _cachedColorHelper!.getColor(colorString);
-      }
+    final colorString = widget.model.metadata?.highlightColor;
+    if (colorString != null && colorString.isNotEmpty) {
+      return _cachedColorHelper!.getColor(colorString);
     }
     return null; // No color if not found
   }

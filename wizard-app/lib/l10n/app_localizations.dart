@@ -229,6 +229,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Continue'**
   String get continueButton;
+
+  /// Restore purchases button text
+  ///
+  /// In en, this message translates to:
+  /// **'Restore Purchases'**
+  String get restorePurchases;
+
+  /// Terms link text
+  ///
+  /// In en, this message translates to:
+  /// **'Terms'**
+  String get terms;
+
+  /// Privacy link text
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy'**
+  String get privacy;
+
+  /// Error message when subscription product is not available
+  ///
+  /// In en, this message translates to:
+  /// **'Product not available. Please try again.'**
+  String get productNotAvailable;
+
+  /// Success message when subscription is activated
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription activated!'**
+  String get subscriptionActivated;
+
+  /// Button text to skip paywall temporarily
+  ///
+  /// In en, this message translates to:
+  /// **'Skip for now'**
+  String get skipForNow;
 }
 
 class _AppLocalizationsDelegate

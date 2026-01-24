@@ -13,6 +13,7 @@ import 'package:appwizard/presentation/bloc/auth/auth_bloc.dart';
 import 'package:appwizard/presentation/bloc/auth/auth_event.dart';
 import 'package:appwizard/presentation/bloc/auth/auth_state.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
+import 'package:appwizard/core/routing/app_routes.dart';
 
 class SignInModal extends StatelessWidget {
   const SignInModal({super.key});
@@ -37,7 +38,7 @@ class SignInModal extends StatelessWidget {
         } else if (state is AuthAuthenticated) {
           // Close modal and navigate to home
           Navigator.of(context).pop();
-          context.go('/');
+          context.go(AppRoutes.home);
         }
       },
       builder: (context, state) {

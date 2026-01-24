@@ -76,4 +76,23 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get continueButton => 'Continuar';
+
+  @override
+  String get restorePurchases => 'Restaurar Compras';
+
+  @override
+  String get terms => 'Términos';
+
+  @override
+  String get privacy => 'Privacidad';
+
+  @override
+  String get productNotAvailable =>
+      'Producto no disponible. Por favor intenta de nuevo.';
+
+  @override
+  String get subscriptionActivated => '¡Suscripción activada!';
+
+  @override
+  String get skipForNow => 'Skip for now';
 }

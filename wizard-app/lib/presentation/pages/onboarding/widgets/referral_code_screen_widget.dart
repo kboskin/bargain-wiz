@@ -131,7 +131,7 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
       decoration: InputDecoration(
         hintText: _cachedMultilocaleTextHelper!.getText(
           context,
-          widget.model.metadata?['placeholder'] ?? {'en': 'Enter code', 'es': 'Ingresa código'},
+          widget.model.metadata?.placeholder ?? {'en': 'Enter code', 'es': 'Ingresa código'},
         ),
         hintStyle: Theme.of(context).textTheme.headlineMedium?.copyWith(
               color: AppColors.backgroundDark.withValues(alpha: 0.4),
@@ -173,19 +173,14 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
 
   /// Get description highlight words from metadata
   dynamic _getDescriptionHighlightWords() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_words')) {
-      return widget.model.metadata!['highlight_words'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords;
   }
 
   /// Get highlight color from metadata
   Color? _getHighlightColor() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('highlight_color')) {
-      final colorString = widget.model.metadata!['highlight_color'];
-      if (colorString is String) {
-        return _cachedColorHelper?.getColor(colorString);
-      }
+    final colorString = widget.model.metadata?.highlightColor;
+    if (colorString != null && colorString.isNotEmpty) {
+      return _cachedColorHelper?.getColor(colorString);
     }
     return null;
   }

@@ -92,6 +92,30 @@
   "continueButton": "Continue",
   "@continueButton": {
     "description": "Continue button text"
+  },
+  "restorePurchases": "Restore Purchases",
+  "@restorePurchases": {
+    "description": "Restore purchases button text"
+  },
+  "terms": "Terms",
+  "@terms": {
+    "description": "Terms link text"
+  },
+  "privacy": "Privacy",
+  "@privacy": {
+    "description": "Privacy link text"
+  },
+  "productNotAvailable": "Product not available. Please try again.",
+  "@productNotAvailable": {
+    "description": "Error message when subscription product is not available"
+  },
+  "subscriptionActivated": "Subscription activated!",
+  "@subscriptionActivated": {
+    "description": "Success message when subscription is activated"
+  },
+  "skipForNow": "Skip for now",
+  "@skipForNow": {
+    "description": "Button text to skip paywall temporarily"
   }
 }
 

@@ -15,24 +15,35 @@ import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:appwizard/presentation/bloc/onboarding/onboarding_bloc.dart';
 import 'package:appwizard/presentation/bloc/onboarding/onboarding_event.dart';
 import 'package:appwizard/presentation/bloc/onboarding/onboarding_state.dart';
+import 'package:appwizard/core/routing/app_routes.dart';
 import 'widgets/engagement_screen_widget.dart';
 import 'widgets/image_list_screen_widget.dart';
 import 'widgets/referral_code_screen_widget.dart';
 import 'widgets/select_screen_widget.dart';
 import 'widgets/slider_screen_widget.dart';
 import 'widgets/permission_screen_widget.dart';
+import 'widgets/paywall_screen_widget.dart';
+import 'widgets/warmup_screen_widget.dart';
+import 'package:appwizard/presentation/bloc/subscription/subscription_bloc.dart';
 
 class OnboardingFlowPage extends StatelessWidget {
   const OnboardingFlowPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => OnboardingBloc(
-        repository: di.sl<OnboardingRepository>(),
-        onboardingService: di.sl<OnboardingService>(),
-        logger: di.sl<AppLogger>(),
-      )..add(const LoadOnboardingConfigRequested()),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (context) => OnboardingBloc(
+            repository: di.sl<OnboardingRepository>(),
+            onboardingService: di.sl<OnboardingService>(),
+            logger: di.sl<AppLogger>(),
+          )..add(const LoadOnboardingConfigRequested()),
+        ),
+        BlocProvider(
+          create: (context) => di.sl<SubscriptionBloc>(),
+        ),
+      ],
       child: const _OnboardingFlowView(),
     );
   }
@@ -81,7 +92,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     return BlocConsumer<OnboardingBloc, OnboardingState>(
       listener: (context, state) {
         if (state is OnboardingCompleted) {
-          context.go('/');
+          context.go(AppRoutes.paywall);
         } else if (state is OnboardingError) {
           // Error state - navigation will be handled by the error UI
         }
@@ -111,7 +122,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => context.go('/'),
+                    onPressed: () => context.go(AppRoutes.home),
                     child: Text(AppLocalizations.of(context)!.goBack),
                   ),
                 ],
@@ -188,7 +199,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                           ),
                         ),
 
-                        // Next/Get Started button
+                        // Next/Get Started button (secondary for paywall screens)
                         Padding(
                           padding: const EdgeInsets.all(24.0),
                           child: Column(
@@ -206,13 +217,29 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                     );
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.backgroundDark,
-                                    foregroundColor: Colors.white,
+                                    backgroundColor: state.screens.isNotEmpty &&
+                                            _currentScreenIndex < state.screens.length &&
+                                            state.screens[_currentScreenIndex] is PaywallScreenModel
+                                        ? Colors.transparent
+                                        : AppColors.backgroundDark,
+                                    foregroundColor: state.screens.isNotEmpty &&
+                                            _currentScreenIndex < state.screens.length &&
+                                            state.screens[_currentScreenIndex] is PaywallScreenModel
+                                        ? AppColors.backgroundDark
+                                        : Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 18,
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
+                                      side: state.screens.isNotEmpty &&
+                                              _currentScreenIndex < state.screens.length &&
+                                              state.screens[_currentScreenIndex] is PaywallScreenModel
+                                          ? BorderSide(
+                                              color: AppColors.backgroundDark,
+                                              width: 1,
+                                            )
+                                          : BorderSide.none,
                                     ),
                                   ),
                                   child: Text(
@@ -312,6 +339,8 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     return true;
   }
 
+
+
   String _getNextButtonText(BuildContext context, OnboardingConfigLoaded state) {
     if (_currentScreenIndex >= state.screens.length) {
       return AppLocalizations.of(context)!.next;
@@ -319,15 +348,34 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
     final currentScreen = state.screens[_currentScreenIndex];
 
-    // Use custom button text from model if provided
-    if (currentScreen.nextButtonText != null) {
-      final text = _cachedMultilocaleTextHelper!.getText(context, currentScreen.nextButtonText);
+    return currentScreen.when(
+      paywall: (m) => _getStandardButtonText(context, m, state,
+          defaultText: AppLocalizations.of(context)!.skipForNow),
+      engagement: (m) => _getStandardButtonText(context, m, state),
+      select: (m) => _getStandardButtonText(context, m, state),
+      slider: (m) => _getStandardButtonText(context, m, state),
+      permission: (m) => _getStandardButtonText(context, m, state),
+      imageList: (m) => _getStandardButtonText(context, m, state),
+      referralCode: (m) => _getStandardButtonText(context, m, state),
+      warmup: (m) => _getStandardButtonText(context, m, state),
+    );
+  }
+
+  String _getStandardButtonText(BuildContext context, OnboardingModel screen,
+      OnboardingConfigLoaded state,
+      {String? defaultText}) {
+    if (screen.nextButtonText != null) {
+      final text =
+          _cachedMultilocaleTextHelper!.getText(context, screen.nextButtonText);
       if (text.isNotEmpty) {
         return text;
       }
     }
 
-    // Fallback to default: "Get Started" for last screen, "Next" for others
+    if (defaultText != null) {
+      return defaultText;
+    }
+
     return _currentScreenIndex == state.screens.length - 1
         ? AppLocalizations.of(context)!.getStarted
         : AppLocalizations.of(context)!.next;
@@ -360,7 +408,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           bloc.add(
             OnboardingAnswerChanged(
               screenIndex: index,
-              screenTitle: model.title,
+              screenTitle: _cachedMultilocaleTextHelper!.getText(context, model.title),
               screenType: model.type,
               answerKey: model.answerStructure?.answerKeyName,
               answer: value,
@@ -375,7 +423,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           bloc.add(
             OnboardingAnswerChanged(
               screenIndex: index,
-              screenTitle: model.title,
+              screenTitle: _cachedMultilocaleTextHelper!.getText(context, model.title),
               screenType: model.type,
               answerKey: model.answerStructure?.answerKeyName,
               answer: value,
@@ -395,7 +443,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           bloc.add(
             OnboardingAnswerChanged(
               screenIndex: index,
-              screenTitle: model.title,
+              screenTitle: _cachedMultilocaleTextHelper!.getText(context, model.title),
               screenType: model.type,
               answerKey: model.answerStructure?.answerKeyName,
               answer: value,
@@ -403,6 +451,8 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           );
         },
       ),
+      paywall: (model) => PaywallScreenWidget(model: model),
+      warmup: (model) => WarmupScreenWidget(model: model),
       orElse: () => Center(
         child: Text(
           'Unknown screen type: ${screen.runtimeType}',

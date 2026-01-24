@@ -21,6 +21,11 @@
   "signInWithApple": "Iniciar sesión con Apple",
   "dontHaveAccount": "¿No tienes una cuenta?",
   "alreadyHaveAccount": "¿Ya tienes una cuenta?",
-  "continueButton": "Continuar"
+  "continueButton": "Continuar",
+  "restorePurchases": "Restaurar Compras",
+  "terms": "Términos",
+  "privacy": "Privacidad",
+  "productNotAvailable": "Producto no disponible. Por favor intenta de nuevo.",
+  "subscriptionActivated": "¡Suscripción activada!"
 }
 

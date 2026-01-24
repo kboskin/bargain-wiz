@@ -216,3 +216,53 @@ Map<String, dynamic> _$ReferralCodeScreenModelToJson(
   'referralCode': instance.referralCode,
   'metadata': instance.metadata,
 };
+
+PaywallScreenModel _$PaywallScreenModelFromJson(Map<String, dynamic> json) =>
+    PaywallScreenModel(
+      title: json['title'],
+      description: json['description'],
+      metadata: json['metadata'] as Map<String, dynamic>?,
+      nextButtonText: json['nextButtonText'],
+      answerStructure: json['answerStructure'] == null
+          ? null
+          : AnswerStructure.fromJson(
+              json['answerStructure'] as Map<String, dynamic>,
+            ),
+      showTopBar: json['showTopBar'] as bool? ?? true,
+    );
+
+Map<String, dynamic> _$PaywallScreenModelToJson(PaywallScreenModel instance) =>
+    <String, dynamic>{
+      'title': instance.title,
+      'description': instance.description,
+      'nextButtonText': instance.nextButtonText,
+      'answerStructure': instance.answerStructure,
+      'showTopBar': instance.showTopBar,
+      'metadata': instance.metadata,
+    };
+
+WarmupScreenModel _$WarmupScreenModelFromJson(Map<String, dynamic> json) =>
+    WarmupScreenModel(
+      title: json['title'],
+      description: json['description'],
+      visual: json['visual'] as String?,
+      metadata: json['metadata'] as Map<String, dynamic>?,
+      nextButtonText: json['next_button_text'],
+      answerStructure: json['answer_structure'] == null
+          ? null
+          : AnswerStructure.fromJson(
+              json['answer_structure'] as Map<String, dynamic>,
+            ),
+      showTopBar: json['show_top_bar'] as bool? ?? true,
+    );
+
+Map<String, dynamic> _$WarmupScreenModelToJson(WarmupScreenModel instance) =>
+    <String, dynamic>{
+      'title': instance.title,
+      'description': instance.description,
+      'visual': instance.visual,
+      'metadata': instance.metadata,
+      'next_button_text': instance.nextButtonText,
+      'answer_structure': instance.answerStructure,
+      'show_top_bar': instance.showTopBar,
+    };

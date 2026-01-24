@@ -463,15 +463,12 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
   }
 
   List<ButtonConfig> _getButtons() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('buttons')) {
-      final buttonsData = widget.model.metadata!['buttons'];
-      if (buttonsData is List) {
-        return buttonsData
-            .whereType<Map<String, dynamic>>()
-            .map((buttonJson) => ButtonConfig.fromJson(buttonJson))
-            .toList();
-      }
+    final buttonsData = widget.model.metadata?.buttons;
+    if (buttonsData != null) {
+      return buttonsData
+          .whereType<Map<String, dynamic>>()
+          .map((buttonJson) => ButtonConfig.fromJson(buttonJson))
+          .toList();
     }
     return [];
   }
@@ -532,58 +529,58 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
 
   // Legacy methods for backward compatibility (single button config)
   String _getButtonText() {
-    if (widget.model.metadata != null) {
-      return _getTextFromConfig(
-        widget.model.metadata!,
-        'button_text',
-        'Enable Notifications',
-      );
+    final metadata = widget.model.metadata;
+    if (metadata != null) {
+      final textData = metadata.raw?['button_text'];
+      if (textData is String) {
+        return textData;
+      } else if (textData is Map<String, dynamic>) {
+        return _cachedMultilocaleTextHelper!.getText(context, textData);
+      }
     }
     return 'Enable Notifications';
   }
 
   Color? _getButtonColor() {
-    return _getColorFromConfig(widget.model.metadata ?? {}, 'button_color');
+    final colorHex = widget.model.metadata?.raw?['button_color'] as String?;
+    return _cachedColorHelper!.getColor(colorHex);
   }
 
   Color? _getGlowColor() {
-    return _getColorFromConfig(widget.model.metadata ?? {}, 'glow_color');
+    final colorHex = widget.model.metadata?.raw?['glow_color'] as String?;
+    return _cachedColorHelper!.getColor(colorHex);
   }
 
   double _getGlowIntensity() {
-    return _getDoubleFromConfig(
-      widget.model.metadata ?? {},
-      'glow_intensity',
-      0.6,
-    );
+    final intensity = widget.model.metadata?.raw?['glow_intensity'];
+    if (intensity is num) {
+      return intensity.toDouble().clamp(0.0, 1.0);
+    }
+    return 0.6;
   }
 
   ButtonVisualStyle _getButtonStyle() {
-    return _getButtonStyleFromConfig(widget.model.metadata ?? {});
+    final styleString = widget.model.metadata?.raw?['button_style'] as String?;
+    if (styleString != null && styleString.isNotEmpty) {
+      return ButtonVisualStyle.fromString(styleString);
+    }
+    return ButtonVisualStyle.glow; // Default style
   }
 
   /// Get highlight words from metadata
   dynamic _getHighlightWords() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('highlight_words')) {
-      final highlightWordsData = widget.model.metadata!['highlight_words'];
-      if (highlightWordsData is Map<String, dynamic> &&
-          highlightWordsData.containsKey('title')) {
-        return highlightWordsData['title'];
-      }
+    final highlightWordsData = widget.model.metadata?.highlightWords;
+    if (highlightWordsData != null && highlightWordsData.containsKey('title')) {
+      return highlightWordsData['title'];
     }
     return null;
   }
 
   /// Get description highlight words from metadata
   dynamic _getDescriptionHighlightWords() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('highlight_words')) {
-      final highlightWordsData = widget.model.metadata!['highlight_words'];
-      if (highlightWordsData is Map<String, dynamic> &&
-          highlightWordsData.containsKey('description')) {
-        return highlightWordsData['description'];
-      }
+    final highlightWordsData = widget.model.metadata?.highlightWords;
+    if (highlightWordsData != null && highlightWordsData.containsKey('description')) {
+      return highlightWordsData['description'];
     }
     return null;
   }
@@ -591,36 +588,21 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
   /// Get highlight color from metadata
   /// Returns null if no valid color is found
   Color? _getHighlightColor() {
-    if (widget.model.metadata != null &&
-        widget.model.metadata!.containsKey('highlight_color')) {
-      final colorString = widget.model.metadata!['highlight_color'] as String?;
-      if (colorString != null && colorString.isNotEmpty) {
-        return _cachedColorHelper!.getColor(colorString);
-      }
+    final colorString = widget.model.metadata?.highlightColor;
+    if (colorString != null && colorString.isNotEmpty) {
+      return _cachedColorHelper!.getColor(colorString);
     }
     return null; // No color if not found
   }
 
   /// Get visual width from metadata or default to 200
   double _getVisualWidth() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('width')) {
-      final width = widget.model.metadata!['width'];
-      if (width is num) {
-        return width.toDouble();
-      }
-    }
-    return 200; // Default width
+    return widget.model.metadata?.width ?? 200.0;
   }
 
   /// Get visual height from metadata or default to 200
   double _getVisualHeight() {
-    if (widget.model.metadata != null && widget.model.metadata!.containsKey('height')) {
-      final height = widget.model.metadata!['height'];
-      if (height is num) {
-        return height.toDouble();
-      }
-    }
-    return 200; // Default height
+    return widget.model.metadata?.height ?? 200.0;
   }
 
   /// Build visual (frame/animation) widget

@@ -227,6 +227,35 @@
     "next_button_text": "Continue"
   },
   {
+    "title": {
+      "en": "Doing Great!",
+      "es": "¡Vas Muy Bien!"
+    },
+    "description": {
+      "en": "Studies reveal: customers who negotiate often pay up to 40% less",
+      "es": "Los estudios revelan: los clientes que negocian suelen pagar hasta un 40% menos"
+    },
+    "type": "warmup",
+    "visual": "assets/lottie/onboarding_big.json",
+    "metadata": {
+      "width": 200,
+      "height": 200,
+      "side_text": {
+        "en": "Potential settings found!",
+        "es": "¡Configuraciones potenciales encontradas!"
+      },
+      "highlight_words": {
+        "description": [
+          "40% less",
+          "40% menos"
+        ]
+      },
+      "highlight_color": "#C47A00",
+      "side_text_alignment": "top"
+    },
+    "next_button_text": "Continue"
+  },
+  {
     "title": "You're All Set!",
     "description": "We're ready to help you negotiate better deals and get the best bargains. Let's start analyzing deals together!",
     "type": "engagement",

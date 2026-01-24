@@ -8,6 +8,7 @@ import 'package:appwizard/presentation/bloc/auth/auth_bloc.dart';
 import 'package:appwizard/presentation/bloc/auth/auth_event.dart';
 import 'package:appwizard/presentation/bloc/auth/auth_state.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
+import 'package:appwizard/core/routing/app_routes.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -27,7 +28,7 @@ class _SignInPageState extends State<SignInPage> {
             // Error state - UI will handle display
           } else if (state is AuthAuthenticated) {
             // Navigate to home after successful authentication
-            context.go('/');
+            context.go(AppRoutes.home);
           }
         },
         builder: (context, state) {

@@ -5,6 +5,7 @@ import 'onboarding_state.dart';
 import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/core/services/onboarding_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
 import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
 
 /// Onboarding BLoC
@@ -34,7 +35,10 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
   ) async {
     emit(const OnboardingLoading());
     try {
-      final screens = await _onboardingService.getOnboardingConfig();
+      final allScreens = await _onboardingService.getOnboardingConfig();
+      final screens = allScreens
+          .where((s) => s.type != OnboardingScreenType.paywall)
+          .toList();
       emit(OnboardingConfigLoaded(
         screens: screens,
         answers: {},
@@ -67,9 +71,10 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
       return;
     }
 
-    emit(const OnboardingSubmitting());
-    
+    // Capture state before emitting new state
     final currentState = state as OnboardingConfigLoaded;
+
+    emit(const OnboardingSubmitting());
     
     // Convert answers to entity
     final answers = currentState.answers.entries.map((entry) {
@@ -79,9 +84,23 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
         return null;
       }
       final screen = currentState.screens[screenIndex];
+      
+      // Handle title that might be a Map (multilocale) at runtime
+      String title = 'Onboarding';
+      try {
+        final dynamic rawTitle = screen.title;
+        if (rawTitle is Map) {
+          title = rawTitle['en']?.toString() ?? rawTitle.values.first?.toString() ?? 'Onboarding';
+        } else {
+          title = rawTitle?.toString() ?? 'Onboarding';
+        }
+      } catch (e) {
+        _logger.w('Error parsing screen title: $e');
+      }
+
       return OnboardingAnswer(
         screenIndex: screenIndex,
-        screenTitle: screen.title,
+        screenTitle: title,
         screenType: screen.type,
         answerKey: screen.answerStructure?.answerKeyName,
         answer: entry.value,

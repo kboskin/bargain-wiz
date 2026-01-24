@@ -77,22 +77,13 @@ class ImageListScreenWidget extends StatelessWidget {
 
   /// Get image spacing from metadata or default to 16
   double _getImageSpacing() {
-    if (model.metadata != null && model.metadata!.containsKey('image_spacing')) {
-      final spacing = model.metadata!['image_spacing'];
-      if (spacing is num) {
-        return spacing.toDouble();
-      }
-    }
-    return 16.0; // Default spacing
+    return model.metadata?.imageSpacing ?? 16.0;
   }
 
   /// Get image width from metadata or default to full width
   double? _getImageWidth(final BuildContext context) {
-    if (model.metadata != null && model.metadata!.containsKey('image_width')) {
-      final width = model.metadata!['image_width'];
-      if (width is num) {
-        return width.toDouble();
-      }
+    if (model.metadata?.imageWidth != null) {
+      return model.metadata?.imageWidth;
     }
     // Default to full width minus padding (40 on each side = 80 total)
     return MediaQuery.of(context).size.width - 80;
@@ -100,13 +91,7 @@ class ImageListScreenWidget extends StatelessWidget {
 
   /// Get image height from metadata or null for auto-fit
   double? _getImageHeight() {
-    if (model.metadata != null && model.metadata!.containsKey('image_height')) {
-      final height = model.metadata!['image_height'];
-      if (height is num) {
-        return height.toDouble();
-      }
-    }
-    return null; // Auto-fit based on aspect ratio
+    return model.metadata?.imageHeight;
   }
 }
 

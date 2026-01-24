@@ -34,10 +34,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => AuthBloc(
-        authService: di.sl<AuthService>(),
-        logger: di.sl<AppLogger>(),
-      ),
+      create: (context) => di.sl<AuthBloc>(),
       child: PastelGradientBackground(
         blurSigma: 2.0, // Subtle blur for glass effect
         child: MaterialApp.router(
@@ -45,7 +42,7 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: kDebugMode,
           
           // Router configuration
-          routerConfig: AppRouter.router,
+          routerConfig: di.sl<AppRouter>().router,
           
           // Localization configuration
           localizationsDelegates: AppLocalizations.localizationsDelegates,
