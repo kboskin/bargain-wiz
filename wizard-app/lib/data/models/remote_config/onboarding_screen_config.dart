@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:json_annotation/json_annotation.dart';
 import 'package:appwizard/data/models/multilocale_text.dart';
+import 'package:appwizard/data/models/remote_config/validatable_entity.dart';
+import 'package:json_annotation/json_annotation.dart';
 
 part 'onboarding_screen_config.g.dart';
 
@@ -43,7 +44,7 @@ enum OnboardingScreenType {
 
 /// Onboarding screen configuration model
 @JsonSerializable()
-class OnboardingScreenConfig {
+class OnboardingScreenConfig extends ValidatableEntity {
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic title;
   @JsonKey(fromJson: _multilocaleFromJson)
@@ -76,7 +77,9 @@ class OnboardingScreenConfig {
 
   Map<String, dynamic> toJson() => _$OnboardingScreenConfigToJson(this);
 
+  @override
   void validate() {
+    super.validate();
     // Validate options if present
     if (options != null) {
       for (final option in options!) {
@@ -111,7 +114,7 @@ class OnboardingScreenConfig {
 
 /// Option for select type screens (legacy - use OnboardingOption from onboarding_model.dart)
 @JsonSerializable()
-class OnboardingScreenConfigOption {
+class OnboardingScreenConfigOption extends ValidatableEntity {
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic label;
   final String? value;
@@ -130,13 +133,15 @@ class OnboardingScreenConfigOption {
 
   Map<String, dynamic> toJson() => _$OnboardingScreenConfigOptionToJson(this);
 
+  @override
   void validate() {
+    super.validate();
   }
 }
 
 /// Answer structure configuration (legacy - use AnswerStructure from onboarding_model.dart)
 @JsonSerializable()
-class AnswerStructureConfig {
+class AnswerStructureConfig extends ValidatableEntity {
   @JsonKey(name: 'answer_key_name')
   final String answerKeyName; // Unique key for storing the answer (e.g., "marketplace", "deal_count")
 
@@ -149,7 +154,9 @@ class AnswerStructureConfig {
 
   Map<String, dynamic> toJson() => _$AnswerStructureConfigToJson(this);
 
+  @override
   void validate() {
+    super.validate();
     if (answerKeyName.isEmpty) {
       throw FormatException('AnswerStructureConfig.answerKeyName cannot be empty');
     }
@@ -158,7 +165,7 @@ class AnswerStructureConfig {
 
 /// Collection of onboarding screens
 @JsonSerializable()
-class OnboardingConfig {
+class OnboardingConfig extends ValidatableEntity {
   final List<OnboardingScreenConfig> screens;
 
   OnboardingConfig({required this.screens});
@@ -196,7 +203,9 @@ class OnboardingConfig {
     return screens.map((e) => e.toJson()).toList();
   }
 
+  @override
   void validate() {
+    super.validate();
     // Empty screens is valid (e.g., when no config is found)
     // Only validate non-empty screens
     for (final screen in screens) {

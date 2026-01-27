@@ -8,14 +8,17 @@ part of 'highlight_words_config.dart';
 
 HighlightWordsConfig _$HighlightWordsConfigFromJson(
   Map<String, dynamic> json,
-) => HighlightWordsConfig(
-  title: json['title'],
-  description: json['description'],
-);
+) =>
+    HighlightWordsConfig(
+      title: HighlightWordsConfig._highlightWordsFieldFromJson(json['title']),
+      description:
+          HighlightWordsConfig._highlightWordsFieldFromJson(json['description']),
+    );
 
 Map<String, dynamic> _$HighlightWordsConfigToJson(
   HighlightWordsConfig instance,
-) => <String, dynamic>{
-  'title': instance.title,
-  'description': instance.description,
-};
+) =>
+    <String, dynamic>{
+      'title': instance.title,
+      'description': instance.description,
+    };

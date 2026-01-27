@@ -1,8 +1,9 @@
-import 'package:json_annotation/json_annotation.dart';
-import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
-import 'package:appwizard/data/models/remote_config/json_helpers.dart';
-import 'package:appwizard/data/models/remote_config/highlight_words_config.dart';
 import 'package:appwizard/data/models/multilocale_text.dart';
+import 'package:appwizard/data/models/remote_config/highlight_words_config.dart';
+import 'package:appwizard/data/models/remote_config/json_helpers.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
+import 'package:appwizard/data/models/remote_config/validatable_entity.dart';
+import 'package:json_annotation/json_annotation.dart';
 
 part 'onboarding_model.g.dart';
 
@@ -160,7 +161,7 @@ Map<String, dynamic> _fixOnboardingModelJsonKeys(
 /// Abstract base class for all onboarding screen models
 /// Each screen type (engagement, select, slider) extends this class
 /// Note: Abstract classes can't use @JsonSerializable, so we keep the factory pattern
-abstract class OnboardingModel {
+abstract class OnboardingModel extends ValidatableEntity {
   OnboardingModel({
     required this.title,
     this.description, // Made optional
@@ -209,7 +210,9 @@ abstract class OnboardingModel {
 
   Map<String, dynamic> toJson();
 
+  @override
   void validate() {
+    super.validate();
     // Validate title - must be non-empty string or non-empty multilocale map
     if (title is String) {
       if ((title as String).isEmpty) {
@@ -233,8 +236,7 @@ abstract class OnboardingModel {
 
 /// Answer structure configuration
 @JsonSerializable()
-class AnswerStructure {
-
+class AnswerStructure extends ValidatableEntity {
   AnswerStructure({
     required this.answerKeyName,
   });
@@ -246,7 +248,9 @@ class AnswerStructure {
 
   Map<String, dynamic> toJson() => _$AnswerStructureToJson(this);
 
+  @override
   void validate() {
+    super.validate();
     if (answerKeyName.isEmpty) {
       throw FormatException('AnswerStructure.answerKeyName cannot be empty');
     }
@@ -307,8 +311,7 @@ class EngagementScreenModel extends OnboardingModel {
 
 /// Option for select-type screens
 @JsonSerializable()
-class OnboardingOption { // Typed metadata
-
+class OnboardingOption extends ValidatableEntity {
   OnboardingOption({
     required this.label,
     this.value,
@@ -332,7 +335,9 @@ class OnboardingOption { // Typed metadata
 
   Map<String, dynamic> toJson() => _$OnboardingOptionToJson(this);
 
+  @override
   void validate() {
+    super.validate();
     // Validate label - must be non-empty string or non-empty multilocale map
     if (label is String) {
       if ((label as String).isEmpty) {
@@ -525,8 +530,8 @@ class SliderScreenModel extends OnboardingModel {
   static List<SliderOption> _sliderOptionsFromJson(dynamic json) {
     if (json == null) return [];
     if (json is! List) return [];
-    return (json as List<dynamic>)
-        .map((e) => SliderOption.fromJson(e as Map<String, dynamic>))
+    return json
+        .map((final e) => SliderOption.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
@@ -579,7 +584,7 @@ class PermissionScreenModel extends OnboardingModel {
     this.showTopBar = true,
   }) : super(title: title);
 
-  factory PermissionScreenModel.fromJson(Map<String, dynamic> json) => _$PermissionScreenModelFromJson(json);
+  factory PermissionScreenModel.fromJson(final Map<String, dynamic> json) => _$PermissionScreenModelFromJson(json);
   @JsonKey(fromJson: _multilocaleFromJson)
   @override
   final dynamic title;
@@ -805,16 +810,12 @@ class PaywallScreenModel extends OnboardingModel {
       json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
-  Map<String, dynamic> toJson() {
-    return {
-      'type': 'paywall',
-      'metadata': metadata?.toJson(),
-      'show_top_bar': showTopBar,
-    };
-  }
+  Map<String, dynamic> toJson() =>
+      _fixOnboardingModelJsonKeys(_$PaywallScreenModelToJson(this), type);
 
   @override
   void validate() {
+    super.validate();
     // Paywall screen is just a reference, minimal validation
   }
 }

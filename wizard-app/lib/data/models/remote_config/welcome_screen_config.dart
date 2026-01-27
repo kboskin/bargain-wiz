@@ -1,5 +1,6 @@
-import 'package:appwizard/data/models/remote_config/highlight_words_config.dart';
 import 'package:appwizard/data/models/multilocale_text.dart';
+import 'package:appwizard/data/models/remote_config/highlight_words_config.dart';
+import 'package:appwizard/data/models/remote_config/validatable_entity.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 part 'welcome_screen_config.g.dart';
@@ -7,7 +8,7 @@ part 'welcome_screen_config.g.dart';
 /// Configuration for the welcome/landing screen
 /// Separate from onboarding flow screens to allow full customization
 @JsonSerializable()
-class WelcomeScreenConfig {
+class WelcomeScreenConfig extends ValidatableEntity {
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic title;
   @JsonKey(fromJson: _multilocaleFromJson)
@@ -42,7 +43,9 @@ class WelcomeScreenConfig {
 
   Map<String, dynamic> toJson() => _$WelcomeScreenConfigToJson(this);
 
+  @override
   void validate() {
+    super.validate();
     glassContainer?.validate();
     highlightWords?.validate();
     secondaryAction?.validate();
@@ -57,7 +60,7 @@ class WelcomeScreenConfig {
 
 /// Configuration for the glass container placeholder
 @JsonSerializable()
-class GlassContainerConfig {
+class GlassContainerConfig extends ValidatableEntity {
   @JsonKey(name: 'blur_sigma')
   final double blurSigma;
   final String color; // Hex color string
@@ -85,7 +88,9 @@ class GlassContainerConfig {
 
   Map<String, dynamic> toJson() => _$GlassContainerConfigToJson(this);
 
+  @override
   void validate() {
+    super.validate();
     if (blurSigma < 0) {
       throw FormatException('GlassContainerConfig.blurSigma must be >= 0');
     }
@@ -115,7 +120,7 @@ class GlassContainerConfig {
 
 /// Configuration for secondary action (e.g., Sign in link)
 @JsonSerializable()
-class SecondaryActionConfig {
+class SecondaryActionConfig extends ValidatableEntity {
   final String type; // e.g., "sign_in"
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic text;
@@ -135,7 +140,9 @@ class SecondaryActionConfig {
 
   Map<String, dynamic> toJson() => _$SecondaryActionConfigToJson(this);
 
+  @override
   void validate() {
+    super.validate();
     if (type.isEmpty) {
       throw FormatException('SecondaryActionConfig.type cannot be empty');
     }
