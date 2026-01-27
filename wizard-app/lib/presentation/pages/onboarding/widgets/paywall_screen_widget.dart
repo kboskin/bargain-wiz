@@ -7,7 +7,6 @@ import '../../../../core/services/remote_config_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/utils/app_logger.dart';
-import '../../../../core/utils/multilocale_text_helper.dart';
 import '../../../../core/widgets/visual_asset_widget.dart';
 import '../../../../data/models/remote_config/onboarding_model.dart';
 import '../../../../data/models/remote_config/paywall_config.dart';
@@ -42,7 +41,6 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
   final AppLogger _logger = di.sl<AppLogger>();
   final AnalyticsService _analytics = di.sl<AnalyticsService>();
   final RemoteConfigService _remoteConfigService = di.sl<RemoteConfigService>();
-  final MultilocaleTextHelper _multilocaleTextHelper = di.sl<MultilocaleTextHelper>();
 
   @override
   void initState() {
@@ -289,7 +287,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 32),
             // Title
             Text(
-              _multilocaleTextHelper.getText(context, config.title),
+              config.title.get(context),
               style: AppTextStyles.heading1.copyWith(
                 color: AppColors.backgroundDark,
               ),
@@ -298,7 +296,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 16),
             // Description
             Text(
-              _multilocaleTextHelper.getText(context, config.description),
+              config.description.get(context),
               style: AppTextStyles.bodyLarge.copyWith(
                 color: AppColors.backgroundDark.withValues(alpha: 0.7),
               ),
@@ -321,7 +319,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 12),
             // Note text
             Text(
-              _multilocaleTextHelper.getText(context, config.noteText),
+              config.noteText.get(context),
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.backgroundDark.withValues(alpha: 0.6),
               ),
@@ -354,7 +352,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 32),
             // Title
             Text(
-              _multilocaleTextHelper.getText(context, config.title),
+              config.title.get(context),
               style: AppTextStyles.heading1.copyWith(
                 color: AppColors.backgroundDark,
               ),
@@ -363,7 +361,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 16),
             // Description
             Text(
-              _multilocaleTextHelper.getText(context, config.description),
+              config.description.get(context),
               style: AppTextStyles.bodyLarge.copyWith(
                 color: AppColors.backgroundDark.withValues(alpha: 0.7),
               ),
@@ -400,7 +398,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 12),
             // Note text
             Text(
-              _multilocaleTextHelper.getText(context, config.noteText),
+              config.noteText.get(context),
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.backgroundDark.withValues(alpha: 0.6),
               ),
@@ -433,7 +431,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 24),
             // Title
             Text(
-              _multilocaleTextHelper.getText(context, config.title),
+              config.title.get(context),
               style: AppTextStyles.heading2.copyWith(
                 color: AppColors.backgroundDark,
               ),
@@ -442,7 +440,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 8),
             // Description
             Text(
-              _multilocaleTextHelper.getText(context, config.description),
+              config.description.get(context),
               style: AppTextStyles.bodyMedium.copyWith(
                 color: AppColors.backgroundDark.withValues(alpha: 0.7),
               ),
@@ -466,7 +464,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 8),
             // Note text
             Text(
-              _multilocaleTextHelper.getText(context, config.noteText),
+              config.noteText.get(context),
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.backgroundDark.withValues(alpha: 0.6),
               ),
@@ -514,7 +512,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
                 ),
               )
             : Text(
-                _multilocaleTextHelper.getText(context, config.nextButtonText),
+                config.nextButtonText.get(context),
                 style: AppTextStyles.buttonText,
               ),
       ),
@@ -623,7 +621,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
                       children: [
                         Expanded(
                           child: Text(
-                            _multilocaleTextHelper.getText(context, option.title),
+                            option.title.get(context),
                             style: AppTextStyles.heading3.copyWith(
                               color: AppColors.backgroundDark,
                             ),
@@ -640,7 +638,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              _multilocaleTextHelper.getText(context, option.badge),
+                              option.badge!.get(context),
                               style: AppTextStyles.caption.copyWith(
                                 color: Colors.white,
                               ),
@@ -650,7 +648,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _multilocaleTextHelper.getText(context, option.description),
+                      option.description.get(context),
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.backgroundDark.withValues(alpha: 0.7),
                       ),

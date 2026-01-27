@@ -26,8 +26,7 @@ class GlassContainer extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
 
   @override
-  Widget build(BuildContext context) {
-    return Directionality(
+  Widget build(final BuildContext context) => Directionality(
       textDirection: TextDirection.ltr,
       child: Container(
         margin: margin,
@@ -55,6 +54,5 @@ class GlassContainer extends StatelessWidget {
         ),
       ),
     );
-  }
 }
 

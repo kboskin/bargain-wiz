@@ -15,8 +15,8 @@ class WordHighlightResult {
 }
 
 /// Parsed highlight words configuration
-class HighlightWordsConfig {
-  HighlightWordsConfig({
+class ParsedHighlightConfig {
+  ParsedHighlightConfig({
     required this.words,
     required this.wordColors,
   });
@@ -35,7 +35,7 @@ class TextHighlightHelper {
   /// Parse highlight words data (supports map or list format)
   /// Map format: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
   /// List format: ["Bargain", "Wiz"] - backward compatibility
-  HighlightWordsConfig parseHighlightWords(
+  ParsedHighlightConfig parseHighlightWords(
     final dynamic highlightWordsData,
   ) {
     final wordColors = <String, Color>{};
@@ -60,7 +60,7 @@ class TextHighlightHelper {
       );
     }
 
-    return HighlightWordsConfig(
+    return ParsedHighlightConfig(
       words: highlightWords,
       wordColors: wordColors,
     );
@@ -70,7 +70,7 @@ class TextHighlightHelper {
   /// Returns WordHighlightResult with highlight status and color
   WordHighlightResult processWord(
     final String word,
-    final HighlightWordsConfig config,
+    final ParsedHighlightConfig config,
     final Color? defaultHighlightColor,
   ) {
     final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '').toLowerCase();

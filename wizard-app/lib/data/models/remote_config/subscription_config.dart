@@ -1,5 +1,6 @@
-import 'package:json_annotation/json_annotation.dart';
 import 'package:appwizard/domain/entities/subscription_tier.dart';
+import 'package:appwizard/data/models/multilocale_text.dart';
+import 'package:json_annotation/json_annotation.dart';
 
 part 'subscription_config.g.dart';
 
@@ -24,8 +25,10 @@ class SubscriptionProductConfig {
   final String tier; // 'free', 'basic', 'premium'
   @JsonKey(name: 'product_id')
   final ProductIdConfig productId; // Platform-specific product IDs
-  final dynamic title; // Map<String, String> (multilocale) or String
-  final dynamic description; // Map<String, String> (multilocale) or String
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic title;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic description;
   final List<String> features; // List of feature descriptions
   @JsonKey(name: 'display_order')
   final int displayOrder;
@@ -39,8 +42,10 @@ class SubscriptionProductConfig {
     required this.displayOrder,
   });
 
-  factory SubscriptionProductConfig.fromJson(Map<String, dynamic> json) =>
-      _$SubscriptionProductConfigFromJson(json);
+  factory SubscriptionProductConfig.fromJson(Map<String, dynamic> json) => _$SubscriptionProductConfigFromJson(json);
+
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   Map<String, dynamic> toJson() => _$SubscriptionProductConfigToJson(this);
 

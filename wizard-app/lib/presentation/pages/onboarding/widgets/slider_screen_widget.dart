@@ -5,7 +5,7 @@ import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/utils/asset_path_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
@@ -31,15 +31,18 @@ class SliderScreenWidget extends StatefulWidget {
 
 class _SliderScreenWidgetState extends State<SliderScreenWidget>
     with SingleTickerProviderStateMixin {
-  ColorHelper? _cachedColorHelper;
-  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
-  AssetPathHelper? _cachedAssetPathHelper;
-  TextHighlightHelper? _cachedTextHighlightHelper;
+  late final ColorHelper _colorHelper;
+  late final AssetPathHelper _assetPathHelper;
+  late final TextHighlightHelper _textHighlightHelper;
   AnimationController? _staticFrameController;
 
   @override
   void initState() {
     super.initState();
+    _colorHelper = di.sl<ColorHelper>();
+    _assetPathHelper = di.sl<AssetPathHelper>();
+    _textHighlightHelper = TextHighlightHelper(_colorHelper);
+
     // Create a controller for static frames (paused at 0)
     _staticFrameController = AnimationController(
       vsync: this,
@@ -66,11 +69,6 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
 
   @override
   Widget build(BuildContext context) {
-    // Cache ColorHelper lookup
-    _cachedColorHelper ??= di.sl<ColorHelper>();
-    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
-    _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
-    _cachedTextHighlightHelper ??= TextHighlightHelper(_cachedColorHelper!);
     // Check if this is a discrete slider with options
     if (widget.model.options.isNotEmpty) {
       return _buildDiscreteSlider(context);
@@ -117,14 +115,14 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
           // Title at the top
-          _buildStyledTitle(context, _cachedMultilocaleTextHelper!.getText(context, widget.model.title)),
+          _buildStyledTitle(context, widget.model.title.get(context)),
           const SizedBox(height: 16),
 
           // Description (optional)
           if (widget.model.description != null) ...[
             Builder(
               builder: (context) {
-                final descriptionText = _cachedMultilocaleTextHelper!.getText(context, widget.model.description);
+                final descriptionText = widget.model.description!.get(context);
                 if (descriptionText.isNotEmpty) {
                   return Column(
                     children: [
@@ -177,7 +175,7 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
-              _cachedMultilocaleTextHelper!.getText(context, currentOption.label),
+              currentOption.label.get(context),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 color: AppColors.backgroundDark,
                 fontWeight: FontWeight.bold,
@@ -303,7 +301,7 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
                             fontSize: 14,
                           ) ?? const TextStyle(),
                           child: Text(
-                            _cachedMultilocaleTextHelper!.getText(context, opt.label),
+                            opt.label.get(context),
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -336,8 +334,8 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
     final lowerPath = visualPath.toLowerCase();
     final isLottie = lowerPath.endsWith('.json');
     final isSvg = lowerPath.endsWith('.svg');
-    final normalizedPath = _cachedAssetPathHelper!.normalizeAssetPath(visualPath);
-    final isNetworkUrl = _cachedAssetPathHelper!.isNetworkUrl(visualPath);
+    final normalizedPath = _assetPathHelper.normalizeAssetPath(visualPath);
+    final isNetworkUrl = _assetPathHelper.isNetworkUrl(visualPath);
 
     Widget visualWidget;
 
@@ -421,11 +419,11 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (int i = 0; i < parts.length; i++) {
       final word = parts[i];
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
@@ -458,13 +456,9 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
     );
   }
 
-  /// Get highlight words from metadata (supports map or list format)
+  /// Get highlight words from metadata
   dynamic _getHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('title')) {
-      return highlightWordsData['title'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.title;
   }
 
   Widget _buildStyledDescription(BuildContext context, String description) {
@@ -475,7 +469,7 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
       description: description,
       highlightWordsData: highlightWordsData,
       highlightColor: highlightColor,
-      textHighlightHelper: _cachedTextHighlightHelper!,
+      textHighlightHelper: _textHighlightHelper,
       onRichTextDescription: _buildRichTextDescription,
     );
   }
@@ -493,10 +487,10 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (final word in parts) {
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
@@ -522,13 +516,9 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
     );
   }
 
-  /// Get description highlight words from metadata (supports map or list format)
+  /// Get description highlight words from metadata
   dynamic _getDescriptionHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('description')) {
-      return highlightWordsData['description'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.description;
   }
 
   /// Get highlight color from metadata
@@ -536,7 +526,7 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
   Color? _getHighlightColor() {
     final colorString = widget.model.metadata?.highlightColor;
     if (colorString != null && colorString.isNotEmpty) {
-      return _cachedColorHelper!.getColor(colorString);
+      return _colorHelper.getColor(colorString);
     }
     return null; // No color if not found
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/color_helper.dart';
-import '../../../../core/utils/multilocale_text_helper.dart';
+import '../../../../core/utils/color_helper.dart';
 import '../../../../core/utils/text_highlight_helper.dart';
 import '../../../../core/widgets/styled_description_widget.dart';
 import '../../../../core/widgets/visual_asset_widget.dart';
@@ -23,17 +23,18 @@ class EngagementScreenWidget extends StatefulWidget {
 }
 
 class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
-  ColorHelper? _cachedColorHelper;
-  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
-  TextHighlightHelper? _cachedTextHighlightHelper;
+  late final ColorHelper _colorHelper;
+  late final TextHighlightHelper _textHighlightHelper;
 
   @override
-  Widget build(BuildContext context) {
-    // Cache ColorHelper lookup
-    _cachedColorHelper ??= di.sl<ColorHelper>();
-    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
-    _cachedTextHighlightHelper ??= TextHighlightHelper(_cachedColorHelper!);
-    return Padding(
+  void initState() {
+    super.initState();
+    _colorHelper = di.sl<ColorHelper>();
+    _textHighlightHelper = TextHighlightHelper(_colorHelper);
+  }
+
+  @override
+  Widget build(final BuildContext context) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -51,14 +52,14 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
           const SizedBox(height: 48),
 
           // Title
-          _buildStyledTitle(context, _cachedMultilocaleTextHelper!.getText(context, widget.model.title)),
+          _buildStyledTitle(context, widget.model.title.get(context)),
           const SizedBox(height: 16),
 
           // Description (optional)
           if (widget.model.description != null) ...[
             Builder(
               builder: (context) {
-                final descriptionText = _cachedMultilocaleTextHelper!.getText(context, widget.model.description);
+                final descriptionText = widget.model.description!.get(context);
                 if (descriptionText.isNotEmpty) {
                   return _buildStyledDescription(context, descriptionText);
                 }
@@ -69,7 +70,6 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
         ],
       ),
     );
-  }
 
   /// Get visual width from metadata or default to 200
   double _getVisualWidth() {
@@ -142,11 +142,11 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (var i = 0; i < parts.length; i++) {
       final word = parts[i];
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
@@ -179,13 +179,9 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
     );
   }
 
-  /// Get highlight words from metadata (supports map or list format)
+  /// Get highlight words from metadata
   dynamic _getHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('title')) {
-      return highlightWordsData['title'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.title;
   }
 
   Widget _buildStyledDescription(BuildContext context, String description) {
@@ -196,7 +192,7 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
       description: description,
       highlightWordsData: highlightWordsData,
       highlightColor: highlightColor,
-      textHighlightHelper: _cachedTextHighlightHelper!,
+      textHighlightHelper: _textHighlightHelper,
       onRichTextDescription: _buildRichTextDescription,
     );
   }
@@ -214,10 +210,10 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (final word in parts) {
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
@@ -243,13 +239,9 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
     );
   }
 
-  /// Get description highlight words from metadata (supports map or list format)
+  /// Get description highlight words from metadata
   dynamic _getDescriptionHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('description')) {
-      return highlightWordsData['description'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.description;
   }
 
   /// Get highlight color from metadata
@@ -257,7 +249,7 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
   Color? _getHighlightColor() {
     final colorString = widget.model.metadata?.highlightColor;
     if (colorString != null && colorString.isNotEmpty) {
-      return _cachedColorHelper!.getColor(colorString);
+      return _colorHelper.getColor(colorString);
     }
     return null; // No color if not found
   }

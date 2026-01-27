@@ -9,7 +9,7 @@ import 'package:appwizard/core/utils/asset_path_helper.dart';
 class VisualAssetWidget extends StatefulWidget {
   const VisualAssetWidget({
     super.key,
-    required this.visualPath,
+    this.visualPath = '',
     this.width = 200,
     this.height = 200,
     this.fit = BoxFit.contain,
@@ -25,12 +25,16 @@ class VisualAssetWidget extends StatefulWidget {
 }
 
 class _VisualAssetWidgetState extends State<VisualAssetWidget> {
-  AssetPathHelper? _cachedAssetPathHelper;
+  late final AssetPathHelper _assetPathHelper;
+
+  @override
+  void initState() {
+    super.initState();
+    _assetPathHelper = di.sl<AssetPathHelper>();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Cache DI lookup
-    _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
     
     // Determine file type from extension
     final lowerPath = widget.visualPath.toLowerCase();
@@ -39,8 +43,8 @@ class _VisualAssetWidgetState extends State<VisualAssetWidget> {
     // PNG/JPG are handled as the default case (not Lottie or SVG)
 
     // Normalize asset path
-    final normalizedPath = _cachedAssetPathHelper!.normalizeAssetPath(widget.visualPath);
-    final isNetworkUrl = _cachedAssetPathHelper!.isNetworkUrl(widget.visualPath);
+    final normalizedPath = _assetPathHelper.normalizeAssetPath(widget.visualPath);
+    final isNetworkUrl = _assetPathHelper.isNetworkUrl(widget.visualPath);
 
     Widget visualWidget;
 

@@ -3,11 +3,11 @@ import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/rc_metadata_button.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
+import 'package:appwizard/data/models/multilocale_text.dart';
 import 'package:appwizard/data/models/remote_config/button_config.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -30,15 +30,16 @@ class PermissionScreenWidget extends StatefulWidget {
 }
 
 class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
-  ColorHelper? _cachedColorHelper;
-  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
-  TextHighlightHelper? _cachedTextHighlightHelper;
+  late final ColorHelper _colorHelper;
+  late final TextHighlightHelper _textHighlightHelper;
   bool _isRequesting = false;
   AuthorizationStatus? _permissionStatus;
 
   @override
   void initState() {
     super.initState();
+    _colorHelper = di.sl<ColorHelper>();
+    _textHighlightHelper = TextHighlightHelper(_colorHelper);
     // Check current permission status
     _checkPermissionStatus();
   }
@@ -90,11 +91,6 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // Cache helper lookups
-    _cachedColorHelper ??= di.sl<ColorHelper>();
-    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
-    _cachedTextHighlightHelper ??= TextHighlightHelper(_cachedColorHelper!);
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40.0),
       child: Column(
@@ -113,7 +109,7 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
           // Title
           _buildStyledTitle(
             context,
-            _cachedMultilocaleTextHelper!.getText(context, widget.model.title),
+            widget.model.title.get(context),
           ),
           const SizedBox(height: 16),
 
@@ -121,10 +117,7 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
           if (widget.model.description != null) ...[
             Builder(
               builder: (context) {
-                final descriptionText = _cachedMultilocaleTextHelper!.getText(
-                  context,
-                  widget.model.description,
-                );
+                final descriptionText = widget.model.description!.get(context);
                 if (descriptionText.isNotEmpty) {
                   return Column(
                     children: [
@@ -140,9 +133,116 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
 
           // Permission buttons (configurable array)
           _buildPermissionButtons(context),
+          // Optional animation below the button (metadata.animation) and/or hint with arrow (metadata.sideText + sideTextAlignment)
+          if (_hasBelowButtonContent()) ...[
+            const SizedBox(height: 24),
+            _buildBelowButtonContent(context),
+          ],
         ],
       ),
     );
+  }
+
+  /// True when metadata has animation and/or sideText for the below-button block
+  bool _hasBelowButtonContent() {
+    final m = widget.model.metadata;
+    if (m == null) return false;
+    final hasAnimation =
+        m.animation != null && m.animation!.trim().isNotEmpty;
+    final hasSideText = m.sideText != null;
+    return hasAnimation || hasSideText;
+  }
+
+  /// Optional animation + optional hint; order depends on sideTextAlignment so they render sequentially.
+  /// Top = hint above (near button), then image; bottom/center/baseline = image then hint.
+  Widget _buildBelowButtonContent(BuildContext context) {
+    final m = widget.model.metadata!;
+    final hasAnimation =
+        m.animation != null && m.animation!.trim().isNotEmpty;
+    final sideTextStr = m.sideText?.get(context) ?? '';
+    final hasSideText = sideTextStr.isNotEmpty;
+    final alignment = m.sideTextAlignment ?? SideTextAlignment.top;
+
+    final List<Widget> children = [];
+    final showHintFirst = hasSideText && alignment == SideTextAlignment.top;
+
+    if (showHintFirst) {
+      children.add(_buildBelowButtonHint(context, m));
+      if (hasAnimation) children.add(const SizedBox(height: 12));
+    }
+    if (hasAnimation) {
+      children.add(
+        _buildVisual(
+          m.animation!,
+          width: m.width ?? 120.0,
+          height: m.height ?? 120.0,
+        ),
+      );
+      if (hasSideText && !showHintFirst) children.add(const SizedBox(height: 12));
+    }
+    if (hasSideText && !showHintFirst) {
+      children.add(_buildBelowButtonHint(context, m));
+    }
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  /// Hint text with arrow; arrow icon and position from sideTextAlignment (same pattern as warmup_screen_widget)
+  Widget _buildBelowButtonHint(BuildContext context, OnboardingMetadata metadata) {
+    final text = metadata.sideText?.get(context) ?? '';
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    final alignment = metadata.sideTextAlignment ?? SideTextAlignment.top;
+    final arrowIcon = _arrowIconForAlignment(alignment);
+    final iconBelow = _iconBelowForAlignment(alignment);
+
+    final content = <Widget>[
+      if (!iconBelow)
+        Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
+      Text(
+        text,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.backgroundDark,
+          fontWeight: FontWeight.bold,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      if (iconBelow)
+        Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: content,
+    );
+  }
+
+  /// Arrow icon for direction: top/bottom use straight up/down so they align to top and bottom, not corner arrows
+  IconData _arrowIconForAlignment(SideTextAlignment alignment) {
+    switch (alignment) {
+      case SideTextAlignment.top:
+        return Icons.keyboard_arrow_up;
+      case SideTextAlignment.bottom:
+        return Icons.keyboard_arrow_down;
+      case SideTextAlignment.center:
+        return Icons.arrow_forward;
+      case SideTextAlignment.baseline:
+        return Icons.trending_flat;
+      default:
+        return Icons.keyboard_arrow_up;
+    }
+  }
+
+  bool _iconBelowForAlignment(SideTextAlignment alignment) {
+    switch (alignment) {
+      case SideTextAlignment.bottom:
+        return false;
+      default:
+        return true;
+    }
   }
 
   Widget _buildStyledTitle(BuildContext context, String title) {
@@ -179,13 +279,13 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(
+    final config = _textHighlightHelper.parseHighlightWords(
       highlightWordsData,
     );
 
     for (var i = 0; i < parts.length; i++) {
       final word = parts[i];
-      final result = _cachedTextHighlightHelper!.processWord(
+      final result = _textHighlightHelper.processWord(
         word,
         config,
         defaultHighlightColor,
@@ -232,7 +332,7 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
       description: description,
       highlightWordsData: highlightWordsData,
       highlightColor: highlightColor,
-      textHighlightHelper: _cachedTextHighlightHelper!,
+      textHighlightHelper: _textHighlightHelper,
       onRichTextDescription: _buildRichTextDescription,
     );
   }
@@ -248,12 +348,12 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(
+    final config = _textHighlightHelper.parseHighlightWords(
       highlightWordsData,
     );
 
     for (final word in parts) {
-      final result = _cachedTextHighlightHelper!.processWord(
+      final result = _textHighlightHelper.processWord(
         word,
         config,
         defaultHighlightColor,
@@ -291,50 +391,59 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
       return _buildSingleButton(context);
     }
 
-    // Render multiple buttons side by side
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: buttons.asMap().entries.map((entry) {
-        final index = entry.key;
-        final buttonConfig = entry.value;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: index > 0 ? 8 : 0,
-              right: index < buttons.length - 1 ? 8 : 0,
+    // Fixed-height row so both buttons get the same size. LayoutBuilder is safe here
+    // (no IntrinsicHeight), and SizedBox forces each button to fill its cell.
+    const double rowHeight = 64.0;
+    return SizedBox(
+      height: rowHeight,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: buttons.asMap().entries.map((entry) {
+          final index = entry.key;
+          final buttonConfig = entry.value;
+          return Expanded(
+            flex: 1,
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: index > 0 ? 8 : 0,
+                right: index < buttons.length - 1 ? 8 : 0,
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final cellSize = Size(constraints.maxWidth, constraints.maxHeight);
+                  return SizedBox(
+                    width: cellSize.width,
+                    height: cellSize.height,
+                    child: _buildButton(context, buttonConfig, cellSize: cellSize),
+                  );
+                },
+              ),
             ),
-            child: _buildButton(context, buttonConfig),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 
   Widget _buildSingleButton(BuildContext context) {
     // Legacy single button support - create a ButtonConfig from metadata
-    final buttonText = _getButtonText();
-    final buttonColor = _getButtonColor();
-    final glowColor = _getGlowColor();
-    final glowIntensity = _getGlowIntensity();
-    final buttonStyle = _getButtonStyle();
-
-    // Convert Color to hex string (RRGGBB format)
-    String? buttonColorHex;
-    if (buttonColor != null) {
-      buttonColorHex = '#${buttonColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-    }
-    
-    String? glowColorHex;
-    if (glowColor != null) {
-      glowColorHex = '#${glowColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-    }
+    final metadata = widget.model.metadata;
+    final buttonText = metadata?.buttonText;
+    final buttonColor = metadata?.buttonColor;
+    final glowColor = metadata?.glowColor;
+    final glowIntensity = metadata?.glowIntensity ?? 0.6;
+    final buttonStyleStr = metadata?.buttonStyle;
+    final buttonStyle = buttonStyleStr != null 
+        ? ButtonVisualStyle.fromString(buttonStyleStr) 
+        : ButtonVisualStyle.glow;
 
     // Create a ButtonConfig for legacy support
     final buttonConfig = ButtonConfig(
-      text: buttonText,
+      text: buttonText ?? const MultilocaleText({'en': 'Enable Notifications'}),
       action: ButtonAction.requestPermission,
-      buttonColor: buttonColorHex,
-      glowColor: glowColorHex,
+      buttonColor: buttonColor,
+      glowColor: glowColor,
       glowIntensity: glowIntensity,
       buttonStyle: buttonStyle,
     );
@@ -342,7 +451,7 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     // Button is enabled unless currently requesting permission
     final isEnabled = !_isRequesting;
 
-    return RCMetadataButton(
+    final button = RCMetadataButton(
       config: buttonConfig,
       onPressed: isEnabled ? _requestPermission : null,
       isLoading: _isRequesting,
@@ -350,21 +459,71 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
       borderRadius: 16,
       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
     );
+
+    return _buildDecoratedButton(
+      button: button,
+      isActionPermission: true,
+    );
   }
 
-  Widget _buildButton(final BuildContext context, ButtonConfig buttonConfig) {
+  Widget _buildButton(
+    final BuildContext context,
+    ButtonConfig buttonConfig, {
+    Size? cellSize,
+  }) {
     final action = buttonConfig.action;
 
     // Button is enabled unless currently requesting permission
     final isEnabled = !_isRequesting;
 
-    return RCMetadataButton(
+    final button = RCMetadataButton(
       config: buttonConfig,
       onPressed: isEnabled ? () => _handleButtonAction(action) : null,
       isLoading: _isRequesting && action == ButtonAction.requestPermission,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       borderRadius: 16,
       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      fixedSize: cellSize,
+    );
+
+    return _buildDecoratedButton(
+      button: button,
+      isActionPermission: action == ButtonAction.requestPermission,
+    );
+  }
+
+  /// Builds a button optionally decorated with a floating visual.
+  /// Button keeps its natural size/position; visual is positioned below the button and can overflow (Clip.none).
+  Widget _buildDecoratedButton({
+    required Widget button,
+    required bool isActionPermission,
+  }) {
+    if (!isActionPermission) return button;
+
+    final buttonVisual = widget.model.metadata?.buttonVisual;
+    final visualWidth = widget.model.metadata?.buttonVisualWidth ?? 60.0;
+    final visualHeight = widget.model.metadata?.buttonVisualHeight ?? 60.0;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        button,
+        Positioned(
+          bottom: -visualHeight - 12,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: Center(
+              child: VisualAssetWidget(
+                visualPath: buttonVisual ?? 'assets/lottie/magic_stick_pointer.json',
+                width: visualWidth,
+                height: visualHeight,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -484,7 +643,7 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
       if (textData is String) {
         return textData;
       } else if (textData is Map<String, dynamic>) {
-        return _cachedMultilocaleTextHelper!.getText(context, textData);
+        return MultilocaleText.fromJson(textData).get(context);
       }
     }
     return defaultValue;
@@ -495,7 +654,7 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     if (config.containsKey(key)) {
       final colorString = config[key] as String?;
       if (colorString != null && colorString.isNotEmpty) {
-        return _cachedColorHelper!.getColor(colorString);
+        return _colorHelper.getColor(colorString);
       }
     }
     return null;
@@ -527,62 +686,14 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     return ButtonVisualStyle.glow; // Default style
   }
 
-  // Legacy methods for backward compatibility (single button config)
-  String _getButtonText() {
-    final metadata = widget.model.metadata;
-    if (metadata != null) {
-      final textData = metadata.raw?['button_text'];
-      if (textData is String) {
-        return textData;
-      } else if (textData is Map<String, dynamic>) {
-        return _cachedMultilocaleTextHelper!.getText(context, textData);
-      }
-    }
-    return 'Enable Notifications';
-  }
-
-  Color? _getButtonColor() {
-    final colorHex = widget.model.metadata?.raw?['button_color'] as String?;
-    return _cachedColorHelper!.getColor(colorHex);
-  }
-
-  Color? _getGlowColor() {
-    final colorHex = widget.model.metadata?.raw?['glow_color'] as String?;
-    return _cachedColorHelper!.getColor(colorHex);
-  }
-
-  double _getGlowIntensity() {
-    final intensity = widget.model.metadata?.raw?['glow_intensity'];
-    if (intensity is num) {
-      return intensity.toDouble().clamp(0.0, 1.0);
-    }
-    return 0.6;
-  }
-
-  ButtonVisualStyle _getButtonStyle() {
-    final styleString = widget.model.metadata?.raw?['button_style'] as String?;
-    if (styleString != null && styleString.isNotEmpty) {
-      return ButtonVisualStyle.fromString(styleString);
-    }
-    return ButtonVisualStyle.glow; // Default style
-  }
-
   /// Get highlight words from metadata
   dynamic _getHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('title')) {
-      return highlightWordsData['title'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.title;
   }
 
   /// Get description highlight words from metadata
   dynamic _getDescriptionHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('description')) {
-      return highlightWordsData['description'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.description;
   }
 
   /// Get highlight color from metadata
@@ -590,7 +701,7 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
   Color? _getHighlightColor() {
     final colorString = widget.model.metadata?.highlightColor;
     if (colorString != null && colorString.isNotEmpty) {
-      return _cachedColorHelper!.getColor(colorString);
+      return _colorHelper.getColor(colorString);
     }
     return null; // No color if not found
   }

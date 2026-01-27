@@ -6,30 +6,29 @@ part of 'paywall_config.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-PaywallConfig _$PaywallConfigFromJson(Map<String, dynamic> json) =>
-    PaywallConfig(
-      type: json['type'] as String,
-      title: json['title'],
-      description: json['description'],
-      options: (json['options'] as List<dynamic>)
-          .map((e) => PaywallOption.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      metadata: PaywallMetadata.fromJson(
-        json['metadata'] as Map<String, dynamic>,
-      ),
-      nextButtonText: json['next_button_text'],
-      noteText: json['note_text'],
-      showRestore: json['show_restore'] as bool? ?? true,
-      showClose: json['show_close'] as bool? ?? false,
-    );
+PaywallConfig _$PaywallConfigFromJson(
+  Map<String, dynamic> json,
+) => PaywallConfig(
+  type: json['type'] as String,
+  title: PaywallConfig._multilocaleFromJson(json['title']),
+  description: PaywallConfig._multilocaleFromJson(json['description']),
+  options: (json['options'] as List<dynamic>)
+      .map((e) => PaywallOption.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  metadata: PaywallMetadata.fromJson(json['metadata'] as Map<String, dynamic>),
+  nextButtonText: PaywallConfig._multilocaleFromJson(json['next_button_text']),
+  noteText: PaywallConfig._multilocaleFromJson(json['note_text']),
+  showRestore: json['show_restore'] as bool? ?? true,
+  showClose: json['show_close'] as bool? ?? false,
+);
 
 Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
     <String, dynamic>{
       'type': instance.type,
       'title': instance.title,
       'description': instance.description,
-      'options': instance.options,
-      'metadata': instance.metadata,
+      'options': instance.options.map((e) => e.toJson()).toList(),
+      'metadata': instance.metadata.toJson(),
       'next_button_text': instance.nextButtonText,
       'note_text': instance.noteText,
       'show_restore': instance.showRestore,
@@ -40,9 +39,9 @@ PaywallOption _$PaywallOptionFromJson(Map<String, dynamic> json) =>
     PaywallOption(
       id: json['id'] as String,
       tier: json['tier'] as String,
-      title: json['title'],
-      description: json['description'],
-      badge: json['badge'],
+      title: PaywallOption._multilocaleFromJson(json['title']),
+      description: PaywallOption._multilocaleFromJson(json['description']),
+      badge: PaywallOption._multilocaleFromJson(json['badge']),
     );
 
 Map<String, dynamic> _$PaywallOptionToJson(PaywallOption instance) =>
@@ -62,7 +61,11 @@ PaywallMetadata _$PaywallMetadataFromJson(Map<String, dynamic> json) =>
       visualWidth: (json['visual_width'] as num?)?.toDouble(),
       visualHeight: (json['visual_height'] as num?)?.toDouble(),
       visualOpacity: (json['visual_opacity'] as num?)?.toDouble(),
-      optionVisuals: Map<String, String>.from(json['option_visuals'] as Map),
+      optionVisuals:
+          (json['option_visuals'] as Map?)?.map(
+            (k, e) => MapEntry(k.toString(), e.toString()),
+          ) ??
+          {},
     );
 
 Map<String, dynamic> _$PaywallMetadataToJson(PaywallMetadata instance) =>

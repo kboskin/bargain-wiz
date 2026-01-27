@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:json_annotation/json_annotation.dart';
+import 'package:appwizard/data/models/multilocale_text.dart';
 
 part 'onboarding_screen_config.g.dart';
 
@@ -43,8 +44,10 @@ enum OnboardingScreenType {
 /// Onboarding screen configuration model
 @JsonSerializable()
 class OnboardingScreenConfig {
-  final String title;
-  final String description;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic title;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic description;
   @JsonKey(fromJson: _typeFromJson, toJson: _typeToJson)
   final OnboardingScreenType type;
   final String? visual; // Lottie resource path or asset path
@@ -52,8 +55,8 @@ class OnboardingScreenConfig {
   final Map<String, dynamic>? metadata; // Additional config (e.g., min/max for slider)
   @JsonKey(name: 'answer_structure')
   final AnswerStructureConfig? answerStructure; // Structure for storing the answer
-  @JsonKey(name: 'next_button_text')
-  final String? nextButtonText; // Custom button text for this step (e.g., "Next", "Get Started", "Continue")
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  final dynamic nextButtonText; // Custom button text for this step (e.g., "Next", "Get Started", "Continue")
 
   OnboardingScreenConfig({
     required this.title,
@@ -66,18 +69,14 @@ class OnboardingScreenConfig {
     this.nextButtonText,
   });
 
-  factory OnboardingScreenConfig.fromJson(Map<String, dynamic> json) =>
-      _$OnboardingScreenConfigFromJson(json);
+  factory OnboardingScreenConfig.fromJson(Map<String, dynamic> json) => _$OnboardingScreenConfigFromJson(json);
+
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   Map<String, dynamic> toJson() => _$OnboardingScreenConfigToJson(this);
 
   void validate() {
-    if (title.isEmpty) {
-      throw FormatException('OnboardingScreenConfig.title cannot be empty');
-    }
-    if (description.isEmpty) {
-      throw FormatException('OnboardingScreenConfig.description cannot be empty');
-    }
     // Validate options if present
     if (options != null) {
       for (final option in options!) {
@@ -113,7 +112,8 @@ class OnboardingScreenConfig {
 /// Option for select type screens (legacy - use OnboardingOption from onboarding_model.dart)
 @JsonSerializable()
 class OnboardingScreenConfigOption {
-  final String label;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic label;
   final String? value;
   final Map<String, dynamic>? metadata;
 
@@ -123,15 +123,14 @@ class OnboardingScreenConfigOption {
     this.metadata,
   });
 
-  factory OnboardingScreenConfigOption.fromJson(Map<String, dynamic> json) =>
-      _$OnboardingScreenConfigOptionFromJson(json);
+  factory OnboardingScreenConfigOption.fromJson(Map<String, dynamic> json) => _$OnboardingScreenConfigOptionFromJson(json);
+
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   Map<String, dynamic> toJson() => _$OnboardingScreenConfigOptionToJson(this);
 
   void validate() {
-    if (label.isEmpty) {
-      throw FormatException('OnboardingScreenConfigOption.label cannot be empty');
-    }
   }
 }
 

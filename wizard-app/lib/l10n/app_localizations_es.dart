@@ -94,5 +94,5 @@ class AppLocalizationsEs extends AppLocalizations {
   String get subscriptionActivated => '¡Suscripción activada!';
 
   @override
-  String get skipForNow => 'Skip for now';
+  String get skipForNow => 'Omitir por ahora';
 }

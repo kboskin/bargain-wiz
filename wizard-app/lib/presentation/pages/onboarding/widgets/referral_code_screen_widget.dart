@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
+import 'package:appwizard/data/models/multilocale_text.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:flutter/material.dart';
 
@@ -27,9 +28,8 @@ class ReferralCodeScreenWidget extends StatefulWidget {
 }
 
 class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
-  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
-  TextHighlightHelper? _cachedTextHighlightHelper;
-  ColorHelper? _cachedColorHelper;
+  late final TextHighlightHelper _textHighlightHelper;
+  late final ColorHelper _colorHelper;
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   Timer? _debounceTimer;
@@ -37,6 +37,9 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
   @override
   void initState() {
     super.initState();
+    _colorHelper = di.sl<ColorHelper>();
+    _textHighlightHelper = TextHighlightHelper(_colorHelper);
+
     // Initialize with existing value if available
     if (widget.selectedValue != null) {
       _codeController.text = widget.selectedValue!;
@@ -67,15 +70,8 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // Cache helper lookups
-    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
-    _cachedColorHelper ??= di.sl<ColorHelper>();
-    _cachedTextHighlightHelper ??= TextHighlightHelper(_cachedColorHelper!);
-
-    final title = _cachedMultilocaleTextHelper!.getText(context, widget.model.title);
-    final description = widget.model.description != null
-        ? _cachedMultilocaleTextHelper!.getText(context, widget.model.description)
-        : null;
+    final title = widget.model.title.get(context);
+    final description = widget.model.description?.get(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40.0),
@@ -91,7 +87,7 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
               description: description,
               highlightWordsData: _getDescriptionHighlightWords(),
               highlightColor: _getHighlightColor(),
-              textHighlightHelper: _cachedTextHighlightHelper!,
+              textHighlightHelper: _textHighlightHelper,
             ),
           ],
           const SizedBox(height: 32),
@@ -104,8 +100,7 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
   }
 
   /// Build styled title
-  Widget _buildStyledTitle(BuildContext context, String title) {
-    return Text(
+  Widget _buildStyledTitle(final BuildContext context, String title) => Text(
       title,
       style: Theme.of(context).textTheme.headlineLarge?.copyWith(
             color: AppColors.backgroundDark,
@@ -114,11 +109,9 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
           ),
       textAlign: TextAlign.center,
     );
-  }
 
   /// Build referral code input field
-  Widget _buildReferralCodeInput(BuildContext context) {
-    return TextField(
+  Widget _buildReferralCodeInput(final BuildContext context) => TextField(
       controller: _codeController,
       focusNode: _focusNode,
       textAlign: TextAlign.center,
@@ -129,10 +122,8 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
             letterSpacing: 2,
           ),
       decoration: InputDecoration(
-        hintText: _cachedMultilocaleTextHelper!.getText(
-          context,
-          widget.model.metadata?.placeholder ?? {'en': 'Enter code', 'es': 'Ingresa código'},
-        ),
+        hintText: (widget.model.metadata?.placeholder ??
+                  const MultilocaleText(const {'en': 'Enter code', 'es': 'Ingresa código'})).get(context),
         hintStyle: Theme.of(context).textTheme.headlineMedium?.copyWith(
               color: AppColors.backgroundDark.withValues(alpha: 0.4),
               fontWeight: FontWeight.normal,
@@ -157,8 +148,7 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: AppColors.backgroundDark,
+          borderSide: const BorderSide(
             width: 2,
           ),
         ),
@@ -168,19 +158,18 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
       autocorrect: false,
       enableSuggestions: false,
     );
-  }
 
 
   /// Get description highlight words from metadata
   dynamic _getDescriptionHighlightWords() {
-    return widget.model.metadata?.highlightWords;
+    return widget.model.metadata?.highlightWords?.description;
   }
 
   /// Get highlight color from metadata
   Color? _getHighlightColor() {
     final colorString = widget.model.metadata?.highlightColor;
     if (colorString != null && colorString.isNotEmpty) {
-      return _cachedColorHelper?.getColor(colorString);
+      return _colorHelper.getColor(colorString);
     }
     return null;
   }

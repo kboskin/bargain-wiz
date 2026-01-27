@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
@@ -21,18 +21,20 @@ class WarmupScreenWidget extends StatefulWidget {
 }
 
 class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
-  ColorHelper? _cachedColorHelper;
-  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
-  TextHighlightHelper? _cachedTextHighlightHelper;
+  late final ColorHelper _colorHelper;
+  late final TextHighlightHelper _textHighlightHelper;
+
+  @override
+  void initState() {
+    super.initState();
+    _colorHelper = di.sl<ColorHelper>();
+    _textHighlightHelper = TextHighlightHelper(_colorHelper);
+  }
 
   @override
   Widget build(BuildContext context) {
-    _cachedColorHelper ??= di.sl<ColorHelper>();
-    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
-    _cachedTextHighlightHelper ??= TextHighlightHelper(_cachedColorHelper!);
-
-    final title = _cachedMultilocaleTextHelper!.getText(context, widget.model.title);
-    final description = _cachedMultilocaleTextHelper!.getText(context, widget.model.description);
+    final title = widget.model.title.get(context);
+    final description = widget.model.description?.get(context) ?? '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40.0),
@@ -66,7 +68,7 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
               description: description,
               highlightWordsData: _getDescriptionHighlightWords(),
               highlightColor: _getHighlightColor(),
-              textHighlightHelper: _cachedTextHighlightHelper!,
+              textHighlightHelper: _textHighlightHelper,
               onRichTextDescription: _buildRichTextDescription,
             ),
         ],
@@ -76,18 +78,14 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
 
   /// Get description highlight words from metadata
   dynamic _getDescriptionHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('description')) {
-      return highlightWordsData['description'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.description;
   }
 
   /// Get highlight color from metadata
   Color? _getHighlightColor() {
     final colorString = widget.model.metadata?.highlightColor;
     if (colorString != null && colorString.isNotEmpty) {
-      return _cachedColorHelper!.getColor(colorString);
+      return _colorHelper.getColor(colorString);
     }
     return null;
   }
@@ -133,7 +131,7 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
   }
 
   Widget _buildSideText(BuildContext context, OnboardingMetadata metadata, SideTextAlignment alignment) {
-    final text = _cachedMultilocaleTextHelper!.getText(context, metadata.sideText);
+    final text = metadata.sideText?.get(context) ?? '';
     
     IconData arrowIcon;
     bool iconBelow = true;
@@ -211,10 +209,10 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
     final textSpans = <TextSpan>[];
     final defaultHighlightColor = _getHighlightColor();
 
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (final word in parts) {
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(

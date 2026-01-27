@@ -8,7 +8,6 @@ import 'package:appwizard/core/services/onboarding_service.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
@@ -59,8 +58,13 @@ class _OnboardingFlowView extends StatefulWidget {
 class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   final PageController _pageController = PageController();
   int _currentScreenIndex = 0;
-  OnboardingBloc? _cachedBloc;
-  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
+  late final OnboardingBloc _onboardingBloc;
+
+  @override
+  void initState() {
+    super.initState();
+    _onboardingBloc = context.read<OnboardingBloc>();
+  }
 
   @override
   void dispose() {
@@ -85,9 +89,6 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
   @override
   Widget build(BuildContext context) {
-    // Cache bloc reference to avoid repeated lookups
-    _cachedBloc ??= context.read<OnboardingBloc>();
-    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
     
     return BlocConsumer<OnboardingBloc, OnboardingState>(
       listener: (context, state) {
@@ -192,7 +193,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                   screen,
                                   index,
                                   state,
-                                  _cachedBloc!,
+                                  _onboardingBloc,
                                 ),
                               );
                             },
@@ -213,7 +214,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                     FocusScope.of(context).unfocus();
                                     _handleNext(
                                       state,
-                                      _cachedBloc!,
+                                      _onboardingBloc,
                                     );
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -365,8 +366,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       OnboardingConfigLoaded state,
       {String? defaultText}) {
     if (screen.nextButtonText != null) {
-      final text =
-          _cachedMultilocaleTextHelper!.getText(context, screen.nextButtonText);
+      final text = screen.nextButtonText!.get(context);
       if (text.isNotEmpty) {
         return text;
       }
@@ -408,7 +408,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           bloc.add(
             OnboardingAnswerChanged(
               screenIndex: index,
-              screenTitle: _cachedMultilocaleTextHelper!.getText(context, model.title),
+              screenTitle: model.title.get(context),
               screenType: model.type,
               answerKey: model.answerStructure?.answerKeyName,
               answer: value,
@@ -423,7 +423,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           bloc.add(
             OnboardingAnswerChanged(
               screenIndex: index,
-              screenTitle: _cachedMultilocaleTextHelper!.getText(context, model.title),
+              screenTitle: model.title.get(context),
               screenType: model.type,
               answerKey: model.answerStructure?.answerKeyName,
               answer: value,
@@ -433,7 +433,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       ),
       permission: (model) => PermissionScreenWidget(
         model: model,
-        onContinue: () => _handleNext(state, _cachedBloc!),
+        onContinue: () => _handleNext(state, _onboardingBloc),
       ),
       imageList: (model) => ImageListScreenWidget(model: model),
       referralCode: (model) => ReferralCodeScreenWidget(
@@ -443,7 +443,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           bloc.add(
             OnboardingAnswerChanged(
               screenIndex: index,
-              screenTitle: _cachedMultilocaleTextHelper!.getText(context, model.title),
+              screenTitle: model.title.get(context),
               screenType: model.type,
               answerKey: model.answerStructure?.answerKeyName,
               answer: value,

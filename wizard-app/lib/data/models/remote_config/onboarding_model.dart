@@ -1,6 +1,8 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
 import 'package:appwizard/data/models/remote_config/json_helpers.dart';
+import 'package:appwizard/data/models/remote_config/highlight_words_config.dart';
+import 'package:appwizard/data/models/multilocale_text.dart';
 
 part 'onboarding_model.g.dart';
 
@@ -27,26 +29,8 @@ enum SideTextAlignment {
 }
 
 /// Structured metadata for onboarding screens
+@JsonSerializable()
 class OnboardingMetadata {
-  final Map<String, dynamic>? highlightWords;
-  final String? highlightColor;
-  final dynamic description; // Optional supplemental description
-  final SideTextAlignment? sideTextAlignment;
-  final dynamic sideText;
-  final double? width;
-  final double? height;
-  final String? color; // Brand/tint color
-  final String? animation;
-  final String? animationColor;
-  final List<dynamic>? buttons;
-  final List<dynamic>? options;
-  final String? paywallConfigKey;
-  final String? paywallId;
-  final dynamic placeholder;
-  final double? imageSpacing;
-  final double? imageWidth;
-  final double? imageHeight;
-  final Map<String, dynamic>? raw;
 
   OnboardingMetadata({
     this.highlightWords,
@@ -67,36 +51,80 @@ class OnboardingMetadata {
     this.imageSpacing,
     this.imageWidth,
     this.imageHeight,
+    this.buttonVisual,
+    this.buttonVisualWidth,
+    this.buttonVisualHeight,
+    this.buttonColor,
+    this.glowColor,
+    this.glowIntensity,
+    this.buttonText,
+    this.buttonStyle,
     this.raw,
   });
 
   factory OnboardingMetadata.fromJson(Map<String, dynamic> json) {
-    return OnboardingMetadata(
-      highlightWords: json['highlight_words'] as Map<String, dynamic>?,
-      highlightColor: json['highlight_color'] as String?,
-      description: json['description'],
-      sideTextAlignment: json.containsKey('side_text_alignment') 
-          ? SideTextAlignment.fromString(json['side_text_alignment'] as String?)
-          : null,
-      sideText: json['side_text'],
-      width: (json['width'] as num?)?.toDouble(),
-      height: (json['height'] as num?)?.toDouble(),
-      color: json['color'] as String?,
-      animation: json['animation'] as String?,
-      animationColor: json['animation_color'] as String?,
-      buttons: json['buttons'] as List<dynamic>?,
-      options: json['options'] as List<dynamic>?,
-      paywallConfigKey: json['paywall_config_key'] as String?,
-      paywallId: json['paywall_id'] as String?,
-      placeholder: json['placeholder'],
-      imageSpacing: (json['image_spacing'] as num?)?.toDouble(),
-      imageWidth: (json['image_width'] as num?)?.toDouble(),
-      imageHeight: (json['image_height'] as num?)?.toDouble(),
-      raw: json,
-    );
+    // We pass the full json to the generated constructor as well to populate 'raw'
+    return _$OnboardingMetadataFromJson({...json, 'raw': json});
   }
+  @JsonKey(name: 'highlight_words')
+  final HighlightWordsConfig? highlightWords;
+  @JsonKey(name: 'highlight_color')
+  final String? highlightColor;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic description; // Optional supplemental description
+  @JsonKey(name: 'side_text_alignment', fromJson: _sideTextAlignmentFromJson, toJson: _sideTextAlignmentToJson)
+  final SideTextAlignment? sideTextAlignment;
+  @JsonKey(name: 'side_text', fromJson: _multilocaleFromJson)
+  final dynamic sideText;
+  final double? width;
+  final double? height;
+  final String? color; // Brand/tint color
+  final String? animation;
+  @JsonKey(name: 'animation_color')
+  final String? animationColor;
+  final List<dynamic>? buttons;
+  final List<dynamic>? options;
+  @JsonKey(name: 'paywall_config_key')
+  final String? paywallConfigKey;
+  @JsonKey(name: 'paywall_id')
+  final String? paywallId;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic placeholder;
+  @JsonKey(name: 'image_spacing')
+  final double? imageSpacing;
+  @JsonKey(name: 'image_width')
+  final double? imageWidth;
+  @JsonKey(name: 'image_height')
+  final double? imageHeight;
+  @JsonKey(name: 'button_visual')
+  final String? buttonVisual;
+  @JsonKey(name: 'button_visual_width')
+  final double? buttonVisualWidth;
+  @JsonKey(name: 'button_visual_height')
+  final double? buttonVisualHeight;
+  @JsonKey(name: 'button_color')
+  final String? buttonColor;
+  @JsonKey(name: 'glow_color')
+  final String? glowColor;
+  @JsonKey(name: 'glow_intensity')
+  final double? glowIntensity;
+  @JsonKey(name: 'button_text', fromJson: _multilocaleFromJson)
+  final dynamic buttonText;
+  @JsonKey(name: 'button_style')
+  final String? buttonStyle;
+  @JsonKey(includeFromJson: true, includeToJson: false)
+  final Map<String, dynamic>? raw;
 
-  Map<String, dynamic> toJson() => raw ?? {};
+  Map<String, dynamic> toJson() => raw ?? _$OnboardingMetadataToJson(this);
+
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
+
+  static SideTextAlignment? _sideTextAlignmentFromJson(String? value) =>
+      value != null ? SideTextAlignment.fromString(value) : null;
+
+  static String? _sideTextAlignmentToJson(SideTextAlignment? alignment) =>
+      alignment?.name;
 
   static OnboardingMetadata? fromOptionalMap(Map<String, dynamic>? map) {
     if (map == null) return null;
@@ -206,8 +234,6 @@ abstract class OnboardingModel {
 /// Answer structure configuration
 @JsonSerializable()
 class AnswerStructure {
-  @JsonKey(name: 'answer_key_name')
-  final String answerKeyName;
 
   AnswerStructure({
     required this.answerKeyName,
@@ -215,6 +241,8 @@ class AnswerStructure {
 
   factory AnswerStructure.fromJson(Map<String, dynamic> json) =>
       _$AnswerStructureFromJson(json);
+  @JsonKey(name: 'answer_key_name')
+  final String answerKeyName;
 
   Map<String, dynamic> toJson() => _$AnswerStructureToJson(this);
 
@@ -231,10 +259,30 @@ class AnswerStructure {
   includeIfNull: false,
 )
 class EngagementScreenModel extends OnboardingModel {
+
+  EngagementScreenModel({
+    required this.title,
+    this.description,
+    this.visual,
+    this.metadata,
+    required this.nextButtonText,
+    required this.answerStructure,
+    this.showTopBar = true,
+  }): super(title: title);
+
+  factory EngagementScreenModel.fromJson(Map<String, dynamic> json) => _$EngagementScreenModelFromJson(json);
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
   final String? visual; // Lottie resource path or asset path
   final OnboardingMetadata? metadata; // Typed metadata
 
-  @JsonKey(name: 'next_button_text')
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
   @override
   final dynamic nextButtonText;
 
@@ -246,36 +294,11 @@ class EngagementScreenModel extends OnboardingModel {
   @override
   final bool showTopBar;
 
-  EngagementScreenModel({
-    required super.title,
-    super.description,
-    this.visual,
-    this.metadata,
-    this.nextButtonText,
-    this.answerStructure,
-    this.showTopBar = true,
-  });
-
   @override
   OnboardingScreenType get type => OnboardingScreenType.engagement;
 
-  factory EngagementScreenModel.fromJson(Map<String, dynamic> json) {
-    final model = EngagementScreenModel(
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
-      visual: JsonHelpers.optionalString(json, 'visual'),
-      metadata: OnboardingMetadata.fromOptionalMap(JsonHelpers.optionalMap(json, 'metadata')),
-      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
-      answerStructure: json['answer_structure'] != null
-          ? AnswerStructure.fromJson(
-              JsonHelpers.requireMap(json, 'answer_structure'),
-            )
-          : null,
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-    );
-    model.validate();
-    return model;
-  }
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
   Map<String, dynamic> toJson() =>
@@ -284,13 +307,7 @@ class EngagementScreenModel extends OnboardingModel {
 
 /// Option for select-type screens
 @JsonSerializable()
-class OnboardingOption {
-  final dynamic label; // Can be Map<String, String> (multilocale) or String (backward compatibility)
-  final dynamic value; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
-  final String? icon; // Material icon name (e.g., "tiktok", "youtube", "search", "store")
-  @JsonKey(name: 'tint_color')
-  final String? tintColor; // Optional hex color string for brand/tint color (e.g., "#FF6600")
-  final OnboardingMetadata? metadata; // Typed metadata
+class OnboardingOption { // Typed metadata
 
   OnboardingOption({
     required this.label,
@@ -300,17 +317,18 @@ class OnboardingOption {
     this.metadata,
   });
 
-  factory OnboardingOption.fromJson(Map<String, dynamic> json) {
-    final option = OnboardingOption(
-      label: JsonHelpers.requireMultilocaleText(json, 'label'),
-      value: JsonHelpers.optionalMultilocaleText(json, 'value'),
-      icon: JsonHelpers.optionalString(json, 'icon'),
-      tintColor: JsonHelpers.optionalString(json, 'tint_color'),
-      metadata: OnboardingMetadata.fromOptionalMap(JsonHelpers.optionalMap(json, 'metadata')),
-    );
-    option.validate();
-    return option;
-  }
+  factory OnboardingOption.fromJson(Map<String, dynamic> json) => _$OnboardingOptionFromJson(json);
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic label; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic value; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
+  final String? icon; // Material icon name (e.g., "tiktok", "youtube", "search", "store")
+  @JsonKey(name: 'tint_color')
+  final String? tintColor; // Optional hex color string for brand/tint color (e.g., "#FF6600")
+  final OnboardingMetadata? metadata;
+
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   Map<String, dynamic> toJson() => _$OnboardingOptionToJson(this);
 
@@ -335,52 +353,51 @@ class OnboardingOption {
 }
 
 /// Model for select-type onboarding screens
-@JsonSerializable()
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
 class SelectScreenModel extends OnboardingModel {
+
+  SelectScreenModel({
+    required this.title,
+    required this.description,
+    required this.options,
+    this.metadata,
+    required this.nextButtonText,
+    required this.answerStructure,
+    this.showTopBar = true,
+  }): super(title: title);
+
+  factory SelectScreenModel.fromJson(Map<String, dynamic> json) => _$SelectScreenModelFromJson(json);
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
   final List<OnboardingOption> options;
   final OnboardingMetadata? metadata; // Typed metadata
 
-  SelectScreenModel({
-    required super.title,
-    required super.description,
-    required this.options,
-    this.metadata,
-    super.nextButtonText,
-    super.answerStructure,
-    super.showTopBar,
-  });
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'answer_structure')
+  @override
+  final AnswerStructure? answerStructure;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: true)
+  @override
+  final bool showTopBar;
 
   @override
   OnboardingScreenType get type => OnboardingScreenType.select;
 
-  factory SelectScreenModel.fromJson(Map<String, dynamic> json) {
-    final model = SelectScreenModel(
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
-      options: JsonHelpers.requireList<OnboardingOption>(
-        json,
-        'options',
-        (item) {
-          if (item is! Map<String, dynamic>) {
-            throw FormatException(
-              'Expected Map<String, dynamic> for option, got ${item.runtimeType}',
-            );
-          }
-          return OnboardingOption.fromJson(item);
-        },
-      ),
-      metadata: OnboardingMetadata.fromOptionalMap(JsonHelpers.optionalMap(json, 'metadata')),
-      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
-      answerStructure: json['answer_structure'] != null
-          ? AnswerStructure.fromJson(
-              JsonHelpers.requireMap(json, 'answer_structure'),
-            )
-          : null,
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-    );
-    model.validate();
-    return model;
-  }
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
   Map<String, dynamic> toJson() {
@@ -403,13 +420,6 @@ class SelectScreenModel extends OnboardingModel {
 /// Slider option with value, label, and optional animation
 @JsonSerializable()
 class SliderOption {
-  final double value;
-  final dynamic label; // Can be Map<String, String> (multilocale) or String (backward compatibility)
-  final String? animation;
-  @JsonKey(name: 'animation_width')
-  final double? animationWidth;
-  @JsonKey(name: 'animation_height')
-  final double? animationHeight;
 
   SliderOption({
     required this.value,
@@ -419,101 +429,105 @@ class SliderOption {
     this.animationHeight,
   });
 
-  factory SliderOption.fromJson(Map<String, dynamic> json) {
-    final value = json['value'];
-    if (value is! num) {
-      throw FormatException(
-        'Expected num for slider option value, got ${value.runtimeType}',
-      );
-    }
+  factory SliderOption.fromJson(Map<String, dynamic> json) => _$SliderOptionFromJson(json);
+  final double value;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic label; // Can be Map<String, String> (multilocale) or String (backward compatibility)
+  final String? animation;
+  @JsonKey(name: 'animation_width')
+  final double? animationWidth;
+  @JsonKey(name: 'animation_height')
+  final double? animationHeight;
 
-    // Parse optional animation dimensions
-    double? animationWidth;
-    double? animationHeight;
-    if (json.containsKey('animation_width')) {
-      final width = json['animation_width'];
-      if (width is num) {
-        animationWidth = width.toDouble();
-      }
-    }
-    if (json.containsKey('animation_height')) {
-      final height = json['animation_height'];
-      if (height is num) {
-        animationHeight = height.toDouble();
-      }
-    }
-
-    return SliderOption(
-      value: value.toDouble(),
-      label: JsonHelpers.requireMultilocaleText(json, 'label'),
-      animation: JsonHelpers.optionalString(json, 'animation'),
-      animationWidth: animationWidth,
-      animationHeight: animationHeight,
-    );
-  }
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   Map<String, dynamic> toJson() => _$SliderOptionToJson(this);
 }
 
 /// Model for slider-type onboarding screens
-@JsonSerializable()
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
 class SliderScreenModel extends OnboardingModel {
+
+  SliderScreenModel({
+    required this.title,
+    this.description,
+    required this.options,
+    this.metadata,
+    required this.nextButtonText,
+    required this.answerStructure,
+    this.showTopBar = true,
+  }) : super(title: title);
+
+  factory SliderScreenModel.fromJson(Map<String, dynamic> json) {
+    // Note: Slider possibilities are complex because options can be in metadata
+    // We'll handle the metadata.options extraction if needed, but the basic model
+    // should be parseable via _$SliderScreenModelFromJson.
+    final model = _$SliderScreenModelFromJson(json);
+
+    // Check if this is a discrete slider with options in metadata
+    if (model.options.isEmpty) {
+      final metadataMap = json['metadata'];
+      if (metadataMap is Map && metadataMap.containsKey('options')) {
+        final optionsList = metadataMap['options'];
+        if (optionsList is List) {
+          final options = optionsList
+              .map((item) => SliderOption.fromJson(item as Map<String, dynamic>))
+              .toList();
+          return SliderScreenModel(
+            title: model.title,
+            description: model.description,
+            options: options,
+            metadata: model.metadata,
+            nextButtonText: model.nextButtonText,
+            answerStructure: model.answerStructure,
+            showTopBar: model.showTopBar,
+          );
+        }
+      }
+    }
+
+    return model;
+  }
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
+  @JsonKey(fromJson: _sliderOptionsFromJson)
   final List<SliderOption> options;
   final OnboardingMetadata? metadata; // Typed metadata
 
-  SliderScreenModel({
-    required super.title,
-    super.description,
-    required this.options,
-    this.metadata,
-    super.nextButtonText,
-    super.answerStructure,
-    super.showTopBar,
-  });
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'answer_structure')
+  @override
+  final AnswerStructure? answerStructure;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: true)
+  @override
+  final bool showTopBar;
 
   @override
   OnboardingScreenType get type => OnboardingScreenType.slider;
 
-  factory SliderScreenModel.fromJson(Map<String, dynamic> json) {
-    // Check if this is a discrete slider with options in metadata
-    final metadataMap = JsonHelpers.optionalMap(json, 'metadata');
-    List<SliderOption> options = [];
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
-    if (metadataMap != null && metadataMap.containsKey('options')) {
-      // Discrete slider with options
-      final optionsList = metadataMap['options'];
-      if (optionsList is! List) {
-        throw FormatException(
-          'Expected List for metadata.options, got ${optionsList.runtimeType}',
-        );
-      }
-      options = optionsList
-          .map((item) {
-            if (item is! Map<String, dynamic>) {
-              throw FormatException(
-                'Expected Map<String, dynamic> for slider option, got ${item.runtimeType}',
-              );
-            }
-            return SliderOption.fromJson(item);
-          })
-          .toList();
-    }
-
-    final model = SliderScreenModel(
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
-      options: options,
-      metadata: OnboardingMetadata.fromOptionalMap(metadataMap),
-      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
-      answerStructure: json['answer_structure'] != null
-          ? AnswerStructure.fromJson(
-              JsonHelpers.requireMap(json, 'answer_structure'),
-            )
-          : null,
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-    );
-    model.validate();
-    return model;
+  static List<SliderOption> _sliderOptionsFromJson(dynamic json) {
+    if (json == null) return [];
+    if (json is! List) return [];
+    return (json as List<dynamic>)
+        .map((e) => SliderOption.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -548,44 +562,53 @@ class SliderScreenModel extends OnboardingModel {
 }
 
 /// Model for permission-type onboarding screens
-@JsonSerializable()
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
 class PermissionScreenModel extends OnboardingModel {
+
+  PermissionScreenModel({
+    required this.title,
+    this.description,
+    required this.subtype,
+    this.visual,
+    this.metadata,
+    required this.nextButtonText,
+    required this.answerStructure,
+    this.showTopBar = true,
+  }) : super(title: title);
+
+  factory PermissionScreenModel.fromJson(Map<String, dynamic> json) => _$PermissionScreenModelFromJson(json);
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
   final String subtype; // e.g., "notifications"
   final String? visual; // Optional Lottie resource path or asset path for frame/animation
   final OnboardingMetadata? metadata; // Typed metadata
 
-  PermissionScreenModel({
-    required super.title,
-    super.description,
-    required this.subtype,
-    this.visual,
-    this.metadata,
-    super.nextButtonText,
-    super.answerStructure,
-    super.showTopBar,
-  });
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'answer_structure')
+  @override
+  final AnswerStructure? answerStructure;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: true)
+  @override
+  final bool showTopBar;
 
   @override
   OnboardingScreenType get type => OnboardingScreenType.permission;
 
-  factory PermissionScreenModel.fromJson(Map<String, dynamic> json) {
-    final model = PermissionScreenModel(
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
-      subtype: JsonHelpers.requireString(json, 'subtype'),
-      visual: JsonHelpers.optionalString(json, 'visual'),
-      metadata: OnboardingMetadata.fromOptionalMap(JsonHelpers.optionalMap(json, 'metadata')),
-      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
-      answerStructure: json['answer_structure'] != null
-          ? AnswerStructure.fromJson(
-              JsonHelpers.requireMap(json, 'answer_structure'),
-            )
-          : null,
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-    );
-    model.validate();
-    return model;
-  }
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
   Map<String, dynamic> toJson() {
@@ -606,57 +629,51 @@ class PermissionScreenModel extends OnboardingModel {
 
 /// Model for image list-type onboarding screens
 /// Displays a title and scrollable list of images
-@JsonSerializable()
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
 class ImageListScreenModel extends OnboardingModel {
+
+  ImageListScreenModel({
+    required this.title,
+    this.description,
+    required this.images,
+    this.metadata,
+    required this.nextButtonText,
+    required this.answerStructure,
+    this.showTopBar = true,
+  }) : super(title: title);
+
+  factory ImageListScreenModel.fromJson(Map<String, dynamic> json) => _$ImageListScreenModelFromJson(json);
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
   final List<String> images; // List of image paths (Lottie, SVG, or regular images)
   final OnboardingMetadata? metadata; // Typed metadata
 
-  ImageListScreenModel({
-    required super.title,
-    super.description,
-    required this.images,
-    this.metadata,
-    super.nextButtonText,
-    super.answerStructure,
-    super.showTopBar,
-  });
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'answer_structure')
+  @override
+  final AnswerStructure? answerStructure;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: true)
+  @override
+  final bool showTopBar;
 
   @override
   OnboardingScreenType get type => OnboardingScreenType.imageList;
 
-  factory ImageListScreenModel.fromJson(Map<String, dynamic> json) {
-    final imagesList = json['images'];
-    if (imagesList is! List) {
-      throw FormatException(
-        'Expected List for images, got ${imagesList.runtimeType}',
-      );
-    }
-
-    final model = ImageListScreenModel(
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
-      images: imagesList
-          .map((item) {
-            if (item is! String) {
-              throw FormatException(
-                'Expected String for image path, got ${item.runtimeType}',
-              );
-            }
-            return item;
-          })
-          .toList(),
-      metadata: OnboardingMetadata.fromOptionalMap(JsonHelpers.optionalMap(json, 'metadata')),
-      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
-      answerStructure: json['answer_structure'] != null
-          ? AnswerStructure.fromJson(
-              JsonHelpers.requireMap(json, 'answer_structure'),
-            )
-          : null,
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-    );
-    model.validate();
-    return model;
-  }
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
   Map<String, dynamic> toJson() {
@@ -675,41 +692,52 @@ class ImageListScreenModel extends OnboardingModel {
 
 /// Model for referral code-type onboarding screens
 /// Displays a referral code that users can copy or share
-@JsonSerializable()
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
 class ReferralCodeScreenModel extends OnboardingModel {
+
+  ReferralCodeScreenModel({
+    required this.title,
+    this.description,
+    this.referralCode,
+    this.metadata,
+    required this.nextButtonText,
+    required this.answerStructure,
+    this.showTopBar = true,
+  }) : super(title: title);
+
+  factory ReferralCodeScreenModel.fromJson(Map<String, dynamic> json) => _$ReferralCodeScreenModelFromJson(json);
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
+  @JsonKey(name: 'referral_code')
   final String? referralCode; // The referral code to display (can be null if fetched from service)
   final OnboardingMetadata? metadata; // Typed metadata
 
-  ReferralCodeScreenModel({
-    required super.title,
-    super.description,
-    this.referralCode,
-    this.metadata,
-    super.nextButtonText,
-    super.answerStructure,
-    super.showTopBar,
-  });
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'answer_structure')
+  @override
+  final AnswerStructure? answerStructure;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: true)
+  @override
+  final bool showTopBar;
 
   @override
   OnboardingScreenType get type => OnboardingScreenType.referralCode;
 
-  factory ReferralCodeScreenModel.fromJson(Map<String, dynamic> json) {
-    final model = ReferralCodeScreenModel(
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
-      referralCode: JsonHelpers.optionalString(json, 'referral_code'),
-      metadata: OnboardingMetadata.fromOptionalMap(JsonHelpers.optionalMap(json, 'metadata')),
-      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
-      answerStructure: json['answer_structure'] != null
-          ? AnswerStructure.fromJson(
-              JsonHelpers.requireMap(json, 'answer_structure'),
-            )
-          : null,
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-    );
-    model.validate();
-    return model;
-  }
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
   Map<String, dynamic> toJson() {
@@ -726,18 +754,43 @@ class ReferralCodeScreenModel extends OnboardingModel {
 
 /// Model for paywall reference screen (lightweight placeholder)
 /// Contains only metadata pointing to separate paywall config
-@JsonSerializable()
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
 class PaywallScreenModel extends OnboardingModel {
-  final OnboardingMetadata? metadata; // Typed metadata
 
   PaywallScreenModel({
-    required super.title, // Required by base class but not used for paywall
-    super.description,
+    required this.title, // Required by base class but not used for paywall
+    this.description,
     this.metadata,
-    super.nextButtonText,
-    super.answerStructure,
-    super.showTopBar,
-  });
+    this.nextButtonText,
+    this.answerStructure,
+    this.showTopBar = true,
+  }): super(title: title);
+
+  factory PaywallScreenModel.fromJson(Map<String, dynamic> json) => _$PaywallScreenModelFromJson(json);
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
+  final OnboardingMetadata? metadata; // Typed metadata
+
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'answer_structure')
+  @override
+  final AnswerStructure? answerStructure;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: true)
+  @override
+  final bool showTopBar;
 
   @override
   OnboardingScreenType get type => OnboardingScreenType.paywall;
@@ -748,17 +801,8 @@ class PaywallScreenModel extends OnboardingModel {
     return metadata?.paywallConfigKey ?? metadata?.paywallId ?? 'paywall_config';
   }
 
-  factory PaywallScreenModel.fromJson(Map<String, dynamic> json) {
-    final model = PaywallScreenModel(
-      title: 'Paywall', // Dummy title, not used
-      description: null,
-      metadata: OnboardingMetadata.fromOptionalMap(JsonHelpers.optionalMap(json, 'metadata')),
-      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
-      answerStructure: null,
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-    );
-    return model;
-  }
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
   Map<String, dynamic> toJson() {
@@ -815,12 +859,35 @@ extension OnboardingModelWhen<T> on OnboardingModel {
 
 /// Model for warmup-type onboarding screens
 /// Displays an image and text to motivate the user
-@JsonSerializable()
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
 class WarmupScreenModel extends OnboardingModel {
+
+  factory WarmupScreenModel.fromJson(final Map<String, dynamic> json) => _$WarmupScreenModelFromJson(json);
+
+  WarmupScreenModel({
+    required this.title,
+    this.description,
+    this.visual,
+    this.metadata,
+    required this.nextButtonText,
+    required this.answerStructure,
+    this.showTopBar = true,
+  }): super(title: title);
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
   final String? visual; // Lottie resource path or asset path
   final OnboardingMetadata? metadata; // Typed metadata
 
-  @JsonKey(name: 'next_button_text')
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
   @override
   final dynamic nextButtonText;
 
@@ -832,36 +899,11 @@ class WarmupScreenModel extends OnboardingModel {
   @override
   final bool showTopBar;
 
-  WarmupScreenModel({
-    required super.title,
-    super.description,
-    this.visual,
-    this.metadata,
-    this.nextButtonText,
-    this.answerStructure,
-    this.showTopBar = true,
-  });
-
   @override
   OnboardingScreenType get type => OnboardingScreenType.warmup;
 
-  factory WarmupScreenModel.fromJson(Map<String, dynamic> json) {
-    final model = WarmupScreenModel(
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.optionalMultilocaleText(json, 'description'),
-      visual: JsonHelpers.optionalString(json, 'visual'),
-      metadata: OnboardingMetadata.fromOptionalMap(JsonHelpers.optionalMap(json, 'metadata')),
-      nextButtonText: JsonHelpers.optionalMultilocaleText(json, 'next_button_text'),
-      answerStructure: json['answer_structure'] != null
-          ? AnswerStructure.fromJson(
-              JsonHelpers.requireMap(json, 'answer_structure'),
-            )
-          : null,
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-    );
-    model.validate();
-    return model;
-  }
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
   Map<String, dynamic> toJson() =>

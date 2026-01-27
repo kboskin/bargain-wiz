@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/data/models/remote_config/button_config.dart';
 
 /// Button widget that uses ButtonConfig from Remote Config metadata
@@ -14,7 +14,8 @@ class RCMetadataButton extends StatefulWidget {
   final double? borderRadius;
   final TextStyle? textStyle;
   final ColorHelper? colorHelper;
-  final MultilocaleTextHelper? multilocaleTextHelper;
+  /// When set, the button is forced to this size so it matches adjacent buttons.
+  final Size? fixedSize;
 
   const RCMetadataButton({
     super.key,
@@ -25,7 +26,7 @@ class RCMetadataButton extends StatefulWidget {
     this.borderRadius,
     this.textStyle,
     this.colorHelper,
-    this.multilocaleTextHelper,
+    this.fixedSize,
   });
 
   @override
@@ -86,10 +87,8 @@ class _RCMetadataButtonState extends State<RCMetadataButton>
 
   @override
   Widget build(BuildContext context) {
-    final cachedMultilocaleTextHelper = widget.multilocaleTextHelper ?? di.sl<MultilocaleTextHelper>();
-
     // Get button text
-    final buttonText = _getButtonText(cachedMultilocaleTextHelper);
+    final buttonText = _getButtonText();
 
     // Get colors - only parse if provided, no default fallback
     Color? buttonColor;
@@ -134,6 +133,7 @@ class _RCMetadataButtonState extends State<RCMetadataButton>
         backgroundColor: buttonColor,
         foregroundColor: Colors.white,
         padding: widget.padding ?? const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+        fixedSize: widget.fixedSize,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(widget.borderRadius ?? 16),
         ),
@@ -230,16 +230,11 @@ class _RCMetadataButtonState extends State<RCMetadataButton>
     return button;
   }
 
-  String _getButtonText(final MultilocaleTextHelper multilocaleTextHelper) {
+  String _getButtonText() {
     if (widget.config.text == null) {
       return 'Button';
     }
-    if (widget.config.text is String) {
-      return widget.config.text as String;
-    } else if (widget.config.text is Map<String, dynamic>) {
-      return multilocaleTextHelper.getText(context, widget.config.text);
-    }
-    return 'Button';
+    return widget.config.text!.get(context);
   }
 }
 

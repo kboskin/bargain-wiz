@@ -8,10 +8,14 @@ part of 'welcome_screen_config.dart';
 
 WelcomeScreenConfig _$WelcomeScreenConfigFromJson(Map<String, dynamic> json) =>
     WelcomeScreenConfig(
-      title: json['title'],
-      description: json['description'],
+      title: WelcomeScreenConfig._multilocaleFromJson(json['title']),
+      description: WelcomeScreenConfig._multilocaleFromJson(
+        json['description'],
+      ),
       visual: json['visual'] as String?,
-      primaryButtonText: json['primary_button_text'],
+      primaryButtonText: WelcomeScreenConfig._multilocaleFromJson(
+        json['primary_button_text'],
+      ),
       glassContainer: json['glass_container'] == null
           ? null
           : GlassContainerConfig.fromJson(
@@ -67,26 +71,12 @@ Map<String, dynamic> _$GlassContainerConfigToJson(
   'icon_opacity': instance.iconOpacity,
 };
 
-HighlightWordsConfig _$HighlightWordsConfigFromJson(
-  Map<String, dynamic> json,
-) => HighlightWordsConfig(
-  title: json['title'],
-  description: json['description'],
-);
-
-Map<String, dynamic> _$HighlightWordsConfigToJson(
-  HighlightWordsConfig instance,
-) => <String, dynamic>{
-  'title': instance.title,
-  'description': instance.description,
-};
-
 SecondaryActionConfig _$SecondaryActionConfigFromJson(
   Map<String, dynamic> json,
 ) => SecondaryActionConfig(
   type: json['type'] as String,
-  text: json['text'],
-  prefixText: json['prefix_text'],
+  text: SecondaryActionConfig._multilocaleFromJson(json['text']),
+  prefixText: SecondaryActionConfig._multilocaleFromJson(json['prefix_text']),
 );
 
 Map<String, dynamic> _$SecondaryActionConfigToJson(

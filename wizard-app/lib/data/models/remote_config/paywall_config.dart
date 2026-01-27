@@ -1,7 +1,7 @@
 import 'package:json_annotation/json_annotation.dart';
-import 'package:appwizard/data/models/remote_config/json_helpers.dart';
 import 'package:appwizard/data/models/remote_config/paywall_layout.dart';
 import 'package:appwizard/domain/entities/subscription_tier.dart';
+import 'package:appwizard/data/models/multilocale_text.dart';
 
 part 'paywall_config.g.dart';
 
@@ -10,14 +10,16 @@ part 'paywall_config.g.dart';
 @JsonSerializable()
 class PaywallConfig {
   final String type; // e.g., "onboarding_default"
-  final dynamic title; // Map<String, String> (multilocale) or String
-  final dynamic description; // Map<String, String> (multilocale) or String
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic title;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic description;
   final List<PaywallOption> options; // Two subscription options
   final PaywallMetadata metadata; // Visual config, default selection, etc.
-  @JsonKey(name: 'next_button_text')
-  final dynamic nextButtonText; // Map<String, String> (multilocale) or String
-  @JsonKey(name: 'note_text')
-  final dynamic noteText; // Map<String, String> (multilocale) or String
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  final dynamic nextButtonText;
+  @JsonKey(name: 'note_text', fromJson: _multilocaleFromJson)
+  final dynamic noteText;
   @JsonKey(name: 'show_restore')
   final bool showRestore;
   @JsonKey(name: 'show_close')
@@ -35,32 +37,10 @@ class PaywallConfig {
     this.showClose = false,
   });
 
-  factory PaywallConfig.fromJson(Map<String, dynamic> json) {
-    return PaywallConfig(
-      type: JsonHelpers.requireString(json, 'type'),
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.requireMultilocaleText(json, 'description'),
-      options: JsonHelpers.requireList<PaywallOption>(
-        json,
-        'options',
-        (item) {
-          if (item is! Map<String, dynamic>) {
-            throw FormatException(
-              'Expected Map<String, dynamic> for paywall option, got ${item.runtimeType}',
-            );
-          }
-          return PaywallOption.fromJson(item);
-        },
-      ),
-      metadata: PaywallMetadata.fromJson(
-        JsonHelpers.requireMap(json, 'metadata'),
-      ),
-      nextButtonText: JsonHelpers.requireMultilocaleText(json, 'next_button_text'),
-      noteText: JsonHelpers.requireMultilocaleText(json, 'note_text'),
-      showRestore: json['show_restore'] as bool? ?? true,
-      showClose: json['show_close'] as bool? ?? false,
-    );
-  }
+  factory PaywallConfig.fromJson(Map<String, dynamic> json) => _$PaywallConfigFromJson(json);
+
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   Map<String, dynamic> toJson() => _$PaywallConfigToJson(this);
 }
@@ -70,9 +50,12 @@ class PaywallConfig {
 class PaywallOption {
   final String id; // e.g., "text", "vision"
   final String tier; // "basic" or "premium"
-  final dynamic title; // Map<String, String> (multilocale) or String
-  final dynamic description; // Map<String, String> (multilocale) or String
-  final dynamic badge; // Map<String, String> (multilocale) or String or null
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic title;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic description;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic badge;
 
   PaywallOption({
     required this.id,
@@ -82,15 +65,10 @@ class PaywallOption {
     this.badge,
   });
 
-  factory PaywallOption.fromJson(Map<String, dynamic> json) {
-    return PaywallOption(
-      id: JsonHelpers.requireString(json, 'id'),
-      tier: JsonHelpers.requireString(json, 'tier'),
-      title: JsonHelpers.requireMultilocaleText(json, 'title'),
-      description: JsonHelpers.requireMultilocaleText(json, 'description'),
-      badge: JsonHelpers.optionalMultilocaleText(json, 'badge'),
-    );
-  }
+  factory PaywallOption.fromJson(Map<String, dynamic> json) => _$PaywallOptionFromJson(json);
+
+  static dynamic _multilocaleFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   Map<String, dynamic> toJson() => _$PaywallOptionToJson(this);
 
@@ -135,34 +113,7 @@ class PaywallMetadata {
     required this.optionVisuals,
   });
 
-  factory PaywallMetadata.fromJson(Map<String, dynamic> json) {
-    final optionVisualsJson = json['option_visuals'];
-    Map<String, String> optionVisuals = {};
-    if (optionVisualsJson is Map) {
-      optionVisuals = optionVisualsJson.map(
-        (key, value) => MapEntry(key.toString(), value.toString()),
-      );
-    }
-
-    return PaywallMetadata(
-      defaultSelectedOptionId: JsonHelpers.requireString(
-        json,
-        'default_selected_option_id',
-      ),
-      layout: PaywallLayout.fromString(JsonHelpers.optionalString(json, 'layout')),
-      cardStyle: JsonHelpers.optionalString(json, 'card_style'),
-      visualWidth: json['visual_width'] is num
-          ? (json['visual_width'] as num).toDouble()
-          : null,
-      visualHeight: json['visual_height'] is num
-          ? (json['visual_height'] as num).toDouble()
-          : null,
-      visualOpacity: json['visual_opacity'] is num
-          ? (json['visual_opacity'] as num).toDouble()
-          : null,
-      optionVisuals: optionVisuals,
-    );
-  }
+  factory PaywallMetadata.fromJson(Map<String, dynamic> json) => _$PaywallMetadataFromJson(json);
 
   static PaywallLayout _layoutFromJson(String? value) =>
       PaywallLayout.fromString(value);

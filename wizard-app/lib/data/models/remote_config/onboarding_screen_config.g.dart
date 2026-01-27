@@ -9,8 +9,8 @@ part of 'onboarding_screen_config.dart';
 OnboardingScreenConfig _$OnboardingScreenConfigFromJson(
   Map<String, dynamic> json,
 ) => OnboardingScreenConfig(
-  title: json['title'] as String,
-  description: json['description'] as String,
+  title: OnboardingScreenConfig._multilocaleFromJson(json['title']),
+  description: OnboardingScreenConfig._multilocaleFromJson(json['description']),
   type: OnboardingScreenConfig._typeFromJson(json['type'] as String),
   visual: json['visual'] as String?,
   options: (json['options'] as List<dynamic>?)
@@ -24,7 +24,9 @@ OnboardingScreenConfig _$OnboardingScreenConfigFromJson(
       : AnswerStructureConfig.fromJson(
           json['answer_structure'] as Map<String, dynamic>,
         ),
-  nextButtonText: json['next_button_text'] as String?,
+  nextButtonText: OnboardingScreenConfig._multilocaleFromJson(
+    json['next_button_text'],
+  ),
 );
 
 Map<String, dynamic> _$OnboardingScreenConfigToJson(
@@ -43,7 +45,7 @@ Map<String, dynamic> _$OnboardingScreenConfigToJson(
 OnboardingScreenConfigOption _$OnboardingScreenConfigOptionFromJson(
   Map<String, dynamic> json,
 ) => OnboardingScreenConfigOption(
-  label: json['label'] as String,
+  label: OnboardingScreenConfigOption._multilocaleFromJson(json['label']),
   value: json['value'] as String?,
   metadata: json['metadata'] as Map<String, dynamic>?,
 );

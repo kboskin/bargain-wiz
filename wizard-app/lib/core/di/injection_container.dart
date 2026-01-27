@@ -24,7 +24,6 @@ import 'package:appwizard/presentation/bloc/subscription/subscription_bloc.dart'
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/utils/asset_path_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
 import 'package:appwizard/data/datasources/onboarding_local_datasource.dart';
 import 'package:appwizard/data/network/network_info_impl.dart';
 import 'package:appwizard/data/repositories/onboarding_repository_impl.dart';
@@ -67,9 +66,6 @@ Future<void> init() async {
 
     ..registerLazySingleton<ColorHelper>(ColorHelper.new)
     ..registerLazySingleton<AssetPathHelper>(AssetPathHelper.new)
-    ..registerLazySingleton<MultilocaleTextHelper>(
-      () => const MultilocaleTextHelper(),
-    )
 
   // Services
 

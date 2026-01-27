@@ -7,6 +7,7 @@ import 'package:appwizard/data/models/onboarding_data.dart';
 import 'package:appwizard/core/error/failures.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
 
 import 'onboarding_repository_impl_test.mocks.dart';
 
@@ -28,7 +29,7 @@ void main() {
           OnboardingAnswer(
             screenIndex: 0,
             screenTitle: 'Test Screen',
-            screenType: 'select',
+            screenType: OnboardingScreenType.select,
             answerKey: 'favorite_marketplace',
             answer: 'ebay',
           ),
@@ -219,7 +220,7 @@ void main() {
           OnboardingAnswer(
             screenIndex: 0,
             screenTitle: 'Test',
-            screenType: 'select',
+            screenType: OnboardingScreenType.select,
             answerKey: 'favorite_marketplace',
             answer: 'ebay',
           ),
@@ -252,7 +253,7 @@ void main() {
           OnboardingAnswer(
             screenIndex: 2,
             screenTitle: 'Test',
-            screenType: 'select',
+            screenType: OnboardingScreenType.select,
             answerKey: null,
             answer: 'value',
           ),

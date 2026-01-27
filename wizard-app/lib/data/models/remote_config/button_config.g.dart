@@ -7,7 +7,7 @@ part of 'button_config.dart';
 // **************************************************************************
 
 ButtonConfig _$ButtonConfigFromJson(Map<String, dynamic> json) => ButtonConfig(
-  text: json['text'],
+  text: ButtonConfig._textFromJson(json['text']),
   action: ButtonConfig._actionFromJson(json['action'] as String?),
   buttonColor: json['button_color'] as String?,
   glowColor: json['glow_color'] as String?,

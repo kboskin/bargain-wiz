@@ -1,3 +1,5 @@
+import 'package:appwizard/data/models/multilocale_text.dart';
+
 /// Helper functions for JSON parsing that work with json_annotation
 /// These provide the same validation as the old JsonParser but are compatible with json_serializable
 class JsonHelpers {
@@ -78,8 +80,7 @@ class JsonHelpers {
 
   /// Safely extracts a multilocale text field
   /// Supports both Map<String, String> (multilocale) and String (backward compatibility)
-  /// Returns dynamic to allow both formats
-  static dynamic requireMultilocaleText(
+  static MultilocaleText requireMultilocaleText(
     Map<String, dynamic> json,
     String key,
   ) {
@@ -87,50 +88,18 @@ class JsonHelpers {
     if (value == null) {
       throw FormatException('Required field "$key" is missing');
     }
-    if (value is String) {
-      return value; // Backward compatibility
-    }
-    if (value is Map<String, dynamic>) {
-      // Validate that all values in the map are strings
-      for (final entry in value.entries) {
-        if (entry.value is! String) {
-          throw FormatException(
-            'Field "$key" multilocale map values must be Strings, got ${entry.value.runtimeType} for key "${entry.key}"',
-          );
-        }
-      }
-      return value; // Multilocale format
-    }
-    throw FormatException(
-      'Field "$key" must be a String or Map<String, String>, got ${value.runtimeType}',
-    );
+    return MultilocaleText.fromJson(value);
   }
 
   /// Safely extracts an optional multilocale text field
   /// Supports both Map<String, String> (multilocale) and String (backward compatibility)
-  static dynamic optionalMultilocaleText(
+  static MultilocaleText? optionalMultilocaleText(
     Map<String, dynamic> json,
     String key,
   ) {
     final value = json[key];
     if (value == null) return null;
-    if (value is String) {
-      return value; // Backward compatibility
-    }
-    if (value is Map<String, dynamic>) {
-      // Validate that all values in the map are strings
-      for (final entry in value.entries) {
-        if (entry.value is! String) {
-          throw FormatException(
-            'Field "$key" multilocale map values must be Strings, got ${entry.value.runtimeType} for key "${entry.key}"',
-          );
-        }
-      }
-      return value; // Multilocale format
-    }
-    throw FormatException(
-      'Field "$key" must be a String or Map<String, String> or null, got ${value.runtimeType}',
-    );
+    return MultilocaleText.fromJson(value);
   }
 
   /// Safely extracts a required list field

@@ -26,8 +26,10 @@ SubscriptionProductConfig _$SubscriptionProductConfigFromJson(
   productId: ProductIdConfig.fromJson(
     json['product_id'] as Map<String, dynamic>,
   ),
-  title: json['title'],
-  description: json['description'],
+  title: SubscriptionProductConfig._multilocaleFromJson(json['title']),
+  description: SubscriptionProductConfig._multilocaleFromJson(
+    json['description'],
+  ),
   features: (json['features'] as List<dynamic>)
       .map((e) => e as String)
       .toList(),

@@ -1,6 +1,6 @@
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:flutter/material.dart';
@@ -17,8 +17,7 @@ class ImageListScreenWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final multilocaleTextHelper = di.sl<MultilocaleTextHelper>();
-    final title = multilocaleTextHelper.getText(context, model.title);
+    final title = model.title.get(context);
 
     // Get image spacing from metadata or default to 16
     final imageSpacing = _getImageSpacing();

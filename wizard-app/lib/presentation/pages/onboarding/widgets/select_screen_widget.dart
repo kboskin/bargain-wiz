@@ -7,7 +7,7 @@ import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/utils/asset_path_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/glass_container.dart'; // Added for glass effect
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
@@ -53,15 +53,19 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   final Map<int, AnimationController> _magicControllers = {};
   final Map<int, AnimationController> _waterfallControllers = {}; // Separate controllers for waterfall stars
   final Random _random = Random();
-  AssetPathHelper? _cachedAssetPathHelper;
-  ColorHelper? _cachedColorHelper;
-  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
-  RemoteConfigService? _cachedRemoteConfigService;
-  TextHighlightHelper? _cachedTextHighlightHelper;
+  late final AssetPathHelper _assetPathHelper;
+  late final ColorHelper _colorHelper;
+  late final RemoteConfigService _remoteConfigService;
+  late final TextHighlightHelper _textHighlightHelper;
 
   @override
   void initState() {
     super.initState();
+    _assetPathHelper = di.sl<AssetPathHelper>();
+    _colorHelper = di.sl<ColorHelper>();
+    _remoteConfigService = di.sl<RemoteConfigService>();
+    _textHighlightHelper = TextHighlightHelper(_colorHelper);
+
     final itemCount = widget.model.options.length;
     // Total duration: each item takes 250ms, appearing one by one with smooth transitions
     final totalDuration = itemCount * 250;
@@ -135,13 +139,6 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
 
   @override
   Widget build(BuildContext context) {
-    // Cache DI lookups
-    _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
-    _cachedColorHelper ??= di.sl<ColorHelper>();
-    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
-    _cachedRemoteConfigService ??= di.sl<RemoteConfigService>();
-    _cachedTextHighlightHelper ??= TextHighlightHelper(_cachedColorHelper!);
-    
     if (widget.model.options.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -152,14 +149,14 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Title
-          _buildStyledTitle(context, _cachedMultilocaleTextHelper!.getText(context, widget.model.title)),
+          _buildStyledTitle(context, widget.model.title.get(context)),
           const SizedBox(height: 16),
 
           // Description (optional)
           if (widget.model.description != null) ...[
             Builder(
               builder: (context) {
-                final descriptionText = _cachedMultilocaleTextHelper!.getText(context, widget.model.description);
+                final descriptionText = widget.model.description!.get(context);
                 if (descriptionText.isNotEmpty) {
                   return Column(
                     children: [
@@ -181,10 +178,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
               itemBuilder: (context, index) {
                 final option = widget.model.options[index];
                 // Extract text from multilocale value/label for comparison
-                final optionValueText = option.value != null 
-                    ? _cachedMultilocaleTextHelper!.getText(context, option.value)
-                    : null;
-                final optionLabelText = _cachedMultilocaleTextHelper!.getText(context, option.label);
+                final optionValueText = option.value?.get(context);
+                final optionLabelText = option.label.get(context);
                 final isSelected = widget.selectedValue != null &&
                     (optionValueText == widget.selectedValue ||
                         optionLabelText == widget.selectedValue ||
@@ -212,9 +207,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
                     padding: const EdgeInsets.only(bottom: 12.0),
                     child: Builder(
                       builder: (context) {
-                        final selectedValue = option.value != null
-                            ? _cachedMultilocaleTextHelper!.getText(context, option.value)
-                            : _cachedMultilocaleTextHelper!.getText(context, option.label);
+                        final selectedValue = option.value?.get(context) ?? option.label.get(context);
                         return _buildOptionButton(
                           context,
                           option,
@@ -313,7 +306,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
               ],
               Expanded(
                 child: Text(
-                  _cachedMultilocaleTextHelper!.getText(context, option.label),
+                  option.label.get(context),
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: textColor,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
@@ -350,17 +343,15 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     AnimationController waterfallController,
     OnboardingOption option,
   ) {
-    // Cache DI lookups
-    _cachedAssetPathHelper ??= di.sl<AssetPathHelper>();
-    _cachedColorHelper ??= di.sl<ColorHelper>();
-    
     // Get animation path from option metadata or use default
     final animationPath = _getAnimationPath(option);
-    final normalizedPath = _cachedAssetPathHelper!.normalizeAssetPath(animationPath);
+    final normalizedPath = _assetPathHelper.normalizeAssetPath(animationPath);
     
-    // Get animation color from option metadata (no default - if not provided, no color applied)
-    final animationColorString = option.metadata?.animationColor;
-    final animationColor = _cachedColorHelper!.getColor(animationColorString);
+    // Animation color: option metadata animation_color, else option color, else screen highlight color (was "highlight color", avoid default blue)
+    final animationColorString = option.metadata?.animationColor ??
+        option.metadata?.color ??
+        widget.model.metadata?.highlightColor;
+    final animationColor = _colorHelper.getColor(animationColorString);
     
     // Single star animation (no waterfall)
     Widget animationWidget = Lottie.asset(
@@ -687,13 +678,13 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   Color? _getBrandColor(OnboardingOption option, BuildContext context) {
     // First priority: Check tint_color from option (per-option override)
     if (option.tintColor != null && option.tintColor!.isNotEmpty) {
-      return _cachedColorHelper!.getColor(option.tintColor);
+      return _colorHelper.getColor(option.tintColor);
     }
 
     // Second priority: Use color from metadata
     final colorHex = option.metadata?.color;
     if (colorHex != null && colorHex.isNotEmpty) {
-      return _cachedColorHelper!.getColor(colorHex);
+      return _colorHelper.getColor(colorHex);
     }
 
     // Return null (no color) if not found
@@ -760,11 +751,11 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (int i = 0; i < parts.length; i++) {
       final word = parts[i];
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
@@ -797,13 +788,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     );
   }
 
-  /// Get highlight words from metadata (supports map or list format)
+  /// Get highlight words from metadata
   dynamic _getHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('title')) {
-      return highlightWordsData['title'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.title;
   }
 
   Widget _buildStyledDescription(BuildContext context, String description) {
@@ -814,7 +801,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       description: description,
       highlightWordsData: highlightWordsData,
       highlightColor: highlightColor,
-      textHighlightHelper: _cachedTextHighlightHelper!,
+      textHighlightHelper: _textHighlightHelper,
       onRichTextDescription: _buildRichTextDescription,
     );
   }
@@ -832,10 +819,10 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (final word in parts) {
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
@@ -861,13 +848,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     );
   }
 
-  /// Get description highlight words from metadata (supports map or list format)
+  /// Get description highlight words from metadata
   dynamic _getDescriptionHighlightWords() {
-    final highlightWordsData = widget.model.metadata?.highlightWords;
-    if (highlightWordsData != null && highlightWordsData.containsKey('description')) {
-      return highlightWordsData['description'];
-    }
-    return null;
+    return widget.model.metadata?.highlightWords?.description;
   }
 
   /// Get highlight color from metadata
@@ -875,7 +858,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
   Color? _getHighlightColor() {
     final colorString = widget.model.metadata?.highlightColor;
     if (colorString != null && colorString.isNotEmpty) {
-      return _cachedColorHelper!.getColor(colorString);
+      return _colorHelper.getColor(colorString);
     }
     return null; // No color if not found
   }

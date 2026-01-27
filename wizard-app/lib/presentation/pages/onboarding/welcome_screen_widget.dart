@@ -5,7 +5,7 @@ import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/multilocale_text_helper.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
 import 'package:appwizard/core/widgets/glass_container.dart';
@@ -26,17 +26,18 @@ class WelcomeScreenWidget extends StatefulWidget {
 }
 
 class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
-  ColorHelper? _cachedColorHelper;
-  MultilocaleTextHelper? _cachedMultilocaleTextHelper;
-  TextHighlightHelper? _cachedTextHighlightHelper;
+  late final ColorHelper _colorHelper;
+  late final TextHighlightHelper _textHighlightHelper;
+
+  @override
+  void initState() {
+    super.initState();
+    _colorHelper = di.sl<ColorHelper>();
+    _textHighlightHelper = TextHighlightHelper(_colorHelper);
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Cache ColorHelper lookup
-    _cachedColorHelper ??= di.sl<ColorHelper>();
-    _cachedMultilocaleTextHelper ??= di.sl<MultilocaleTextHelper>();
-    _cachedTextHighlightHelper ??= TextHighlightHelper(_cachedColorHelper!);
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       // Transparent to show global gradient
@@ -99,7 +100,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
         padding: const EdgeInsets.symmetric(horizontal: 40),
         child: GlassContainer(
           blurSigma: glassConfig.blurSigma,
-          color: _cachedColorHelper!.getColor(glassConfig.color) ?? Colors.white,
+          color: _colorHelper.getColor(glassConfig.color) ?? Colors.white,
           opacity: glassConfig.opacity,
           borderRadius: BorderRadius.circular(glassConfig.borderRadius),
           child: SizedBox(
@@ -136,7 +137,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
 
   /// Build title with optional word highlighting
   Widget _buildTitle(BuildContext context) {
-    final titleText = _cachedMultilocaleTextHelper!.getText(context, widget.config.title);
+    final titleText = widget.config.title.get(context);
     final highlightWordsData = widget.config.highlightWords?.title;
 
     if (highlightWordsData == null || 
@@ -177,11 +178,11 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (int i = 0; i < parts.length; i++) {
       final word = parts[i];
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
@@ -216,7 +217,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
 
   /// Build description with optional HTML or word highlighting
   Widget _buildDescription(BuildContext context) {
-    final description = _cachedMultilocaleTextHelper!.getText(context, widget.config.description);
+    final description = widget.config.description.get(context);
     final highlightWordsData = widget.config.highlightWords?.description;
     final highlightColor = _getHighlightColor();
 
@@ -224,7 +225,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       description: description,
       highlightWordsData: highlightWordsData,
       highlightColor: highlightColor,
-      textHighlightHelper: _cachedTextHighlightHelper!,
+      textHighlightHelper: _textHighlightHelper,
       padding: const EdgeInsets.symmetric(horizontal: 40),
       onRichTextDescription: _buildRichTextDescription,
     );
@@ -243,10 +244,10 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     final defaultHighlightColor = _getHighlightColor();
 
     // Parse highlight words using helper
-    final config = _cachedTextHighlightHelper!.parseHighlightWords(highlightWordsData);
+    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (final word in parts) {
-      final result = _cachedTextHighlightHelper!.processWord(word, config, defaultHighlightColor);
+      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 
       textSpans.add(
         TextSpan(
@@ -276,7 +277,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
   /// Returns null if no valid color is found
   Color? _getHighlightColor() {
     if (widget.config.highlightColor != null) {
-      return _cachedColorHelper!.getColor(widget.config.highlightColor!);
+      return _colorHelper.getColor(widget.config.highlightColor!);
     }
     return null; // No color if not found
   }
@@ -301,7 +302,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
             ),
           ),
           child: Text(
-            _cachedMultilocaleTextHelper!.getText(context, widget.config.primaryButtonText),
+            widget.config.primaryButtonText.get(context),
             style: AppTextStyles.buttonText,
           ),
         ),
@@ -320,9 +321,9 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
           text: TextSpan(
             style: TextStyle(color: AppColors.backgroundDark, fontSize: 14),
             children: [
-              TextSpan(text: _cachedMultilocaleTextHelper!.getText(context, action.prefixText)),
+              TextSpan(text: action.prefixText.get(context)),
               TextSpan(
-                text: _cachedMultilocaleTextHelper!.getText(context, action.text),
+                text: action.text.get(context),
                 style: TextStyle(
                   color: AppColors.backgroundDark,
                   decoration: TextDecoration.underline,

@@ -1,5 +1,6 @@
-import 'package:json_annotation/json_annotation.dart';
 import 'package:appwizard/core/theme/button_style.dart';
+import 'package:appwizard/data/models/multilocale_text.dart';
+import 'package:json_annotation/json_annotation.dart';
 
 part 'button_config.g.dart';
 
@@ -7,7 +8,8 @@ part 'button_config.g.dart';
 /// Parses from metadata button configuration
 @JsonSerializable()
 class ButtonConfig {
-  final dynamic text; // Can be multilocale map or string
+  @JsonKey(name: 'text', fromJson: _textFromJson)
+  final dynamic text;
   @JsonKey(name: 'action', fromJson: _actionFromJson, toJson: _actionToJson)
   final ButtonAction action;
   @JsonKey(name: 'button_color')
@@ -35,6 +37,9 @@ class ButtonConfig {
   factory ButtonConfig.fromJson(Map<String, dynamic> json) => _$ButtonConfigFromJson(json);
 
   Map<String, dynamic> toJson() => _$ButtonConfigToJson(this);
+
+  static dynamic _textFromJson(dynamic json) => 
+      json != null ? MultilocaleText.fromJson(json) : null;
 
   static ButtonAction _actionFromJson(String? value) {
     if (value == null) return ButtonAction.continueAction;
