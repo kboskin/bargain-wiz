@@ -196,7 +196,7 @@ A complete onboarding flow with all three types:
     "title": "You're All Set!",
     "description": "Ready to start negotiating better deals!",
     "type": "engagement",
-    "visual": "assets/lottie/success.json",
+    "visual": "assets/lottie/all_done.json",
     "next_button_text": "Get Started"
   }
 ]

@@ -228,27 +228,28 @@
   },
   {
     "title": {
-      "en": "Doing Great!",
-      "es": "¡Vas Muy Bien!"
+      "en": "YOU have fantastic potential",
+      "es": "TÚ tienes un potencial increíble"
     },
     "description": {
-      "en": "Studies reveal: customers who negotiate often pay up to 40% less",
-      "es": "Los estudios revelan: los clientes que negocian suelen pagar hasta un 40% menos"
+      "en": "Studies reveal: when YOU negotiate, you often pay up to 40% less.",
+      "es": "Los estudios muestran: cuando TÚ negocias, sueles pagar hasta un 40% menos."
     },
     "type": "warmup",
-    "visual": "assets/lottie/onboarding_big.json",
+    "visual": "assets/lottie/falling_money.json",
     "metadata": {
       "width": 200,
       "height": 200,
       "side_text": {
-        "en": "Potential settings found!",
-        "es": "¡Configuraciones potenciales encontradas!"
+        "en": "Stop your money from falling away",
+        "es": "Evita que tu dinero se escape"
       },
       "highlight_words": {
-        "description": [
-          "40% less",
-          "40% menos"
-        ]
+        "description": {
+          "Studies reveal": "bold",
+          "YOU": "bold_large",
+          "40% less": "#2E7D32"
+        }
       },
       "highlight_color": "#C47A00",
       "side_text_alignment": "top"
@@ -259,7 +260,11 @@
     "title": "You're All Set!",
     "description": "We're ready to help you negotiate better deals and get the best bargains. Let's start analyzing deals together!",
     "type": "engagement",
-    "visual": "assets/lottie/success.json",
+    "visual": "assets/lottie/all_done.json",
+    "metadata": {
+      "width": 320,
+      "height": 320
+    },
     "next_button_text": "Get Started"
   }
 ]

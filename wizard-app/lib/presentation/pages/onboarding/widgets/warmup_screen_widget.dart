@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
-import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 
 class WarmupScreenWidget extends StatefulWidget {
   final WarmupScreenModel model;
@@ -93,7 +92,38 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
   Widget _buildVisualArea(BuildContext context) {
     final metadata = widget.model.metadata;
     final alignment = metadata?.sideTextAlignment ?? SideTextAlignment.top;
-    
+    final hasSideText = metadata?.sideText != null;
+    final visual = VisualAssetWidget(
+      visualPath: widget.model.visual!,
+      width: metadata?.width ?? 200.0,
+      height: metadata?.height ?? 200.0,
+      fit: BoxFit.contain,
+    );
+
+    // Top/bottom: stack hint and visual in order (no overlap), same as permission screen
+    if (hasSideText && (alignment == SideTextAlignment.top || alignment == SideTextAlignment.bottom)) {
+      if (alignment == SideTextAlignment.top) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildSideHintBlock(context, metadata!),
+            const SizedBox(height: 12),
+            visual,
+          ],
+        );
+      }
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          visual,
+          const SizedBox(height: 12),
+          _buildSideHintBlock(context, metadata!),
+        ],
+      );
+    }
+
+    // Center/baseline: side-by-side row
+    if (!hasSideText) return visual;
     CrossAxisAlignment rowAlignment;
     switch (alignment) {
       case SideTextAlignment.bottom:
@@ -110,67 +140,88 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
         rowAlignment = CrossAxisAlignment.start;
         break;
     }
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: rowAlignment,
       textBaseline: alignment == SideTextAlignment.baseline ? TextBaseline.alphabetic : null,
       children: [
-        if (metadata?.sideText != null)
-          _buildSideText(context, metadata!, alignment),
-        
-        // Visual
-        VisualAssetWidget(
-          visualPath: widget.model.visual!,
-          width: metadata?.width ?? 200.0,
-          height: metadata?.height ?? 200.0,
-          fit: BoxFit.contain,
-        ),
+        _buildSideText(context, metadata!, alignment),
+        visual,
       ],
     );
   }
 
-  Widget _buildSideText(BuildContext context, OnboardingMetadata metadata, SideTextAlignment alignment) {
+  /// Hint block for stacking above/below visual (top/bottom alignment). Same arrow/order logic as permission screen.
+  Widget _buildSideHintBlock(BuildContext context, OnboardingMetadata metadata) {
     final text = metadata.sideText?.get(context) ?? '';
-    
-    IconData arrowIcon;
-    bool iconBelow = true;
-
-    switch (alignment) {
-      case SideTextAlignment.bottom:
-        arrowIcon = Icons.north_east;
-        iconBelow = false;
-        break;
-      case SideTextAlignment.center:
-        arrowIcon = Icons.arrow_forward;
-        iconBelow = true;
-        break;
-      case SideTextAlignment.baseline:
-        arrowIcon = Icons.trending_flat;
-        iconBelow = true;
-        break;
-      case SideTextAlignment.top:
-      default:
-        arrowIcon = Icons.south_east;
-        iconBelow = true;
-        break;
-    }
-
-    final children = <Widget>[
-      if (!iconBelow) 
+    if (text.isEmpty) return const SizedBox.shrink();
+    final alignment = metadata.sideTextAlignment ?? SideTextAlignment.top;
+    final arrowIcon = _arrowIconForAlignment(alignment);
+    final iconBelow = _iconBelowForAlignment(alignment);
+    final content = <Widget>[
+      if (!iconBelow)
         Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
       Text(
         text,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.backgroundDark,
-              fontWeight: FontWeight.bold,
-            ),
+          color: AppColors.backgroundDark,
+          fontWeight: FontWeight.bold,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      if (iconBelow)
+        Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: content,
+    );
+  }
+
+  /// Arrow icon: points toward the visual. Top = down (hint above visual), bottom = up (hint below visual).
+  IconData _arrowIconForAlignment(SideTextAlignment alignment) {
+    switch (alignment) {
+      case SideTextAlignment.top:
+        return Icons.keyboard_arrow_down;
+      case SideTextAlignment.bottom:
+        return Icons.keyboard_arrow_up;
+      case SideTextAlignment.center:
+        return Icons.arrow_forward;
+      case SideTextAlignment.baseline:
+        return Icons.trending_flat;
+      default:
+        return Icons.keyboard_arrow_down;
+    }
+  }
+
+  bool _iconBelowForAlignment(SideTextAlignment alignment) {
+    switch (alignment) {
+      case SideTextAlignment.bottom:
+        return false;
+      default:
+        return true;
+    }
+  }
+
+  Widget _buildSideText(BuildContext context, OnboardingMetadata metadata, SideTextAlignment alignment) {
+    final text = metadata.sideText?.get(context) ?? '';
+    if (text.isEmpty) return const SizedBox.shrink();
+    final arrowIcon = _arrowIconForAlignment(alignment);
+    final iconBelow = _iconBelowForAlignment(alignment);
+    final children = <Widget>[
+      if (!iconBelow)
+        Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
+      Text(
+        text,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.backgroundDark,
+          fontWeight: FontWeight.bold,
+        ),
         textAlign: TextAlign.right,
       ),
       if (iconBelow)
         Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
     ];
-
     return Flexible(
       child: Padding(
         padding: const EdgeInsets.only(right: 12.0, top: 8.0, bottom: 8.0),
@@ -200,6 +251,7 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
   }
 
   /// Build rich text description with highlighted words
+  /// Supports isHighlight (color), isBold (bold + highlight_color), isBoldLarge (bold + slightly bigger).
   Widget _buildRichTextDescription(
     BuildContext context,
     String description,
@@ -208,25 +260,33 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
     final parts = description.split(' ');
     final textSpans = <TextSpan>[];
     final defaultHighlightColor = _getHighlightColor();
+    const double bodySize = 18.0;
+    const double boldLargeSize = 22.0;
 
     final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (final word in parts) {
       final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
+      final useBold = result.isHighlight || result.isBold || result.isBoldLarge;
+      final color = useBold
+          ? (result.wordColor ?? defaultHighlightColor ?? AppColors.backgroundDark)
+          : AppColors.backgroundDark.withValues(alpha: 0.9);
+      final fontSize = result.isBoldLarge ? boldLargeSize : (result.isHighlight ? 20.0 : bodySize);
 
       textSpans.add(
         TextSpan(
           text: '$word ',
-          style: result.isHighlight
+          style: useBold
               ? TextStyle(
-                  color: result.wordColor,
+                  color: color,
                   fontWeight: FontWeight.bold,
-                  fontSize: 20,
+                  fontSize: fontSize,
+                  height: 1.5,
                 )
               : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.backgroundDark.withValues(alpha: 0.9),
+                  color: color,
                   height: 1.5,
-                  fontSize: 18,
+                  fontSize: bodySize,
                 ),
         ),
       );

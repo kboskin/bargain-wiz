@@ -7,11 +7,17 @@ class WordHighlightResult {
     required this.isHighlight,
     this.wordColor,
     this.matchedWord,
+    this.isBold = false,
+    this.isBoldLarge = false,
   });
 
   final bool isHighlight;
   final Color? wordColor;
   final String? matchedWord;
+  /// Bold only (e.g. remote config value "bold"); uses highlight_color.
+  final bool isBold;
+  /// Bold + slightly larger (e.g. remote config value "bold_large").
+  final bool isBoldLarge;
 }
 
 /// Parsed highlight words configuration
@@ -19,10 +25,14 @@ class ParsedHighlightConfig {
   ParsedHighlightConfig({
     required this.words,
     required this.wordColors,
+    this.wordBold = const {},
+    this.wordBoldLarge = const {},
   });
 
   final List<String> words;
   final Map<String, Color> wordColors;
+  final Set<String> wordBold;
+  final Set<String> wordBoldLarge;
 }
 
 /// Helper class for processing text with word highlighting
@@ -33,28 +43,35 @@ class TextHighlightHelper {
   final ColorHelper _colorHelper;
 
   /// Parse highlight words data (supports map or list format)
-  /// Map format: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
+  /// Map format: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4", "Studies reveal": "bold", "YOU": "bold_large"}
   /// List format: ["Bargain", "Wiz"] - backward compatibility
   ParsedHighlightConfig parseHighlightWords(
     final dynamic highlightWordsData,
   ) {
     final wordColors = <String, Color>{};
     final highlightWords = <String>[];
+    final wordBold = <String>{};
+    final wordBoldLarge = <String>{};
 
     if (highlightWordsData is Map) {
-      // Map format: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
-      highlightWordsData.forEach((final word, final colorValue) {
+      highlightWordsData.forEach((final word, final value) {
         final wordStr = word.toString();
         highlightWords.add(wordStr);
-        if (colorValue is String) {
-          final color = _colorHelper.getColor(colorValue);
-          if (color != null) {
-            wordColors[wordStr.toLowerCase()] = color;
+        if (value is String) {
+          final lower = value.toLowerCase().trim();
+          if (lower == 'bold') {
+            wordBold.add(wordStr.toLowerCase());
+          } else if (lower == 'bold_large') {
+            wordBoldLarge.add(wordStr.toLowerCase());
+          } else {
+            final color = _colorHelper.getColor(value);
+            if (color != null) {
+              wordColors[wordStr.toLowerCase()] = color;
+            }
           }
         }
       });
     } else if (highlightWordsData is List) {
-      // List format: ["Bargain", "Wiz"] - backward compatibility
       highlightWords.addAll(
         highlightWordsData.map((final item) => item.toString()),
       );
@@ -63,6 +80,8 @@ class TextHighlightHelper {
     return ParsedHighlightConfig(
       words: highlightWords,
       wordColors: wordColors,
+      wordBold: wordBold,
+      wordBoldLarge: wordBoldLarge,
     );
   }
 
@@ -86,14 +105,19 @@ class TextHighlightHelper {
     }
 
     final isHighlight = matchedWord != null;
+    final key = matchedWord?.toLowerCase();
     final wordColor = isHighlight
-        ? (config.wordColors[matchedWord.toLowerCase()] ?? defaultHighlightColor)
+        ? (config.wordColors[key] ?? defaultHighlightColor)
         : defaultHighlightColor;
+    final isBold = key != null && config.wordBold.contains(key);
+    final isBoldLarge = key != null && config.wordBoldLarge.contains(key);
 
     return WordHighlightResult(
       isHighlight: isHighlight,
       wordColor: wordColor,
       matchedWord: matchedWord,
+      isBold: isBold,
+      isBoldLarge: isBoldLarge,
     );
   }
 }

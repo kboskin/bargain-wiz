@@ -37,14 +37,12 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+  Widget build(final BuildContext context) => Scaffold(
       backgroundColor: Colors.transparent,
       // Transparent to show global gradient
       body: SafeArea(
         child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
+          builder: (final context, final constraints) => SingleChildScrollView(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   minHeight: constraints.maxHeight,
@@ -75,12 +73,10 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
                   ),
                 ),
               ),
-            );
-          },
+            ),
         ),
       ),
     );
-  }
 
   /// Build visual element (Lottie/image or glass container placeholder)
   Widget _buildVisual() {
@@ -123,11 +119,11 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     return Container(
       width: 120,
       height: 120,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.surface,
         shape: BoxShape.circle,
       ),
-      child: Icon(
+      child: const Icon(
         Icons.check_circle_outline,
         color: AppColors.backgroundDark,
         size: 60,
@@ -231,9 +227,8 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     );
   }
 
-  /// Build rich text description with highlighted words (fallback for non-HTML)
-  /// Supports per-word colors via map: {"the": "#FF6B35", "best": "#4ECDC4", "deal": "#FF6B35"}
-  /// Or simple list for backward compatibility: ["the", "best", "deal"]
+  /// Build rich text description with highlighted words (fallback for non-HTML).
+  /// Supports isHighlight (color), isBold ("bold"), isBoldLarge ("bold_large").
   Widget _buildRichTextDescription(
     BuildContext context,
     String description,
@@ -242,26 +237,33 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     final parts = description.split(' ');
     final textSpans = <TextSpan>[];
     final defaultHighlightColor = _getHighlightColor();
+    const double bodySize = 18.0;
+    const double boldLargeSize = 22.0;
 
-    // Parse highlight words using helper
     final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
     for (final word in parts) {
       final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
+      final useBold = result.isHighlight || result.isBold || result.isBoldLarge;
+      final color = useBold
+          ? (result.wordColor ?? defaultHighlightColor ?? AppColors.backgroundDark)
+          : AppColors.backgroundDark.withValues(alpha: 0.9);
+      final fontSize = result.isBoldLarge ? boldLargeSize : (result.isHighlight || result.isBold ? 20.0 : bodySize);
 
       textSpans.add(
         TextSpan(
           text: '$word ',
-          style: result.isHighlight
+          style: useBold
               ? TextStyle(
-                  color: result.wordColor,
+                  color: color,
                   fontWeight: FontWeight.bold,
-                  fontSize: 20,
+                  fontSize: fontSize,
+                  height: 1.5,
                 )
               : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.backgroundDark.withValues(alpha: 0.9),
+                  color: color,
                   height: 1.5,
-                  fontSize: 18,
+                  fontSize: bodySize,
                 ),
         ),
       );

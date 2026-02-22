@@ -220,19 +220,19 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     );
   }
 
-  /// Arrow icon for direction: top/bottom use straight up/down so they align to top and bottom, not corner arrows
+  /// Arrow icon: points toward the visual. Top = down (hint above visual), bottom = up (hint below visual).
   IconData _arrowIconForAlignment(SideTextAlignment alignment) {
     switch (alignment) {
       case SideTextAlignment.top:
-        return Icons.keyboard_arrow_up;
-      case SideTextAlignment.bottom:
         return Icons.keyboard_arrow_down;
+      case SideTextAlignment.bottom:
+        return Icons.keyboard_arrow_up;
       case SideTextAlignment.center:
         return Icons.arrow_forward;
       case SideTextAlignment.baseline:
         return Icons.trending_flat;
       default:
-        return Icons.keyboard_arrow_up;
+        return Icons.keyboard_arrow_down;
     }
   }
 
@@ -337,17 +337,19 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
     );
   }
 
-  /// Build rich text description with highlighted words
+  /// Build rich text description with highlighted words.
+  /// Supports isHighlight (color), isBold ("bold"), isBoldLarge ("bold_large").
   Widget _buildRichTextDescription(
-    BuildContext context,
-    String description,
-    dynamic highlightWordsData,
+    final BuildContext context,
+    final String description,
+    final dynamic highlightWordsData,
   ) {
     final parts = description.split(' ');
     final textSpans = <TextSpan>[];
     final defaultHighlightColor = _getHighlightColor();
+    const double bodySize = 18.0;
+    const double boldLargeSize = 22.0;
 
-    // Parse highlight words using helper
     final config = _textHighlightHelper.parseHighlightWords(
       highlightWordsData,
     );
@@ -358,20 +360,26 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
         config,
         defaultHighlightColor,
       );
+      final useBold = result.isHighlight || result.isBold || result.isBoldLarge;
+      final color = useBold
+          ? (result.wordColor ?? defaultHighlightColor ?? AppColors.backgroundDark)
+          : AppColors.backgroundDark.withValues(alpha: 0.9);
+      final fontSize = result.isBoldLarge ? boldLargeSize : (result.isHighlight || result.isBold ? 20.0 : bodySize);
 
       textSpans.add(
         TextSpan(
           text: '$word ',
-          style: result.isHighlight
+          style: useBold
               ? TextStyle(
-                  color: result.wordColor,
+                  color: color,
                   fontWeight: FontWeight.bold,
-                  fontSize: 20,
+                  fontSize: fontSize,
+                  height: 1.5,
                 )
               : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.backgroundDark.withValues(alpha: 0.9),
+                  color: color,
                   height: 1.5,
-                  fontSize: 18,
+                  fontSize: bodySize,
                 ),
         ),
       );
