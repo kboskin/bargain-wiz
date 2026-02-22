@@ -258,7 +258,7 @@
   },
   {
     "title": "You're All Set!",
-    "description": "We're ready to help you negotiate better deals and get the best bargains. Let's start analyzing deals together!",
+    "description": "Let's go get those deals.",
     "type": "engagement",
     "visual": "assets/lottie/all_done.json",
     "metadata": {
