@@ -348,6 +348,40 @@ Map<String, dynamic> _$PaywallScreenModelToJson(PaywallScreenModel instance) =>
       'show_top_bar': instance.showTopBar,
     };
 
+DataUploadScreenModel _$DataUploadScreenModelFromJson(
+  Map<String, dynamic> json,
+) => DataUploadScreenModel(
+  title: DataUploadScreenModel._multilocaleFromJson(json['title']),
+  description: DataUploadScreenModel._multilocaleFromJson(json['description']),
+  visual: json['visual'] as String?,
+  metadata: json['metadata'] == null
+      ? null
+      : OnboardingMetadata.fromJson(json['metadata'] as Map<String, dynamic>),
+  nextButtonText: DataUploadScreenModel._multilocaleFromJson(
+    json['next_button_text'],
+  ),
+  answerStructure: json['answer_structure'] == null
+      ? null
+      : AnswerStructure.fromJson(
+          json['answer_structure'] as Map<String, dynamic>,
+        ),
+  showTopBar: json['show_top_bar'] as bool? ?? false,
+  showNextButton: json['show_next_button'] as bool? ?? false,
+);
+
+Map<String, dynamic> _$DataUploadScreenModelToJson(
+  DataUploadScreenModel instance,
+) => <String, dynamic>{
+  'title': ?instance.title,
+  'description': ?instance.description,
+  'visual': ?instance.visual,
+  'metadata': ?instance.metadata?.toJson(),
+  'next_button_text': ?instance.nextButtonText,
+  'answer_structure': ?instance.answerStructure?.toJson(),
+  'show_top_bar': instance.showTopBar,
+  'show_next_button': instance.showNextButton,
+};
+
 WarmupScreenModel _$WarmupScreenModelFromJson(Map<String, dynamic> json) =>
     WarmupScreenModel(
       title: WarmupScreenModel._multilocaleFromJson(json['title']),

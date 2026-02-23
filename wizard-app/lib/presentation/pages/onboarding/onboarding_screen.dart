@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,7 +10,9 @@ import 'package:appwizard/core/services/onboarding_service.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
 import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:appwizard/presentation/bloc/onboarding/onboarding_bloc.dart';
@@ -23,7 +27,11 @@ import 'widgets/slider_screen_widget.dart';
 import 'widgets/permission_screen_widget.dart';
 import 'widgets/paywall_screen_widget.dart';
 import 'widgets/warmup_screen_widget.dart';
+import 'widgets/data_upload_screen_widget.dart';
 import 'package:appwizard/presentation/bloc/subscription/subscription_bloc.dart';
+import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
+import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 
 class OnboardingFlowPage extends StatelessWidget {
   const OnboardingFlowPage({super.key});
@@ -194,64 +202,70 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                                   index,
                                   state,
                                   _onboardingBloc,
+                                  currentPageIndex: _currentScreenIndex,
                                 ),
                               );
                             },
                           ),
                         ),
 
-                        // Next/Get Started button (secondary for paywall screens)
-                        Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: Column(
-                            children: [
-                              // Next/Get Started button
-                              SizedBox(
+                        // Bottom button area: always reserve space when we have screens; button hidden only for data_upload
+                        if (state.screens.isNotEmpty &&
+                            _currentScreenIndex < state.screens.length)
+                          SafeArea(
+                            top: false,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                              child: SizedBox(
+                                height: 56,
                                 width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    // Dismiss keyboard
-                                    FocusScope.of(context).unfocus();
-                                    _handleNext(
-                                      state,
-                                      _onboardingBloc,
-                                    );
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: state.screens.isNotEmpty &&
-                                            _currentScreenIndex < state.screens.length &&
-                                            state.screens[_currentScreenIndex] is PaywallScreenModel
-                                        ? Colors.transparent
-                                        : AppColors.backgroundDark,
-                                    foregroundColor: state.screens.isNotEmpty &&
-                                            _currentScreenIndex < state.screens.length &&
-                                            state.screens[_currentScreenIndex] is PaywallScreenModel
-                                        ? AppColors.backgroundDark
-                                        : Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 18,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      side: state.screens.isNotEmpty &&
-                                              _currentScreenIndex < state.screens.length &&
-                                              state.screens[_currentScreenIndex] is PaywallScreenModel
-                                          ? BorderSide(
-                                              color: AppColors.backgroundDark,
-                                              width: 1,
-                                            )
-                                          : BorderSide.none,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _getNextButtonText(context, state),
-                                    style: AppTextStyles.buttonText,
-                                  ),
-                                ),
+                                child: _shouldShowNextButton(
+                                        state.screens[_currentScreenIndex])
+                                    ? ElevatedButton(
+                                        onPressed: () {
+                                          FocusScope.of(context).unfocus();
+                                          _handleNext(
+                                            state,
+                                            _onboardingBloc,
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              state.screens[_currentScreenIndex]
+                                                      is PaywallScreenModel
+                                                  ? Colors.transparent
+                                                  : AppColors.backgroundDark,
+                                          foregroundColor:
+                                              state.screens[_currentScreenIndex]
+                                                      is PaywallScreenModel
+                                                  ? AppColors.backgroundDark
+                                                  : Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 18,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            side: state.screens[
+                                                        _currentScreenIndex]
+                                                    is PaywallScreenModel
+                                                ? BorderSide(
+                                                    color:
+                                                        AppColors.backgroundDark,
+                                                    width: 1,
+                                                  )
+                                                : BorderSide.none,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _getNextButtonText(context, state),
+                                          style: AppTextStyles.buttonText,
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
                       ],
                     ),
 
@@ -319,6 +333,12 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     }
   }
 
+  /// Show the bottom continue/next button. Hidden only for data_upload; all other screens show it.
+  bool _shouldShowNextButton(OnboardingModel screen) {
+    if (screen.type == OnboardingScreenType.dataUpload) return false;
+    return true;
+  }
+
   bool _validateCurrentStep(OnboardingConfigLoaded state) {
     if (_currentScreenIndex >= state.screens.length) {
       return false;
@@ -359,7 +379,87 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       imageList: (m) => _getStandardButtonText(context, m, state),
       referralCode: (m) => _getStandardButtonText(context, m, state),
       warmup: (m) => _getStandardButtonText(context, m, state),
+      dataUpload: (m) => '', // Button hidden for data upload screen
     );
+  }
+
+  Widget _buildDataUploadScreen(
+    DataUploadScreenModel model,
+    OnboardingConfigLoaded state,
+    OnboardingBloc bloc, {
+    required int screenIndex,
+    required int currentPageIndex,
+  }) {
+    final isActive = screenIndex == currentPageIndex;
+    // Config is inline in the onboarding screen (visual + metadata), same as other screens
+    final config = model.toUploadProgressConfig();
+    if (config == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppColors.backgroundDark),
+            const SizedBox(height: 16),
+            Text(
+              'Upload screen not configured (missing visual or metadata in onboarding_screens).',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.backgroundDark,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+    final uploadFuture = isActive
+        ? di.sl<OnboardingRepository>()
+            .uploadUserData(_buildEntityFromState(state))
+            .then((r) => r.fold(
+                  (f) => throw Exception(f.message),
+                  (_) => null,
+                ))
+        : Completer<void>().future;
+    final raw = model.metadata?.raw;
+    final highlightWordsData = raw?['highlight_words']?['description'] ?? model.metadata?.highlightWords?.description;
+    final highlightColorStr = raw?['highlight_color'] ?? model.metadata?.highlightColor;
+    final highlightColor = highlightColorStr != null && highlightColorStr.isNotEmpty
+        ? di.sl<ColorHelper>().getColor(highlightColorStr)
+        : null;
+    return DataUploadScreenWidget(
+      config: config,
+      uploadFuture: uploadFuture,
+      onComplete: () => bloc.add(const SubmitOnboardingRequested()),
+      isActivePage: isActive,
+      highlightWordsData: highlightWordsData,
+      highlightColor: highlightColor,
+    );
+  }
+
+  OnboardingDataEntity _buildEntityFromState(OnboardingConfigLoaded state) {
+    final answers = state.answers.entries.map((entry) {
+      final screenIndex = entry.key;
+      if (screenIndex >= state.screens.length) return null;
+      final screen = state.screens[screenIndex];
+      String title = 'Onboarding';
+      try {
+        final dynamic rawTitle = screen.title;
+        if (rawTitle is Map) {
+          title = rawTitle['en']?.toString() ??
+              rawTitle.values.first?.toString() ??
+              'Onboarding';
+        } else {
+          title = rawTitle?.toString() ?? 'Onboarding';
+        }
+      } catch (_) {}
+      return OnboardingAnswer(
+        screenIndex: screenIndex,
+        screenTitle: title,
+        screenType: screen.type,
+        answerKey: screen.answerStructure?.answerKeyName,
+        answer: entry.value,
+      );
+    }).whereType<OnboardingAnswer>().toList();
+    return OnboardingDataEntity(answers: answers, isCompleted: true);
   }
 
   String _getStandardButtonText(BuildContext context, OnboardingModel screen,
@@ -385,8 +485,9 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     OnboardingModel screen,
     int index,
     OnboardingConfigLoaded state,
-    OnboardingBloc bloc,
-  ) {
+    OnboardingBloc bloc, {
+    required int currentPageIndex,
+  }) {
     if (index >= state.screens.length) {
       return Center(
         child: Text(
@@ -401,6 +502,13 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     // Map each screen type to its dedicated widget using when pattern matching
     return screen.when<Widget>(
       engagement: (model) => EngagementScreenWidget(model: model),
+      dataUpload: (model) => _buildDataUploadScreen(
+            model,
+            state,
+            bloc,
+            screenIndex: index,
+            currentPageIndex: currentPageIndex,
+          ),
       select: (model) => SelectScreenWidget(
         model: model,
         selectedValue: state.answers[index],
@@ -451,7 +559,10 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           );
         },
       ),
-      paywall: (model) => PaywallScreenWidget(model: model),
+      paywall: (model) => PaywallScreenWidget(
+        model: model,
+        onClose: () => _handleNext(state, _onboardingBloc),
+      ),
       warmup: (model) => WarmupScreenWidget(model: model),
       orElse: () => Center(
         child: Text(

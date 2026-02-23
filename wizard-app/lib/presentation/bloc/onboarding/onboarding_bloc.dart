@@ -39,6 +39,16 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
       final screens = allScreens
           .where((s) => s.type != OnboardingScreenType.paywall)
           .toList();
+      _logger.i(
+        'Onboarding screens loaded: ${screens.length} (types: ${screens.map((s) => s.type.name).join(", ")})',
+      );
+      if (screens.isNotEmpty &&
+          screens.last.type != OnboardingScreenType.dataUpload) {
+        _logger.w(
+          'Last screen is ${screens.last.type.name}, not data_upload. '
+          'Upload screen will not appear. Ensure onboarding_screens in Remote Config includes a data_upload entry.',
+        );
+      }
       emit(OnboardingConfigLoaded(
         screens: screens,
         answers: {},

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -22,10 +25,13 @@ import '../../../bloc/subscription/subscription_state.dart';
 /// Fetches paywall config from Remote Config and renders the paywall UI
 class PaywallScreenWidget extends StatefulWidget {
   final PaywallScreenModel model;
+  /// Called when the user taps the close (X) button. In debug mode X is shown and triggers this to reach the post-paywall screen.
+  final VoidCallback? onClose;
 
   const PaywallScreenWidget({
     super.key,
     required this.model,
+    this.onClose,
   });
 
   @override
@@ -38,6 +44,8 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
   List<SubscriptionProduct> _products = [];
   bool _isLoading = true;
   bool _isPurchasing = false;
+  bool _closeButtonVisible = false;
+  Timer? _closeButtonTimer;
   final AppLogger _logger = di.sl<AppLogger>();
   final AnalyticsService _analytics = di.sl<AnalyticsService>();
   final RemoteConfigService _remoteConfigService = di.sl<RemoteConfigService>();
@@ -47,6 +55,28 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
     super.initState();
     _loadPaywallConfig();
     _loadProducts();
+  }
+
+  @override
+  void dispose() {
+    _closeButtonTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleCloseButtonVisibility() {
+    if (_paywallConfig == null || widget.onClose == null) return;
+    final config = _paywallConfig!;
+    if (!config.showClose && !kDebugMode) return;
+
+    final delaySeconds = config.closeButtonDelaySeconds;
+    if (delaySeconds <= 0) {
+      if (mounted) setState(() => _closeButtonVisible = true);
+      return;
+    }
+    _closeButtonTimer?.cancel();
+    _closeButtonTimer = Timer(Duration(milliseconds: (delaySeconds * 1000).round()), () {
+      if (mounted) setState(() => _closeButtonVisible = true);
+    });
   }
 
   @override
@@ -70,6 +100,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
           _paywallConfig = config;
           _selectedOptionId = config.metadata.defaultSelectedOptionId;
         });
+        _scheduleCloseButtonVisibility();
       } else {
         _logger.w('Failed to load paywall config');
       }
@@ -248,9 +279,38 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             _products = state.products;
           }
 
-          return _buildPaywallContent(context);
+          return _buildPaywallWithClose(context);
         },
       ),
+    );
+  }
+
+  /// Wraps paywall content with an optional close (X) button when config.showClose or in debug mode.
+  /// Button appears after close_button_delay_seconds (remotely configurable; default 5s).
+  Widget _buildPaywallWithClose(BuildContext context) {
+    final config = _paywallConfig!;
+    final closeButtonEnabled = widget.onClose != null &&
+        (config.showClose || kDebugMode);
+    final showCloseButton = closeButtonEnabled && _closeButtonVisible;
+
+    final content = _buildPaywallContent(context);
+    if (!showCloseButton) return content;
+
+    return Stack(
+      children: [
+        content,
+        Positioned(
+          top: 16,
+          right: 16,
+          child: IconButton(
+            icon: const Icon(Icons.close, color: AppColors.backgroundDark),
+            onPressed: widget.onClose,
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.backgroundDark.withValues(alpha: 0.1),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

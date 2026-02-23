@@ -75,9 +75,11 @@ class RemoteConfigService {
     }
   }
 
-  /// Get onboarding screens from Remote Config
-  /// Always fetches fresh from Remote Config
-  /// Returns a list of OnboardingModel instances (polymorphic)
+  /// Get onboarding screens from Remote Config (key: [onboarding_screens]).
+  /// The upload progress screen config is inline: the data_upload entry in this
+  /// list has [DataUploadScreenModel.visual] and metadata (texts, text_interval_seconds, progress_ramp_seconds).
+  /// Always fetches fresh from Remote Config.
+  /// Returns a list of OnboardingModel instances (polymorphic).
   Future<List<OnboardingModel>> getOnboardingScreensFresh() async {
     try {
       final remoteConfig = FirebaseService.remoteConfig;
@@ -286,5 +288,6 @@ class RemoteConfigService {
       return null;
     }
   }
+
 }
 

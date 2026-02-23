@@ -20,6 +20,8 @@ PaywallConfig _$PaywallConfigFromJson(
   noteText: PaywallConfig._multilocaleFromJson(json['note_text']),
   showRestore: json['show_restore'] as bool? ?? true,
   showClose: json['show_close'] as bool? ?? false,
+  closeButtonDelaySeconds:
+      (json['close_button_delay_seconds'] as num?)?.toDouble() ?? 5.0,
 );
 
 Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
@@ -27,12 +29,13 @@ Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
       'type': instance.type,
       'title': instance.title,
       'description': instance.description,
-      'options': instance.options.map((e) => e.toJson()).toList(),
-      'metadata': instance.metadata.toJson(),
+      'options': instance.options,
+      'metadata': instance.metadata,
       'next_button_text': instance.nextButtonText,
       'note_text': instance.noteText,
       'show_restore': instance.showRestore,
       'show_close': instance.showClose,
+      'close_button_delay_seconds': instance.closeButtonDelaySeconds,
     };
 
 PaywallOption _$PaywallOptionFromJson(Map<String, dynamic> json) =>
@@ -61,11 +64,7 @@ PaywallMetadata _$PaywallMetadataFromJson(Map<String, dynamic> json) =>
       visualWidth: (json['visual_width'] as num?)?.toDouble(),
       visualHeight: (json['visual_height'] as num?)?.toDouble(),
       visualOpacity: (json['visual_opacity'] as num?)?.toDouble(),
-      optionVisuals:
-          (json['option_visuals'] as Map?)?.map(
-            (k, e) => MapEntry(k.toString(), e.toString()),
-          ) ??
-          {},
+      optionVisuals: Map<String, String>.from(json['option_visuals'] as Map),
     );
 
 Map<String, dynamic> _$PaywallMetadataToJson(PaywallMetadata instance) =>

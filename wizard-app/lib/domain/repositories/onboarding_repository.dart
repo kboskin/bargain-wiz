@@ -15,5 +15,9 @@ abstract class OnboardingRepository {
   
   /// Check if onboarding is completed
   Future<Either<Failure, bool>> isOnboardingCompleted();
+
+  /// Upload all user/onboarding data to the backend.
+  /// Completes when the backend responds (success or failure).
+  Future<Either<Failure, void>> uploadUserData(OnboardingDataEntity data);
 }
 

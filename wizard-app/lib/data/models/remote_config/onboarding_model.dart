@@ -2,6 +2,7 @@ import 'package:appwizard/data/models/multilocale_text.dart';
 import 'package:appwizard/data/models/remote_config/highlight_words_config.dart';
 import 'package:appwizard/data/models/remote_config/json_helpers.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
+import 'package:appwizard/data/models/remote_config/upload_progress_screen_config.dart';
 import 'package:appwizard/data/models/remote_config/validatable_entity.dart';
 import 'package:json_annotation/json_annotation.dart';
 
@@ -196,6 +197,8 @@ abstract class OnboardingModel extends ValidatableEntity {
         return PaywallScreenModel.fromJson(json);
       case OnboardingScreenType.warmup:
         return WarmupScreenModel.fromJson(json);
+      case OnboardingScreenType.dataUpload:
+        return DataUploadScreenModel.fromJson(json);
     }
   }
 
@@ -204,6 +207,9 @@ abstract class OnboardingModel extends ValidatableEntity {
   final dynamic nextButtonText; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
   final AnswerStructure? answerStructure;
   final bool showTopBar; // Controls visibility of progress bar and back button
+
+  /// Whether to show the next/bottom button. From RC "show_next_button"; default true.
+  bool get showNextButton => true;
 
   /// Get the screen type as an enum
   OnboardingScreenType get type;
@@ -806,7 +812,7 @@ class PaywallScreenModel extends OnboardingModel {
     return metadata?.paywallConfigKey ?? metadata?.paywallId ?? 'paywall_config';
   }
 
-  static dynamic _multilocaleFromJson(dynamic json) => 
+  static dynamic _multilocaleFromJson(dynamic json) =>
       json != null ? MultilocaleText.fromJson(json) : null;
 
   @override
@@ -817,6 +823,105 @@ class PaywallScreenModel extends OnboardingModel {
   void validate() {
     super.validate();
     // Paywall screen is just a reference, minimal validation
+  }
+}
+
+/// Model for data upload progress screen (upload user data to backend).
+/// Config is inline like other onboarding screens: [visual] and [metadata]
+/// (texts, text_interval_seconds, progress_ramp_seconds).
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
+class DataUploadScreenModel extends OnboardingModel {
+  DataUploadScreenModel({
+    required this.title,
+    this.description,
+    this.visual,
+    this.metadata,
+    this.nextButtonText,
+    this.answerStructure,
+    this.showTopBar = false,
+    this.showNextButton = false,
+  }) : super(title: title);
+
+  factory DataUploadScreenModel.fromJson(Map<String, dynamic> json) =>
+      _$DataUploadScreenModelFromJson(json);
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
+  /// Lottie asset path (e.g. assets/lottie/pot.json), same pattern as engagement/warmup.
+  final String? visual;
+
+  final OnboardingMetadata? metadata;
+
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'answer_structure')
+  @override
+  final AnswerStructure? answerStructure;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: false)
+  @override
+  final bool showTopBar;
+
+  @JsonKey(name: 'show_next_button', defaultValue: false)
+  @override
+  final bool showNextButton;
+
+  @override
+  OnboardingScreenType get type => OnboardingScreenType.dataUpload;
+
+  /// Builds upload progress config from this screen's inline config (visual + metadata).
+  /// Returns null if lottie asset is missing (screen not fully configured).
+  UploadProgressScreenConfig? toUploadProgressConfig() {
+    final raw = metadata?.raw;
+    final lottieAsset = visual ?? (raw?['lottie_asset'] as String?);
+    if (lottieAsset == null || lottieAsset.isEmpty) return null;
+    final textsRaw = raw?['texts'];
+    final texts = _parseUploadTexts(textsRaw);
+    final textIntervalSeconds =
+        (raw?['text_interval_seconds'] as num?)?.toDouble() ?? 2.5;
+    final progressRampSeconds =
+        (raw?['progress_ramp_seconds'] as num?)?.toDouble() ?? 5.0;
+    return UploadProgressScreenConfig(
+      lottieAsset: lottieAsset,
+      texts: texts,
+      textIntervalSeconds: textIntervalSeconds,
+      progressRampSeconds: progressRampSeconds,
+    );
+  }
+
+  static List<dynamic> _parseUploadTexts(dynamic json) {
+    if (json == null) return [];
+    if (json is! List) return [];
+    return json
+        .map((e) =>
+            e != null && e is Map<String, dynamic>
+                ? MultilocaleText.fromJson(e)
+                : null)
+        .whereType<MultilocaleText>()
+        .toList();
+  }
+
+  static dynamic _multilocaleFromJson(dynamic json) =>
+      json != null ? MultilocaleText.fromJson(json) : null;
+
+  @override
+  Map<String, dynamic> toJson() =>
+      _fixOnboardingModelJsonKeys(_$DataUploadScreenModelToJson(this), type);
+
+  @override
+  void validate() {
+    super.validate();
   }
 }
 
@@ -833,6 +938,7 @@ extension OnboardingModelWhen<T> on OnboardingModel {
     required T Function(ReferralCodeScreenModel) referralCode,
     required T Function(PaywallScreenModel) paywall,
     required T Function(WarmupScreenModel) warmup,
+    required T Function(DataUploadScreenModel) dataUpload,
     T Function()? orElse,
   }) {
     if (this is EngagementScreenModel) {
@@ -851,6 +957,8 @@ extension OnboardingModelWhen<T> on OnboardingModel {
       return paywall(this as PaywallScreenModel);
     } else if (this is WarmupScreenModel) {
       return warmup(this as WarmupScreenModel);
+    } else if (this is DataUploadScreenModel) {
+      return dataUpload(this as DataUploadScreenModel);
     } else {
       return orElse?.call() ?? 
         (throw FormatException('Unknown screen type: ${runtimeType}')) as T;

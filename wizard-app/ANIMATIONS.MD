@@ -12,3 +12,5 @@
 - [Counting Money](https://lottiefiles.com/free-animation/counting-money-np1igIQdLs)
 - [Coin rain](https://lottiefiles.com/free-animation/coin-rain-eLHdJvDnZl)
 
+## Pot
+- [Pot burst](https://lottiefiles.com/free-animation/cauldron-explosion-9BHHY7KXRD)

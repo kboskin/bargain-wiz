@@ -55,6 +55,19 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     }
   }
 
+  @override
+  Future<Either<Failure, void>> uploadUserData(
+      OnboardingDataEntity entity) async {
+    try {
+      // TODO: Replace with real backend API call (e.g. POST /api/onboarding/sync)
+      // Simulate network delay until backend is available
+      await Future<void>.delayed(const Duration(seconds: 3));
+      return const Right(null);
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
+  }
+
   /// Convert entity to data model
   /// Answers are stored by their answerKey from the screen configuration
   OnboardingData _entityToData(OnboardingDataEntity entity) {
