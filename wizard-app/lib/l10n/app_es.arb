@@ -27,6 +27,13 @@
   "privacy": "Privacidad",
   "productNotAvailable": "Producto no disponible. Por favor intenta de nuevo.",
   "subscriptionActivated": "¡Suscripción activada!",
-  "skipForNow": "Omitir por ahora"
+  "skipForNow": "Omitir por ahora",
+  "homeEmptyTitle": "Sube una captura de un chat o biografía",
+  "uploadScreenshot": "Subir captura",
+  "enterTextManually": "Escribir texto manualmente",
+  "getPickupLines": "Obtener frases de ligue",
+  "startNewNegotiation": "Nueva negociación",
+  "profile": "Perfil",
+  "bargainsHistory": "Historial de ofertas"
 }
 

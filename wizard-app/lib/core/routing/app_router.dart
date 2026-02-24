@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -123,6 +124,14 @@ class AppRouter {
           create: (_) => di.sl<SubscriptionBloc>(),
           child: const PaywallPage(),
         ),
+      ),
+      // Main screen route: used by paywall close in debug so close goes to HomePage
+      GoRoute(
+        path: AppRoutes.main,
+        name: AppRoutes.mainName,
+        builder: (context, state) => kDebugMode
+            ? const HomePage()
+            : const WelcomeScreenPage(), // release: redirect to welcome if someone hits /main
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

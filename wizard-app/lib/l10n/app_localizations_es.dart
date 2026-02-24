@@ -95,4 +95,25 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get skipForNow => 'Omitir por ahora';
+
+  @override
+  String get homeEmptyTitle => 'Sube una captura de un chat o biografía';
+
+  @override
+  String get uploadScreenshot => 'Subir captura';
+
+  @override
+  String get enterTextManually => 'Escribir texto manualmente';
+
+  @override
+  String get getPickupLines => 'Obtener frases de ligue';
+
+  @override
+  String get startNewNegotiation => 'Nueva negociación';
+
+  @override
+  String get profile => 'Perfil';
+
+  @override
+  String get bargainsHistory => 'Historial de ofertas';
 }

@@ -116,6 +116,34 @@
   "skipForNow": "Skip for now",
   "@skipForNow": {
     "description": "Button text to skip paywall temporarily"
+  },
+  "homeEmptyTitle": "Upload a screenshot of a chat or bio",
+  "@homeEmptyTitle": {
+    "description": "Main empty state title on home"
+  },
+  "uploadScreenshot": "Upload a Screenshot",
+  "@uploadScreenshot": {
+    "description": "Primary CTA to upload screenshot"
+  },
+  "enterTextManually": "Enter Text Manually",
+  "@enterTextManually": {
+    "description": "Secondary option to type text"
+  },
+  "getPickupLines": "Get Pickup Lines",
+  "@getPickupLines": {
+    "description": "Secondary option for pickup lines"
+  },
+  "startNewNegotiation": "Start new negotiation",
+  "@startNewNegotiation": {
+    "description": "App bar action for new negotiation"
+  },
+  "profile": "Profile",
+  "@profile": {
+    "description": "Drawer item label"
+  },
+  "bargainsHistory": "Bargains History",
+  "@bargainsHistory": {
+    "description": "Drawer item label"
   }
 }
 

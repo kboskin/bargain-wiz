@@ -265,6 +265,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Skip for now'**
   String get skipForNow;
+
+  /// Main empty state title on home
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a screenshot of a chat or bio'**
+  String get homeEmptyTitle;
+
+  /// Primary CTA to upload screenshot
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a Screenshot'**
+  String get uploadScreenshot;
+
+  /// Secondary option to type text
+  ///
+  /// In en, this message translates to:
+  /// **'Enter Text Manually'**
+  String get enterTextManually;
+
+  /// Secondary option for pickup lines
+  ///
+  /// In en, this message translates to:
+  /// **'Get Pickup Lines'**
+  String get getPickupLines;
+
+  /// App bar action for new negotiation
+  ///
+  /// In en, this message translates to:
+  /// **'Start new negotiation'**
+  String get startNewNegotiation;
+
+  /// Drawer item label
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profile;
+
+  /// Drawer item label
+  ///
+  /// In en, this message translates to:
+  /// **'Bargains History'**
+  String get bargainsHistory;
 }
 
 class _AppLocalizationsDelegate

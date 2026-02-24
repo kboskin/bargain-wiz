@@ -93,4 +93,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get skipForNow => 'Skip for now';
+
+  @override
+  String get homeEmptyTitle => 'Upload a screenshot of a chat or bio';
+
+  @override
+  String get uploadScreenshot => 'Upload a Screenshot';
+
+  @override
+  String get enterTextManually => 'Enter Text Manually';
+
+  @override
+  String get getPickupLines => 'Get Pickup Lines';
+
+  @override
+  String get startNewNegotiation => 'Start new negotiation';
+
+  @override
+  String get profile => 'Profile';
+
+  @override
+  String get bargainsHistory => 'Bargains History';
 }

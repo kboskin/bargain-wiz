@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -97,8 +98,9 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
   @override
   Widget build(BuildContext context) {
-    
-    return BlocConsumer<OnboardingBloc, OnboardingState>(
+    final onboardingGradientConfig =
+        di.sl<RemoteConfigService>().getOnboardingConfig()?.background;
+    final content = BlocConsumer<OnboardingBloc, OnboardingState>(
       listener: (context, state) {
         if (state is OnboardingCompleted) {
           context.go(AppRoutes.paywall);
@@ -311,6 +313,29 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
         return const SizedBox.shrink();
       },
     );
+    if (onboardingGradientConfig != null) {
+      final colors = onboardingGradientConfig.colorObjects;
+      final stops = onboardingGradientConfig.stops;
+      if (colors.isNotEmpty) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: colors,
+                  stops: stops.length == colors.length ? stops : null,
+                ),
+              ),
+            ),
+            content,
+          ],
+        );
+      }
+    }
+    return content;
   }
 
   void _handleNext(OnboardingConfigLoaded state, OnboardingBloc bloc) {
@@ -561,7 +586,9 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       ),
       paywall: (model) => PaywallScreenWidget(
         model: model,
-        onClose: () => _handleNext(state, _onboardingBloc),
+        onClose: kDebugMode
+            ? () => context.go(AppRoutes.main)
+            : () => _handleNext(state, _onboardingBloc),
       ),
       warmup: (model) => WarmupScreenWidget(model: model),
       orElse: () => Center(

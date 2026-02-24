@@ -4,8 +4,10 @@ import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/data/models/remote_config/gradient_background_config.dart';
+import 'package:appwizard/data/models/remote_config/onboarding_config.dart';
 import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
 import 'package:appwizard/data/models/remote_config/subscription_config.dart';
+import 'package:appwizard/data/models/remote_config/main_page_config.dart';
 import 'package:appwizard/data/models/remote_config/paywall_config.dart';
 
 /// Service for managing Firebase Remote Config values
@@ -165,27 +167,33 @@ class RemoteConfigService {
     }
   }
 
-  /// Get gradient background configuration from Remote Config
-  /// Returns null if not configured
-  GradientBackgroundConfig? getGradientBackgroundConfig() {
+  /// Get onboarding config from Remote Config (key: [onboarding_config]).
+  /// Contains e.g. background gradient for onboarding flow.
+  /// Returns null if not configured.
+  OnboardingConfig? getOnboardingConfig() {
     try {
-      final jsonString = getString('gradient_background_config');
+      final jsonString = getString('onboarding_config');
       if (jsonString.isEmpty) {
         return null;
       }
 
       final json = jsonDecode(jsonString);
       if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid gradient_background_config format');
+        _logger.w('Invalid onboarding_config format');
         return null;
       }
 
-      return GradientBackgroundConfig.fromJson(json);
+      return OnboardingConfig.fromJson(json);
     } catch (e, stackTrace) {
-      _logger.e('Error parsing gradient background config', e, stackTrace);
+      _logger.e('Error parsing onboarding config', e, stackTrace);
       return null;
     }
   }
+
+  /// Main-screen gradient from [main_page_config].background.
+  /// Used by root PastelGradientBackground.
+  GradientBackgroundConfig? getGradientBackgroundConfig() =>
+      getMainPageConfig()?.background;
 
   /// Get welcome screen configuration from Remote Config
   /// Returns null if not configured
@@ -289,5 +297,24 @@ class RemoteConfigService {
     }
   }
 
+  /// Get main page configuration from Remote Config (key: [main_page_config]).
+  /// Button texts and center visual (path + metadata) for the home screen.
+  MainPageConfig? getMainPageConfig() {
+    try {
+      final jsonString = getString('main_page_config');
+      if (jsonString.isEmpty) {
+        return null;
+      }
+      final json = jsonDecode(jsonString);
+      if (json is! Map<String, dynamic>) {
+        _logger.w('Invalid main_page_config format');
+        return null;
+      }
+      return MainPageConfig.fromJson(json);
+    } catch (e, stackTrace) {
+      _logger.e('Error parsing main page config', e, stackTrace);
+      return null;
+    }
+  }
 }
 

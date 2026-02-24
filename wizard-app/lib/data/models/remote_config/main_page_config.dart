@@ -1,0 +1,78 @@
+import 'package:appwizard/data/models/multilocale_text.dart';
+import 'package:appwizard/data/models/remote_config/gradient_background_config.dart';
+import 'package:json_annotation/json_annotation.dart';
+
+part 'main_page_config.g.dart';
+
+/// Remote config for the main (home) page.
+/// RC key: [main_page_config].
+@JsonSerializable()
+class MainPageConfig {
+  MainPageConfig({
+    this.headerText,
+    this.uploadButtonText,
+    this.enterTextButtonText,
+    this.getPickupLinesButtonText,
+    this.centerVisual,
+    this.showBottomStripe = true,
+    this.stripeOpacity,
+    this.background,
+  });
+
+  /// Text between the top view (app bar) and the center image. Part of main_page_config.
+  @JsonKey(name: 'header_text', fromJson: _multilocaleFromJson)
+  final dynamic headerText;
+
+  @JsonKey(name: 'upload_button_text', fromJson: _multilocaleFromJson)
+  final dynamic uploadButtonText;
+
+  @JsonKey(name: 'enter_text_button_text', fromJson: _multilocaleFromJson)
+  final dynamic enterTextButtonText;
+
+  @JsonKey(name: 'get_pickup_lines_button_text', fromJson: _multilocaleFromJson)
+  final dynamic getPickupLinesButtonText;
+
+  @JsonKey(name: 'center_visual')
+  final MainPageCenterVisual? centerVisual;
+
+  /// Whether to show the thin stripe below the app bar. Default true.
+  @JsonKey(name: 'show_bottom_stripe')
+  final bool showBottomStripe;
+
+  /// Opacity of the stripe (0.0–1.0). If null, uses 0.12.
+  @JsonKey(name: 'stripe_opacity')
+  final double? stripeOpacity;
+
+  /// Gradient background for the main screen. If null, app uses default gradient.
+  @JsonKey(name: 'background')
+  final GradientBackgroundConfig? background;
+
+  static dynamic _multilocaleFromJson(dynamic json) =>
+      json != null ? MultilocaleText.fromJson(json) : null;
+
+  factory MainPageConfig.fromJson(Map<String, dynamic> json) =>
+      _$MainPageConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$MainPageConfigToJson(this);
+}
+
+/// Center visual: path + optional width/height (same approach as onboarding).
+@JsonSerializable()
+class MainPageCenterVisual {
+  MainPageCenterVisual({
+    required this.visual,
+    this.width,
+    this.height,
+  });
+
+  /// Asset path or URL (Lottie, SVG, or image) – rendered via VisualAssetWidget.
+  final String visual;
+
+  final double? width;
+  final double? height;
+
+  factory MainPageCenterVisual.fromJson(Map<String, dynamic> json) =>
+      _$MainPageCenterVisualFromJson(json);
+
+  Map<String, dynamic> toJson() => _$MainPageCenterVisualToJson(this);
+}
