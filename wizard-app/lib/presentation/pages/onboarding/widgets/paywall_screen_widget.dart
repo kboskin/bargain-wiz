@@ -132,6 +132,7 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
         (p) => p.tier == option.tierEnum,
       );
     } catch (e) {
+      _logger.w('Product not found for option tier ${option.tier}: $e');
       return null;
     }
   }

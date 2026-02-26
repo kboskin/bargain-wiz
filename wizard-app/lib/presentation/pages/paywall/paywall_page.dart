@@ -96,6 +96,7 @@ class _PaywallPageState extends State<PaywallPage> {
       );
       return product.productId;
     } catch (e) {
+      _logger.w('Product not found for tier $tier: $e');
       return null;
     }
   }
@@ -106,6 +107,7 @@ class _PaywallPageState extends State<PaywallPage> {
         (p) => p.tier == option.tierEnum,
       );
     } catch (e) {
+      _logger.w('Product not found for option tier ${option.tier}: $e');
       return null;
     }
   }

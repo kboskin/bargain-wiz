@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 
+import 'package:appwizard/core/utils/app_logger.dart';
+
 /// Utility class for parsing and converting color strings
 class ColorHelper {
+  ColorHelper([this._logger]);
+
+  final AppLogger? _logger;
+
   /// Parse color from hex string with optional opacity/alpha channel
   /// Supports formats:
   /// - 6 characters: "#FFC107" or "FFC107" (RGB, full opacity)
   /// - 8 characters: "#80FFC107" or "80FFC107" (ARGB with alpha channel)
-  /// 
+  ///
   /// Returns the parsed Color, or null if parsing fails
   Color? parseHexColor(String colorString) {
     // Remove # if present and trim whitespace
@@ -23,6 +29,7 @@ class ColorHelper {
       final fullHex = hexCode.length == 6 ? 'FF$hexCode' : hexCode;
       return Color(int.parse(fullHex, radix: 16));
     } catch (e) {
+      _logger?.w('Failed to parse hex color "$colorString": $e');
       return null;
     }
   }

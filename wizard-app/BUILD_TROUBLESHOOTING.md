@@ -91,6 +91,31 @@ minSdkVersion 16 cannot be smaller than version 21
 ```
 **Solution**: Check `android/app/build.gradle.kts` minSdk setting
 
+### Image picker / gallery: "channel-error" (Pigeon)
+
+If you see:
+
+```
+PlatformException(channel-error, Unable to establish connection on channel: "dev.flutter.pigeon.image_picker_android.ImagePickerApi.pickImages"., null, null)
+```
+
+the native plugin channel isn’t connected. Try, in order:
+
+1. **Full cold run (most common fix)**  
+   Hot reload/restart can leave the plugin channel broken. Fully stop the app, then run again:
+   ```bash
+   flutter clean
+   flutter pub get
+   flutter run --flavor dev
+   ```
+   Then **stop the app completely** and start it again with the Run button (no hot reload).
+
+2. **Emulator API level**  
+   Use an emulator with API 33 or 34. Older ones (e.g. API 30) can trigger this with some plugins.
+
+3. **Release build**  
+   If the error only happens in release, add the ProGuard rules from `android/app/proguard-rules.pro` (see that file) and ensure release doesn’t strip plugin classes.
+
 ### Verification Commands
 
 ```bash

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/presentation/pages/onboarding/welcome_screen_widget.dart';
 
@@ -33,7 +34,8 @@ class _WelcomeScreenPageState extends State<WelcomeScreenPage> {
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      di.sl<AppLogger>().e('Error loading welcome screen config', e, stackTrace);
       if (mounted) {
         setState(() {
           _isLoading = false;

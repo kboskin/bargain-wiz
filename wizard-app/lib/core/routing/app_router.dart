@@ -6,6 +6,7 @@ import '../../presentation/bloc/auth/auth_bloc.dart';
 import '../../presentation/bloc/auth/auth_state.dart';
 import '../../presentation/pages/home/home_page.dart';
 import '../../presentation/pages/onboarding/onboarding_screen.dart';
+import '../../presentation/pages/start_with_text/start_with_text_page.dart';
 import '../../presentation/pages/onboarding/welcome_screen_page.dart';
 import '../../presentation/pages/paywall/paywall_page.dart';
 import '../../presentation/bloc/subscription/subscription_bloc.dart';
@@ -124,6 +125,11 @@ class AppRouter {
           create: (_) => di.sl<SubscriptionBloc>(),
           child: const PaywallPage(),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.startWithText,
+        name: AppRoutes.startWithTextName,
+        builder: (context, state) => const StartWithTextPage(),
       ),
       // Main screen route: used by paywall close in debug so close goes to HomePage
       GoRoute(

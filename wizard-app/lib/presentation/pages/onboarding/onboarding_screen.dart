@@ -477,7 +477,9 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
         } else {
           title = rawTitle?.toString() ?? 'Onboarding';
         }
-      } catch (_) {}
+      } catch (e) {
+        di.sl<AppLogger>().w('Error parsing onboarding screen title: $e');
+      }
       return OnboardingAnswer(
         screenIndex: screenIndex,
         screenTitle: title,

@@ -1,5 +1,6 @@
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/firebase_service.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
@@ -55,8 +56,8 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
           });
         }
       }
-    } catch (e) {
-      // Ignore errors when checking status
+    } catch (e, stackTrace) {
+      di.sl<AppLogger>().e('Error checking notification permission status', e, stackTrace);
     }
   }
 
@@ -80,7 +81,8 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
           widget.onContinue?.call();
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      di.sl<AppLogger>().e('Error requesting notification permission', e, stackTrace);
       if (mounted) {
         setState(() {
           _isRequesting = false;

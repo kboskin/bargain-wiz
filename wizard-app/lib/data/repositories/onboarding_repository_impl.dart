@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import 'package:appwizard/core/error/failures.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
 import 'package:appwizard/data/datasources/onboarding_local_datasource.dart';
@@ -9,8 +10,9 @@ import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dar
 /// Implementation of OnboardingRepository
 class OnboardingRepositoryImpl implements OnboardingRepository {
   final OnboardingLocalDataSource localDataSource;
+  final AppLogger _logger;
 
-  OnboardingRepositoryImpl(this.localDataSource);
+  OnboardingRepositoryImpl(this.localDataSource, this._logger);
 
   @override
   Future<Either<Failure, void>> saveOnboardingData(OnboardingDataEntity entity) async {
@@ -19,7 +21,8 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       final data = _entityToData(entity);
       await localDataSource.saveOnboardingData(data);
       return const Right(null);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Error saving onboarding data', e, stackTrace);
       return Left(CacheFailure(e.toString()));
     }
   }
@@ -30,7 +33,8 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       final data = await localDataSource.getOnboardingData();
       if (data == null) return const Right(null);
       return Right(_dataToEntity(data));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Error loading onboarding data', e, stackTrace);
       return Left(CacheFailure(e.toString()));
     }
   }
@@ -40,7 +44,8 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     try {
       await localDataSource.clearOnboardingData();
       return const Right(null);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Error clearing onboarding data', e, stackTrace);
       return Left(CacheFailure(e.toString()));
     }
   }
@@ -50,7 +55,8 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     try {
       final data = await localDataSource.getOnboardingData();
       return Right(data?.isCompleted ?? false);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Error checking onboarding completed', e, stackTrace);
       return Left(CacheFailure(e.toString()));
     }
   }
@@ -63,7 +69,8 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       // Simulate network delay until backend is available
       await Future<void>.delayed(const Duration(seconds: 3));
       return const Right(null);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Error uploading onboarding user data', e, stackTrace);
       return Left(CacheFailure(e.toString()));
     }
   }
@@ -124,7 +131,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
           ));
         }
       } catch (e) {
-        // Skip invalid entries
+        _logger.w('Skipping invalid onboarding answer entry: $e');
         continue;
       }
     }

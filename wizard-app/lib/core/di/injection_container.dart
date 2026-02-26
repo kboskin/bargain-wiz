@@ -64,7 +64,7 @@ Future<void> init() async {
 
   // Utils
 
-    ..registerLazySingleton<ColorHelper>(ColorHelper.new)
+    ..registerLazySingleton<ColorHelper>(() => ColorHelper(sl<AppLogger>()))
     ..registerLazySingleton<AssetPathHelper>(AssetPathHelper.new)
 
   // Services
@@ -93,7 +93,7 @@ Future<void> init() async {
     )
     // Repositories
     ..registerLazySingleton<OnboardingRepository>(
-      () => OnboardingRepositoryImpl(sl<OnboardingLocalDataSource>()),
+      () => OnboardingRepositoryImpl(sl<OnboardingLocalDataSource>(), sl<AppLogger>()),
     );
 
   // Subscription Services

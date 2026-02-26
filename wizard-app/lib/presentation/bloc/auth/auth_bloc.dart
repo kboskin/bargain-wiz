@@ -81,7 +81,8 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
         password: event.password,
       );
       emit(AuthAuthenticated(credential.user!));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Email sign in failed', e, stackTrace);
       emit(AuthError(e.toString()));
     }
   }
@@ -97,7 +98,8 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
         password: event.password,
       );
       emit(AuthAuthenticated(credential.user!));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Email sign up failed', e, stackTrace);
       emit(AuthError(e.toString()));
     }
   }
@@ -110,7 +112,8 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
     try {
       final credential = await _authService.signInWithGoogle();
       emit(AuthAuthenticated(credential.user!));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Google sign in failed', e, stackTrace);
       emit(AuthError(e.toString()));
     }
   }
@@ -123,7 +126,8 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
     try {
       final credential = await _authService.signInWithApple();
       emit(AuthAuthenticated(credential.user!));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Apple sign in failed', e, stackTrace);
       emit(AuthError(e.toString()));
     }
   }
@@ -136,7 +140,8 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
     try {
       await _authService.signOut();
       emit(const AuthUnauthenticated());
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Sign out failed', e, stackTrace);
       emit(AuthError(e.toString()));
     }
   }
@@ -148,7 +153,8 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
     try {
       await _authService.sendPasswordResetEmail(event.email);
       // Don't change state, just show success message
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.e('Password reset failed', e, stackTrace);
       emit(AuthError(e.toString()));
     }
   }

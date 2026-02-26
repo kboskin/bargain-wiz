@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/button_style.dart';
-import 'package:appwizard/core/utils/color_helper.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/data/models/remote_config/button_config.dart';
 
@@ -101,7 +101,7 @@ class _RCMetadataButtonState extends State<RCMetadataButton>
           final fullHex = hexCode.length == 6 ? 'FF$hexCode' : hexCode;
           buttonColor = Color(int.parse(fullHex, radix: 16));
         } catch (e) {
-          // If parsing fails, buttonColor remains null (no color applied)
+          di.sl<AppLogger>().w('Failed to parse button color hex "$hexCode": $e');
         }
       }
     }
@@ -113,7 +113,7 @@ class _RCMetadataButtonState extends State<RCMetadataButton>
           final fullHex = hexCode.length == 6 ? 'FF$hexCode' : hexCode;
           glowColor = Color(int.parse(fullHex, radix: 16));
         } catch (e) {
-          // If parsing fails, glowColor remains null (no glow applied)
+          di.sl<AppLogger>().w('Failed to parse glow color hex "$hexCode": $e');
         }
       }
     }

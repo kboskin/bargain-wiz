@@ -13,6 +13,14 @@ class MainPageConfig {
     this.uploadButtonText,
     this.enterTextButtonText,
     this.getPickupLinesButtonText,
+    this.photoPermissionDeniedTitle,
+    this.photoPermissionDeniedMessage,
+    this.photoPermissionSnackbar,
+    this.openSettingsButtonText,
+    this.cancelButtonText,
+    this.galleryUnavailableMessage,
+    this.galleryErrorMessage,
+    this.galleryErrorTryAgainMessage,
     this.centerVisual,
     this.stripeOpacity,
     this.background,
@@ -30,6 +38,38 @@ class MainPageConfig {
 
   @JsonKey(name: 'get_pickup_lines_button_text', fromJson: _multilocaleFromJson)
   final dynamic getPickupLinesButtonText;
+
+  /// Title for the dialog when photo permission was permanently denied.
+  @JsonKey(name: 'photo_permission_denied_title', fromJson: _multilocaleFromJson)
+  final dynamic photoPermissionDeniedTitle;
+
+  /// Message for the dialog when photo permission was permanently denied.
+  @JsonKey(name: 'photo_permission_denied_message', fromJson: _multilocaleFromJson)
+  final dynamic photoPermissionDeniedMessage;
+
+  /// SnackBar text when photo permission is denied (not permanently).
+  @JsonKey(name: 'photo_permission_snackbar', fromJson: _multilocaleFromJson)
+  final dynamic photoPermissionSnackbar;
+
+  /// Label for the "Open Settings" button in the permission-denied dialog.
+  @JsonKey(name: 'open_settings_button_text', fromJson: _multilocaleFromJson)
+  final dynamic openSettingsButtonText;
+
+  /// Label for the Cancel button in dialogs (e.g. permission-denied).
+  @JsonKey(name: 'cancel_button_text', fromJson: _multilocaleFromJson)
+  final dynamic cancelButtonText;
+
+  /// Shown when gallery picker fails with channel-error (e.g. after hot reload).
+  @JsonKey(name: 'gallery_unavailable_message', fromJson: _multilocaleFromJson)
+  final dynamic galleryUnavailableMessage;
+
+  /// Fallback when gallery picker fails with a platform error (no message).
+  @JsonKey(name: 'gallery_error_message', fromJson: _multilocaleFromJson)
+  final dynamic galleryErrorMessage;
+
+  /// Shown when gallery picker fails with an unexpected error.
+  @JsonKey(name: 'gallery_error_try_again_message', fromJson: _multilocaleFromJson)
+  final dynamic galleryErrorTryAgainMessage;
 
   @JsonKey(name: 'center_visual')
   final MainPageCenterVisual? centerVisual;
