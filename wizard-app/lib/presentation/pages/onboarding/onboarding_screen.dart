@@ -29,6 +29,7 @@ import 'widgets/permission_screen_widget.dart';
 import 'widgets/paywall_screen_widget.dart';
 import 'widgets/warmup_screen_widget.dart';
 import 'widgets/data_upload_screen_widget.dart';
+import 'widgets/create_account_screen_widget.dart';
 import 'package:appwizard/presentation/bloc/subscription/subscription_bloc.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
@@ -182,10 +183,9 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                     // Main content (PageView and bottom controls)
                     Column(
                       children: [
-                        // Spacer for top bar (only if current screen shows top bar)
+                        // Spacer for top bar (always reserve space; bar is invisible when showTopBar is false)
                         if (state.screens.isNotEmpty &&
-                            _currentScreenIndex < state.screens.length &&
-                            state.screens[_currentScreenIndex].showTopBar)
+                            _currentScreenIndex < state.screens.length)
                           const SizedBox(height: 48 + 32), // Top bar height + padding
 
                         // PageView for onboarding screens
@@ -271,17 +271,18 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                       ],
                     ),
 
-                    // Top bar positioned absolutely (controlled by showTopBar and screen index)
+                    // Top bar positioned absolutely; invisible (opacity 0) when showTopBar is false
                     if (state.screens.isNotEmpty &&
-                        _currentScreenIndex < state.screens.length &&
-                        state.screens[_currentScreenIndex].showTopBar)
+                        _currentScreenIndex < state.screens.length)
                       Positioned(
                         top: 0,
                         left: 0,
                         right: 0,
                         child: RepaintBoundary(
                           child: AnimatedOpacity(
-                            opacity: _currentScreenIndex > 0 ? 1.0 : 0.0,
+                            opacity: state.screens[_currentScreenIndex].showTopBar
+                                ? (_currentScreenIndex > 0 ? 1.0 : 0.0)
+                                : 0.0,
                             duration: const Duration(milliseconds: 300),
                             curve: Curves.easeInOut,
                             child: _OnboardingTopBar(
@@ -405,6 +406,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       referralCode: (m) => _getStandardButtonText(context, m, state),
       warmup: (m) => _getStandardButtonText(context, m, state),
       dataUpload: (m) => '', // Button hidden for data upload screen
+      createAccount: (m) => _getStandardButtonText(context, m, state),
     );
   }
 
@@ -591,6 +593,10 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
             : () => _handleNext(state, _onboardingBloc),
       ),
       warmup: (model) => WarmupScreenWidget(model: model),
+      createAccount: (model) => CreateAccountScreenWidget(
+        model: model,
+        onContinue: () => _handleNext(state, _onboardingBloc),
+      ),
       orElse: () => Center(
         child: Text(
           'Unknown screen type: ${screen.runtimeType}',

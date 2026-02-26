@@ -269,25 +269,25 @@ abstract class AppLocalizations {
   /// Main empty state title on home
   ///
   /// In en, this message translates to:
-  /// **'Upload a screenshot of a chat or bio'**
+  /// **'Add a product or negotiation screenshot'**
   String get homeEmptyTitle;
 
-  /// Primary CTA to upload screenshot
+  /// Primary CTA to open gallery and pick screenshot
   ///
   /// In en, this message translates to:
-  /// **'Upload a Screenshot'**
+  /// **'Upload Product or Chat'**
   String get uploadScreenshot;
 
   /// Secondary option to type text
   ///
   /// In en, this message translates to:
-  /// **'Enter Text Manually'**
+  /// **'Start with text'**
   String get enterTextManually;
 
-  /// Secondary option for pickup lines
+  /// Secondary option for deal lines
   ///
   /// In en, this message translates to:
-  /// **'Get Pickup Lines'**
+  /// **'Generate Deal Lines'**
   String get getPickupLines;
 
   /// App bar action for new negotiation
@@ -307,6 +307,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bargains History'**
   String get bargainsHistory;
+
+  /// Message shown when Google or Apple sign-in fails
+  ///
+  /// In en, this message translates to:
+  /// **'Uh, something went wrong. Please try again.'**
+  String get signInError;
 }
 
 class _AppLocalizationsDelegate

@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
@@ -33,20 +34,18 @@ class HomePage extends StatelessWidget {
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        bottom: mainPageConfig.showBottomStripe
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(1),
-                child: Container(
-                  height: 1,
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
-                  decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(
-                      alpha: mainPageConfig.stripeOpacity ?? 0.12,
-                    ),
-                  ),
-                ),
-              )
-            : null,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            decoration: BoxDecoration(
+              color: AppColors.textPrimary.withValues(
+                alpha: mainPageConfig?.stripeOpacity ?? 0.12,
+              ),
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -64,6 +63,15 @@ class HomePage extends StatelessWidget {
 
   void _onStartNewNegotiation(BuildContext context) {
     // TODO: Navigate to new negotiation / upload flow
+  }
+}
+
+Future<void> _pickImageFromGallery(BuildContext context) async {
+  final picker = ImagePicker();
+  final XFile? file = await picker.pickImage(source: ImageSource.gallery);
+  if (!context.mounted) return;
+  if (file != null) {
+    // TODO: use the picked screenshot (e.g. navigate to analysis flow)
   }
 }
 
@@ -258,9 +266,7 @@ class _EmptyStateContent extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // TODO: Open upload screenshot flow
-                  },
+                  onPressed: () => _pickImageFromGallery(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.backgroundDark,
                     foregroundColor: Colors.white,

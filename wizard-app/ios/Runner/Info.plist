@@ -47,6 +47,8 @@
 	<true/>
 	<key>UIStatusBarHidden</key>
 	<false/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose a product or chat screenshot to analyze.</string>
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>

@@ -97,16 +97,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get skipForNow => 'Omitir por ahora';
 
   @override
-  String get homeEmptyTitle => 'Sube una captura de un chat o biografía';
+  String get homeEmptyTitle => 'Sube una captura de producto o negociación';
 
   @override
-  String get uploadScreenshot => 'Subir captura';
+  String get uploadScreenshot => 'Subir producto o chat';
 
   @override
-  String get enterTextManually => 'Escribir texto manualmente';
+  String get enterTextManually => 'Empezar con texto';
 
   @override
-  String get getPickupLines => 'Obtener frases de ligue';
+  String get getPickupLines => 'Generar líneas de oferta';
 
   @override
   String get startNewNegotiation => 'Nueva negociación';
@@ -116,4 +116,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get bargainsHistory => 'Historial de ofertas';
+
+  @override
+  String get signInError => 'Algo salió mal. Por favor intenta de nuevo.';
 }

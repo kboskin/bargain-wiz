@@ -14,7 +14,6 @@ class MainPageConfig {
     this.enterTextButtonText,
     this.getPickupLinesButtonText,
     this.centerVisual,
-    this.showBottomStripe = true,
     this.stripeOpacity,
     this.background,
   });
@@ -35,11 +34,7 @@ class MainPageConfig {
   @JsonKey(name: 'center_visual')
   final MainPageCenterVisual? centerVisual;
 
-  /// Whether to show the thin stripe below the app bar. Default true.
-  @JsonKey(name: 'show_bottom_stripe')
-  final bool showBottomStripe;
-
-  /// Opacity of the stripe (0.0–1.0). If null, uses 0.12.
+  /// Opacity of the stripe (0.0–1.0). If null, uses 0.12. Use 0 to hide the stripe.
   @JsonKey(name: 'stripe_opacity')
   final double? stripeOpacity;
 

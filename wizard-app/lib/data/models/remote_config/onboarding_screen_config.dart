@@ -15,7 +15,8 @@ enum OnboardingScreenType {
   referralCode,
   paywall,
   warmup,
-  dataUpload;
+  dataUpload,
+  createAccount;
 
   static OnboardingScreenType fromString(String value) {
     switch (value.toLowerCase()) {
@@ -40,6 +41,9 @@ enum OnboardingScreenType {
       case 'dataupload':
       case 'data_upload':
         return OnboardingScreenType.dataUpload;
+      case 'createaccount':
+      case 'create_account':
+        return OnboardingScreenType.createAccount;
       default:
         return OnboardingScreenType.engagement;
     }

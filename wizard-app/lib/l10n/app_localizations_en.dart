@@ -95,16 +95,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skipForNow => 'Skip for now';
 
   @override
-  String get homeEmptyTitle => 'Upload a screenshot of a chat or bio';
+  String get homeEmptyTitle => 'Add a product or negotiation screenshot';
 
   @override
-  String get uploadScreenshot => 'Upload a Screenshot';
+  String get uploadScreenshot => 'Upload Product or Chat';
 
   @override
-  String get enterTextManually => 'Enter Text Manually';
+  String get enterTextManually => 'Start with text';
 
   @override
-  String get getPickupLines => 'Get Pickup Lines';
+  String get getPickupLines => 'Generate Deal Lines';
 
   @override
   String get startNewNegotiation => 'Start new negotiation';
@@ -114,4 +114,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bargainsHistory => 'Bargains History';
+
+  @override
+  String get signInError => 'Uh, something went wrong. Please try again.';
 }

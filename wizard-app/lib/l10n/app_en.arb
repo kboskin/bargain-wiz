@@ -117,21 +117,21 @@
   "@skipForNow": {
     "description": "Button text to skip paywall temporarily"
   },
-  "homeEmptyTitle": "Upload a screenshot of a chat or bio",
+  "homeEmptyTitle": "Add a product or negotiation screenshot",
   "@homeEmptyTitle": {
     "description": "Main empty state title on home"
   },
-  "uploadScreenshot": "Upload a Screenshot",
+  "uploadScreenshot": "Upload Product or Chat",
   "@uploadScreenshot": {
-    "description": "Primary CTA to upload screenshot"
+    "description": "Primary CTA to open gallery and pick screenshot"
   },
-  "enterTextManually": "Enter Text Manually",
+  "enterTextManually": "Start with text",
   "@enterTextManually": {
     "description": "Secondary option to type text"
   },
-  "getPickupLines": "Get Pickup Lines",
+  "getPickupLines": "Generate Deal Lines",
   "@getPickupLines": {
-    "description": "Secondary option for pickup lines"
+    "description": "Secondary option for deal lines"
   },
   "startNewNegotiation": "Start new negotiation",
   "@startNewNegotiation": {
@@ -144,6 +144,10 @@
   "bargainsHistory": "Bargains History",
   "@bargainsHistory": {
     "description": "Drawer item label"
+  },
+  "signInError": "Uh, something went wrong. Please try again.",
+  "@signInError": {
+    "description": "Message shown when Google or Apple sign-in fails"
   }
 }
 

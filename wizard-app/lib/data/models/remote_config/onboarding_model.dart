@@ -199,6 +199,8 @@ abstract class OnboardingModel extends ValidatableEntity {
         return WarmupScreenModel.fromJson(json);
       case OnboardingScreenType.dataUpload:
         return DataUploadScreenModel.fromJson(json);
+      case OnboardingScreenType.createAccount:
+        return CreateAccountScreenModel.fromJson(json);
     }
   }
 
@@ -925,6 +927,72 @@ class DataUploadScreenModel extends OnboardingModel {
   }
 }
 
+/// Model for create-account / sign-in onboarding screen.
+/// Shows Login with Google, optionally Sign in with Apple, and Continue (skip).
+/// Button labels and which platforms show each button come from remote config.
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
+class CreateAccountScreenModel extends OnboardingModel {
+  CreateAccountScreenModel({
+    required this.title,
+    this.description,
+    this.nextButtonText,
+    this.showTopBar = true,
+    this.googleButtonLabel,
+    this.appleButtonLabel,
+    this.googlePlatforms,
+    this.applePlatforms,
+  }) : super(title: title);
+
+  factory CreateAccountScreenModel.fromJson(Map<String, dynamic> json) =>
+      _$CreateAccountScreenModelFromJson(json);
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: true)
+  @override
+  final bool showTopBar;
+
+  /// Button label for Google sign-in (e.g. "Google"). Multilocale; default "Google".
+  @JsonKey(name: 'google_button_label', fromJson: _multilocaleFromJson)
+  final dynamic googleButtonLabel;
+
+  /// Button label for Apple sign-in (e.g. "Apple"). Multilocale; default "Apple".
+  @JsonKey(name: 'apple_button_label', fromJson: _multilocaleFromJson)
+  final dynamic appleButtonLabel;
+
+  /// Platforms where Google button is shown: ["android", "ios", "web", "macos", "windows", "linux"].
+  /// Null or empty = show on all platforms.
+  @JsonKey(name: 'google_platforms')
+  final List<String>? googlePlatforms;
+
+  /// Platforms where Apple button is shown. Null or empty = show on all platforms.
+  @JsonKey(name: 'apple_platforms')
+  final List<String>? applePlatforms;
+
+  @override
+  OnboardingScreenType get type => OnboardingScreenType.createAccount;
+
+  static dynamic _multilocaleFromJson(dynamic json) =>
+      json != null ? MultilocaleText.fromJson(json) : null;
+
+  @override
+  Map<String, dynamic> toJson() =>
+      _fixOnboardingModelJsonKeys(_$CreateAccountScreenModelToJson(this), type);
+}
+
 /// Extension for pattern matching with when-like syntax
 extension OnboardingModelWhen<T> on OnboardingModel {
   /// Pattern matching method similar to Kotlin's when expression
@@ -939,10 +1007,13 @@ extension OnboardingModelWhen<T> on OnboardingModel {
     required T Function(PaywallScreenModel) paywall,
     required T Function(WarmupScreenModel) warmup,
     required T Function(DataUploadScreenModel) dataUpload,
+    required T Function(CreateAccountScreenModel) createAccount,
     T Function()? orElse,
   }) {
     if (this is EngagementScreenModel) {
       return engagement(this as EngagementScreenModel);
+    } else if (this is CreateAccountScreenModel) {
+      return createAccount(this as CreateAccountScreenModel);
     } else if (this is SelectScreenModel) {
       return select(this as SelectScreenModel);
     } else if (this is SliderScreenModel) {

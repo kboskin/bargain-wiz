@@ -71,6 +71,7 @@ dependencies:
   # Authentication
   google_sign_in: ^6.2.1
   sign_in_with_apple: ^6.1.3
+  sign_in_button: ^3.2.0
   
   # Routing
   go_router: ^14.6.1
@@ -91,6 +92,9 @@ dependencies:
   
   # Share functionality
   share_plus: ^10.1.2
+  
+  # Image picking (gallery / camera)
+  image_picker: ^1.1.2
   
   # In-app purchases
   in_app_purchase: ^3.2.3

@@ -19,7 +19,6 @@ MainPageConfig _$MainPageConfigFromJson(Map<String, dynamic> json) =>
           ? null
           : MainPageCenterVisual.fromJson(
               json['center_visual'] as Map<String, dynamic>),
-      showBottomStripe: json['show_bottom_stripe'] as bool? ?? true,
       stripeOpacity: (json['stripe_opacity'] as num?)?.toDouble(),
       background: json['background'] == null
           ? null
@@ -35,7 +34,6 @@ Map<String, dynamic> _$MainPageConfigToJson(MainPageConfig instance) =>
       'get_pickup_lines_button_text':
           instance.getPickupLinesButtonText?.toJson(),
       'center_visual': instance.centerVisual?.toJson(),
-      'show_bottom_stripe': instance.showBottomStripe,
       'stripe_opacity': instance.stripeOpacity,
       'background': instance.background?.toJson(),
     };
