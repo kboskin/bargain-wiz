@@ -49,6 +49,10 @@
 	<false/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a product or chat screenshot to analyze.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app uses the microphone for voice input when you tap the mic button.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>This app uses speech recognition to turn your voice into text for deal lines.</string>
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>

@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dartz/dartz.dart';
+
 import '../../presentation/bloc/auth/auth_bloc.dart';
 import '../../presentation/bloc/auth/auth_state.dart';
 import '../../presentation/pages/home/home_page.dart';
@@ -10,7 +12,9 @@ import '../../presentation/pages/start_with_text/start_with_text_page.dart';
 import '../../presentation/pages/onboarding/welcome_screen_page.dart';
 import '../../presentation/pages/paywall/paywall_page.dart';
 import '../../presentation/bloc/subscription/subscription_bloc.dart';
-import '../di/injection_container.dart' as di;
+import '../../core/di/injection_container.dart' as di;
+import '../../domain/repositories/onboarding_repository.dart';
+import '../error/failures.dart';
 import 'app_routes.dart';
 
 /// App router configuration
@@ -55,9 +59,27 @@ class AppRouter {
                   );
                 }
 
-                // If not authenticated, show welcome screen
+                // If not authenticated, decide based on onboarding completion:
+                // - If onboarding has been completed before, go straight to HomePage.
+                // - Otherwise, show welcome screen.
                 if (authState is! AuthAuthenticated) {
-                  return const WelcomeScreenPage();
+                  final repo = di.sl<OnboardingRepository>();
+                  return FutureBuilder<Either<Failure, bool>>(
+                    future: repo.isOnboardingCompleted(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final either = snapshot.data!;
+                      final completed = either.fold((_) => false, (v) => v);
+                      if (completed) {
+                        return const HomePage();
+                      }
+                      return const WelcomeScreenPage();
+                    },
+                  );
                 }
 
                 // If authenticated, show home

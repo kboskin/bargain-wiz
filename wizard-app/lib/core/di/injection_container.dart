@@ -97,16 +97,23 @@ Future<void> init() async {
     );
 
   // Subscription Services
-  // 1. Payment Provider (based on config)
-  if (AppConfig.paymentProviderType == PaymentProviderType.iap) {
-    sl.registerLazySingleton<PaymentProvider>(
+  // 1. Payment Providers (both, selected via Remote Config)
+  sl
+    ..registerLazySingleton<IAPPaymentProvider>(
       () => IAPPaymentProvider(sl<AppLogger>()),
-    );
-  } else {
-    sl.registerLazySingleton<PaymentProvider>(
+    )
+    ..registerLazySingleton<StripePaymentProvider>(
       () => StripePaymentProvider(sl<AppLogger>()),
+    )
+    ..registerLazySingleton<PaymentProvider>(
+      () {
+        final rc = sl<RemoteConfigService>();
+        final type = rc.getPaymentProviderType();
+        return type == PaymentProviderType.stripe
+            ? sl<StripePaymentProvider>()
+            : sl<IAPPaymentProvider>();
+      },
     );
-  }
 
   // 2. In-Memory Data Source
   sl.registerLazySingleton<SubscriptionInMemoryDataSource>(

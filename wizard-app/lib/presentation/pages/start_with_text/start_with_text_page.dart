@@ -1,44 +1,19 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/routing/app_routes.dart';
 
 /// Chat-style "Start with text" screen: input at top, AI suggestion bubbles
 /// that appear to stack from the bottom, with a persistent bottom action bar.
-class StartWithTextPage extends StatefulWidget {
+class StartWithTextPage extends StatelessWidget {
   const StartWithTextPage({super.key});
-
-  @override
-  State<StartWithTextPage> createState() => _StartWithTextPageState();
-}
-
-class _StartWithTextPageState extends State<StartWithTextPage> {
-  final TextEditingController _focusController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-
-  /// Suggestions in order [oldest ... newest]. Newest is shown at bottom (reverse list).
-  final List<String> _suggestions = [];
-
-  /// Optional: seed with a couple of placeholders to show the "from bottom" effect
-  @override
-  void initState() {
-    super.initState();
-    // Uncomment to show example bubbles: _suggestions.addAll(_placeholderSuggestions);
-  }
-
-  static const List<String> _placeholderSuggestions = [
-    '⚡ Something that makes my heart race—how about a partner in crime for some mischievous adventures?',
-    '⚡ Just a partner in crime and fun adventures!',
-    "⚡ Hey, I'm just hunting for trouble... care to join me on a thrilling adventure or are you more of a safe bet? 😉",
-  ];
-
-  @override
-  void dispose() {
-    _focusController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,169 +36,567 @@ class _StartWithTextPageState extends State<StartWithTextPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Prompt + input section (fixed at top)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      body: const SafeArea(
+        child: StartWithTextSection(),
+      ),
+    );
+  }
+}
+
+/// Reusable chat UI: prompt bubble, focus input, hint, suggestion bubbles, bottom bar.
+/// [embeddedInScrollView] true when used inside a scroll view (e.g. home); uses fixed height for the chat area.
+/// [onScrollBackUp] when set (e.g. when embedded), show a control to scroll back to the main content.
+class StartWithTextSection extends StatefulWidget {
+  const StartWithTextSection({
+    super.key,
+    this.embeddedInScrollView = false,
+    this.onScrollBackUp,
+  });
+
+  final bool embeddedInScrollView;
+  final VoidCallback? onScrollBackUp;
+
+  @override
+  State<StartWithTextSection> createState() => _StartWithTextSectionState();
+}
+
+class _StartWithTextSectionState extends State<StartWithTextSection> {
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final stt.SpeechToText _speech = stt.SpeechToText();
+
+  final List<String> _suggestions = [];
+
+  bool _hasMessageText = false;
+  bool _isListening = false;
+  bool _speechAvailable = false;
+
+  bool _isPointerDown = false; // Tracks physical touch state
+  bool _isRestarting = false; // Prevents overlapping restart calls
+  String _baseText = ''; // Stores text typed before holding the mic
+
+  late final AppLogger _logger = di.sl<AppLogger>();
+
+  @override
+  void initState() {
+    super.initState();
+    _messageController.addListener(_onMessageChanged);
+  }
+
+  @override
+  void dispose() {
+    _messageController.removeListener(_onMessageChanged);
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildChatArea() => Stack(
+    children: [
+      ListView.builder(
+        controller: _scrollController,
+        reverse: true,
+        padding: const EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 12,
+          bottom: 100,
+        ),
+        itemCount: _suggestions.length + 2,
+        itemBuilder: (context, index) {
+          if (index == _suggestions.length + 1) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildPromptBubble(context),
                   const SizedBox(height: 12),
-                  _buildFocusInput(context),
-                  const SizedBox(height: 8),
                   _buildHint(context),
                 ],
               ),
-            ),
-            // Chat bubbles area: reverse list so newest stays at bottom; content appears "scrolled from bottom"
-            Expanded(
-              child: Stack(
-                children: [
-                  ListView.builder(
-                    controller: _scrollController,
-                    reverse: true,
-                    padding: EdgeInsets.only(
-                      left: 20,
-                      right: 20,
-                      top: 12,
-                      bottom: 100, // Space for bottom bar overlay so last bubble is partially hidden
-                    ),
-                    itemCount: _suggestions.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == _suggestions.length) {
-                        // Spacer so when there are few items they sit near the bottom
-                        return const SizedBox(height: 120);
-                      }
-                      final text = _suggestions[_suggestions.length - 1 - index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _SuggestionBubble(text: text),
-                      );
-                    },
-                  ),
-                  _buildBottomBar(context),
-                ],
+            );
+          }
+          if (index == _suggestions.length) {
+            return const SizedBox(height: 120);
+          }
+          final text = _suggestions[_suggestions.length - 1 - index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _SuggestionBubble(text: text),
+          );
+        },
+      ),
+      _buildBottomBar(context),
+    ],
+  );
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.max,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (widget.onScrollBackUp != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 20, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: IconButton(
+              onPressed: widget.onScrollBackUp,
+              icon: const Icon(Icons.chevron_left),
+              color: AppColors.textPrimary,
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.all(8),
               ),
+              tooltip: 'Back to main',
             ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
+      if (widget.embeddedInScrollView)
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  reverse: true,
+                  padding: const EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 12,
+                    bottom: 12,
+                  ),
+                  itemCount: _suggestions.length + 2,
+                  itemBuilder: (context, index) {
+                    if (index == _suggestions.length + 1) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildPromptBubble(context),
+                            const SizedBox(height: 12),
+                            _buildHint(context),
+                          ],
+                        ),
+                      );
+                    }
+                    if (index == _suggestions.length) {
+                      return const SizedBox(height: 24);
+                    }
+                    final text = _suggestions[_suggestions.length - 1 - index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _SuggestionBubble(text: text),
+                    );
+                  },
+                ),
+              ),
+              _buildInputBar(context),
+            ],
+          ),
+        )
+      else
+        Expanded(child: _buildChatArea()),
+    ],
+  );
 
-  Widget _buildPromptBubble(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Text(
-          "What's the deal about?",
-          style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-        ),
+  Widget _buildPromptBubble(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildFocusInput(BuildContext context) {
-    return TextField(
-      controller: _focusController,
-      decoration: InputDecoration(
-        hintText: 'Give us a word or two to focus on',
-        hintStyle: AppTextStyles.bodyMedium.copyWith(
-          color: AppColors.textTertiary,
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      ),
-      style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-      onSubmitted: (_) => _onGenerate(),
-    );
-  }
-
-  Widget _buildHint(BuildContext context) {
-    return Center(
       child: Text(
-        '⚡ hold a reply for more ⚡',
-        style: AppTextStyles.bodySmall.copyWith(
-          color: AppColors.textSecondary,
-        ),
+        "What's the deal about?",
+        style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
       ),
-    );
-  }
+    ),
+  );
+
+  Widget _buildHint(BuildContext context) => Center(
+    child: Text(
+      '⚡ hold a reply for more ⚡',
+      style: AppTextStyles.bodySmall.copyWith(
+        color: AppColors.textSecondary,
+      ),
+    ),
+  );
 
   Widget _buildBottomBar(BuildContext context) {
     return Positioned(
       left: 0,
       right: 0,
       bottom: 0,
-      child: Container(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 16,
-          bottom: MediaQuery.paddingOf(context).bottom + 16,
+      child: _buildInputBar(context),
+    );
+  }
+
+  /// Input bar content (text field + mic + send). Used in Stack overlay or at bottom of Column.
+  Widget _buildInputBar(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.paddingOf(context).bottom + 16,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white.withValues(alpha: 0.0),
+            Colors.white.withValues(alpha: 0.85),
+          ],
         ),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.white.withValues(alpha: 0.0),
-              Colors.white.withValues(alpha: 0.85),
-            ],
-          ),
-        ),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _onGenerate,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.backgroundDark,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              decoration: InputDecoration(
+                hintText: _isListening ? 'Listening...' : 'Type a line...',
+                hintStyle: AppTextStyles.bodyMedium.copyWith(
+                  color: _isListening ? AppColors.textPrimary : AppColors.textTertiary,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
-              elevation: 0,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
+              onSubmitted: (_) => _onSendPressed(),
             ),
-            child: Text(
-              'Generate deal lines',
-              style: AppTextStyles.buttonText.copyWith(color: Colors.white),
-            ),
+          ),
+          const SizedBox(width: 8),
+          _buildMicButton(context),
+          const SizedBox(width: 8),
+          _buildActionButton(
+            icon: Icons.send,
+            enabled: _hasMessageText,
+            onTap: _onSendPressed,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onMessageChanged() {
+    final text = _messageController.text.trim();
+    final hasText = text.isNotEmpty;
+
+    if (hasText != _hasMessageText) {
+      setState(() {
+        _hasMessageText = hasText;
+      });
+    }
+  }
+
+  void _onMicPointerDown() {
+    if (_isListening) return;
+
+    HapticFeedback.lightImpact(); // Tactile feedback on press
+    _isPointerDown = true;
+    _baseText = _messageController.text; // Snapshot current text at the start
+
+    setState(() {
+      _isListening = true;
+    });
+
+    _startListening();
+  }
+
+  void _onMicPointerUp() {
+    if (!_isPointerDown) return;
+
+    HapticFeedback.lightImpact(); // Tactile feedback on release
+    _isPointerDown = false;
+
+    // Unconditionally stop to prevent orphaned listeners
+    _speech.stop();
+    setState(() => _isListening = false);
+  }
+
+  /// Cleanly stops and re-initializes the mic stream if the OS kills it prematurely
+  void _restartListening() {
+    if (!_isPointerDown || !mounted || _isRestarting) return;
+
+    _isRestarting = true;
+    _baseText = _messageController.text; // Lock in the text we successfully captured
+
+    _speech.stop(); // Force teardown of the old broken session
+
+    // Give the OS 150ms to release the hardware microphone lock
+    Future.delayed(const Duration(milliseconds: 150), () {
+      _isRestarting = false;
+      if (_isPointerDown && mounted) {
+        _startListening();
+      }
+    });
+  }
+
+  Future<void> _startListening() async {
+    if (!_speechAvailable) {
+      _speechAvailable = await _speech.initialize(
+        onError: (e) => _onSpeechError(e),
+        onStatus: (status) {
+          if (!mounted) return;
+
+          if (status == 'done' || status == 'notListening') {
+            if (_isPointerDown) {
+              // OS killed it, but user is still holding. Restart seamlessly!
+              _restartListening();
+            } else {
+              setState(() => _isListening = false);
+            }
+          }
+        },
+      );
+
+      if (!mounted) return;
+
+      if (!_speechAvailable) {
+        setState(() {
+          _isListening = false;
+          _isPointerDown = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Speech recognition not available on this device')),
+        );
+        return;
+      }
+    }
+
+    if (!_isPointerDown) return;
+    if (_speech.isListening) return;
+
+    await _speech.listen(
+      onResult: (result) {
+        if (!mounted) return;
+
+        final newWords = result.recognizedWords;
+
+        // Add a space between existing text and new words if needed
+        final separator = (_baseText.isNotEmpty &&
+            !_baseText.endsWith(' ') &&
+            newWords.isNotEmpty) ? ' ' : '';
+
+        _messageController.text = _baseText + separator + newWords;
+
+        // Keep the cursor at the end
+        _messageController.selection = TextSelection.collapsed(
+          offset: _messageController.text.length,
+        );
+
+        // Force immediate UI refresh for true real-time streaming
+        setState(() {});
+      },
+      partialResults: true,
+      pauseFor: const Duration(seconds: 10), // Tell OS to tolerate longer pauses
+      listenFor: const Duration(seconds: 60), // Tell OS to allow max session length
+    );
+  }
+
+  void _onSpeechError(dynamic error) {
+    if (!mounted) return;
+
+    final errorString = error.toString();
+
+    // If the user paused too long, the OS throws an error.
+    // If they are still holding the button, intercept it and restart seamlessly!
+    if (_isPointerDown) {
+      _restartListening();
+      return;
+    }
+
+    setState(() {
+      _isListening = false;
+      _isPointerDown = false;
+    });
+
+    // Filter out non-critical timeout errors that happen naturally on release
+    if (!errorString.contains('error_no_match') && !errorString.contains('error_speech_timeout')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Speech error: $errorString')),
+      );
+    }
+  }
+
+  void _onSendPressed() {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _suggestions.add('⚡ $text');
+    });
+    _messageController.clear();
+
+    // Clean up states
+    _isPointerDown = false;
+    _isListening = false;
+    _speech.stop();
+
+    // Scroll to bottom so new message appears above input (Telegram-style)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.35,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppColors.backgroundDark,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 20,
           ),
         ),
       ),
     );
   }
 
-  void _onGenerate() {
-    final focus = _focusController.text.trim();
-    // TODO: Call API / BLoC to generate deal lines; for now add a placeholder
-    setState(() {
-      _suggestions.add(
-        '⚡ ${focus.isEmpty ? "Here\'s a line for you" : "Deal line for: $focus"} — try holding for more!',
-      );
-    });
+  /// Mic button: hold to record indefinitely, shows equalizer inside while recording.
+  Widget _buildMicButton(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _onMicPointerDown(),
+      onPointerUp: (_) => _onMicPointerUp(),
+      onPointerCancel: (_) => _onMicPointerUp(),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: AppColors.backgroundDark,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (_isListening)
+              const _RecordingEqualizer(
+                barCount: 4,
+                barWidth: 3,
+                minHeight: 4,
+                maxHeight: 16,
+                color: Colors.white,
+              )
+            else
+              const Icon(
+                Icons.mic,
+                color: Colors.white,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Waving equalizer bars shown while recording (Telegram-style).
+class _RecordingEqualizer extends StatefulWidget {
+  const _RecordingEqualizer({
+    this.barCount = 5,
+    this.barWidth = 3,
+    this.minHeight = 4,
+    this.maxHeight = 20,
+    this.color,
+  });
+
+  final int barCount;
+  final double barWidth;
+  final double minHeight;
+  final double maxHeight;
+  final Color? color;
+
+  @override
+  State<_RecordingEqualizer> createState() => _RecordingEqualizerState();
+}
+
+class _RecordingEqualizerState extends State<_RecordingEqualizer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final range = widget.maxHeight - widget.minHeight;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(widget.barCount, (i) {
+          final phase = (_controller.value * 2 * math.pi) + (i * 0.8);
+          final height = widget.minHeight + range * (0.5 + 0.5 * math.sin(phase));
+          return Container(
+            margin: EdgeInsets.symmetric(horizontal: widget.barWidth * 0.5),
+            width: widget.barWidth,
+            height: height.clamp(widget.minHeight, widget.maxHeight),
+            decoration: BoxDecoration(
+              color: widget.color ?? Colors.white,
+              borderRadius: BorderRadius.circular(widget.barWidth / 2),
+            ),
+          );
+        }),
+      ),
+    );
   }
 }
 
@@ -257,4 +630,4 @@ class _SuggestionBubble extends StatelessWidget {
       ),
     );
   }
-}
+}T

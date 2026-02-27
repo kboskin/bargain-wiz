@@ -15,20 +15,74 @@ import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/data/models/multilocale_text.dart';
 import 'package:appwizard/data/models/remote_config/main_page_config.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
+import 'package:appwizard/presentation/pages/start_with_text/start_with_text_page.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(final BuildContext context) {
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final ScrollController _scrollController = ScrollController();
+  static const double _kScrolledThreshold = 20;
+  bool _isScrolledToChat = false;
+  int _conversationKey = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScrollChanged);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScrollChanged);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScrollChanged() {
+    final isScrolled = _scrollController.hasClients &&
+        _scrollController.offset > _kScrolledThreshold;
+    if (isScrolled != _isScrolledToChat) {
+      setState(() => _isScrolledToChat = isScrolled);
+    }
+  }
+
+  void _onStartNewNegotiation(BuildContext context) {
+    // TODO: Navigate to new negotiation / upload flow
+  }
+
+  void _scrollTo(double offset) {
+    _scrollController.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _handleSystemBack() {
+    if (_isScrolledToChat) {
+      _scrollTo(0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final mainPageConfig = di.sl<RemoteConfigService>().getMainPageConfig();
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_isScrolledToChat,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleSystemBack();
+      },
+      child: Scaffold(
       backgroundColor: Colors.transparent,
       drawerScrimColor: Colors.black.withValues(alpha: 0.2),
       appBar: AppBar(
-        // Default leading opens drawer when Scaffold has a drawer
         title: Text(
           l10n.appTitle,
           style: AppTextStyles.titleLarge.copyWith(
@@ -61,13 +115,44 @@ class HomePage extends StatelessWidget {
       ),
       drawer: _HomeDrawer(l10n: l10n),
       body: SafeArea(
-        child: _EmptyStateContent(l10n: l10n, config: mainPageConfig),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final viewportHeight = constraints.maxHeight;
+            return SingleChildScrollView(
+              controller: _scrollController,
+              physics: const NeverScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: viewportHeight,
+                    child: _EmptyStateContent(
+                      l10n: l10n,
+                      config: mainPageConfig,
+                      onStartWithText: () {
+                        setState(() => _conversationKey++);
+                        _scrollTo(viewportHeight);
+                      },
+                    ),
+                  ),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: viewportHeight),
+                    child: SizedBox(
+                      height: viewportHeight,
+                      child: StartWithTextSection(
+                        key: ValueKey(_conversationKey),
+                        embeddedInScrollView: true,
+                        onScrollBackUp: () => _scrollTo(0),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
+    ),
     );
-  }
-
-  void _onStartNewNegotiation(BuildContext context) {
-    // TODO: Navigate to new negotiation / upload flow
   }
 }
 
@@ -293,8 +378,7 @@ class _HomeDrawer extends StatelessWidget {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
-  }) {
-    return Padding(
+  }) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: ListTile(
         shape: RoundedRectangleBorder(
@@ -314,14 +398,19 @@ class _HomeDrawer extends StatelessWidget {
         onTap: onTap,
       ),
     );
-  }
 }
 
 class _EmptyStateContent extends StatelessWidget {
-  const _EmptyStateContent({required this.l10n, this.config});
+  const _EmptyStateContent({
+    required this.l10n,
+    this.config,
+    this.onStartWithText,
+  });
 
   final AppLocalizations l10n;
   final MainPageConfig? config;
+  /// When set, "Start with text" scrolls to the chat section instead of pushing a route.
+  final VoidCallback? onStartWithText;
 
   String _headerText(BuildContext context) =>
       (config?.headerText as MultilocaleText?)?.get(context) ??
@@ -406,7 +495,7 @@ class _EmptyStateContent extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => context.push(AppRoutes.startWithText),
+                      onPressed: onStartWithText ?? () => context.push(AppRoutes.startWithText),
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: AppColors.textPrimary,

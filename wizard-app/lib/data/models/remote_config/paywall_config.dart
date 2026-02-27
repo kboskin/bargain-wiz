@@ -27,6 +27,9 @@ class PaywallConfig {
   /// Seconds after which the close (X) button appears. 0 = immediately. Remotely configurable; default 5.
   @JsonKey(name: 'close_button_delay_seconds')
   final double closeButtonDelaySeconds;
+  /// Payment provider to use for this paywall: "iap" or "stripe".
+  @JsonKey(name: 'payment_provider')
+  final String? paymentProvider;
 
   PaywallConfig({
     required this.type,
@@ -39,6 +42,7 @@ class PaywallConfig {
     this.showRestore = true,
     this.showClose = false,
     this.closeButtonDelaySeconds = 5.0,
+    this.paymentProvider,
   });
 
   factory PaywallConfig.fromJson(Map<String, dynamic> json) => _$PaywallConfigFromJson(json);

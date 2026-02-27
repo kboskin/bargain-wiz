@@ -22,6 +22,7 @@ PaywallConfig _$PaywallConfigFromJson(
   showClose: json['show_close'] as bool? ?? false,
   closeButtonDelaySeconds:
       (json['close_button_delay_seconds'] as num?)?.toDouble() ?? 5.0,
+  paymentProvider: json['payment_provider'] as String?,
 );
 
 Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
@@ -36,6 +37,7 @@ Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
       'show_restore': instance.showRestore,
       'show_close': instance.showClose,
       'close_button_delay_seconds': instance.closeButtonDelaySeconds,
+      'payment_provider': instance.paymentProvider,
     };
 
 PaywallOption _$PaywallOptionFromJson(Map<String, dynamic> json) =>

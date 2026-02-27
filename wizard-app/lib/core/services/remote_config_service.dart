@@ -9,6 +9,7 @@ import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
 import 'package:appwizard/data/models/remote_config/subscription_config.dart';
 import 'package:appwizard/data/models/remote_config/main_page_config.dart';
 import 'package:appwizard/data/models/remote_config/paywall_config.dart';
+import 'package:appwizard/core/config/app_config.dart';
 
 /// Service for managing Firebase Remote Config values
 /// Always fetches fresh values from Remote Config (no caching)
@@ -314,6 +315,26 @@ class RemoteConfigService {
     } catch (e, stackTrace) {
       _logger.e('Error parsing main page config', e, stackTrace);
       return null;
+    }
+  }
+
+  /// Get payment provider type, primarily from paywall config.
+  /// Falls back to AppConfig.default (env) and then IAP.
+  PaymentProviderType getPaymentProviderType() {
+    try {
+      final paywall = getPaywallConfig();
+      final value = paywall?.paymentProvider?.toLowerCase().trim();
+      switch (value) {
+        case 'stripe':
+          return PaymentProviderType.stripe;
+        case 'iap':
+          return PaymentProviderType.iap;
+        default:
+          // Fallback to compile-time config if RC doesn't specify.
+          return AppConfig.paymentProviderType;
+      }
+    } catch (_) {
+      return AppConfig.paymentProviderType;
     }
   }
 }
