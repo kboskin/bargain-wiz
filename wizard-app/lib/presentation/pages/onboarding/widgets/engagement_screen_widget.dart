@@ -109,8 +109,8 @@ class _EngagementScreenWidgetState extends State<EngagementScreenWidget> {
   Widget _buildStyledTitle(BuildContext context, String title) {
     // Get highlight words from metadata (supports map or list format)
     final highlightWordsData = _getHighlightWords();
-    
-    if (highlightWordsData == null || 
+
+    if (highlightWordsData == null ||
         (highlightWordsData is List && highlightWordsData.isEmpty) ||
         (highlightWordsData is Map && highlightWordsData.isEmpty)) {
       // Simple title without highlighting

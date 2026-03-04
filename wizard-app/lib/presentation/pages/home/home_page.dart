@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:in_app_review/in_app_review.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
@@ -11,8 +13,12 @@ import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/utils/gallery_picker_helper.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
-import 'package:appwizard/core/widgets/visual_asset_widget.dart';
+import 'package:appwizard/core/theme/button_style.dart';
+import 'package:appwizard/core/widgets/glass_container.dart';
 import 'package:appwizard/data/models/multilocale_text.dart';
+import 'package:appwizard/data/models/remote_config/button_config.dart';
+import 'package:appwizard/data/models/remote_config/rate_us_modal_config.dart';
+import 'package:appwizard/presentation/widgets/glass_two_choice_modal.dart';
 import 'package:appwizard/data/models/remote_config/main_page_config.dart';
 import 'package:appwizard/data/models/remote_config/share_config.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
@@ -25,6 +31,8 @@ import 'package:appwizard/presentation/pages/home/screenshot_upload_item.dart';
 import 'package:appwizard/domain/repositories/express_dealmaker_repository.dart';
 import 'package:appwizard/domain/repositories/conversation_repository.dart';
 import 'package:appwizard/domain/entities/conversation.dart' show Conversation, ConversationType, ProDealCloserMessage;
+import 'package:appwizard/presentation/bloc/lines_that_land/lines_that_land_bloc.dart';
+import 'package:appwizard/presentation/widgets/lines_that_land_sheet.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -103,6 +111,21 @@ class _HomePageState extends State<HomePage> {
     if (_isScrolledToChat) {
       _scrollTo(0);
     }
+  }
+
+  void _showLinesThatLandTips(BuildContext context) {
+    final bloc = di.sl<LinesThatLandBloc>();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => BlocProvider<LinesThatLandBloc>.value(
+        value: bloc,
+        child: _LinesThatLandBottomSheet(
+          onClose: () => Navigator.of(ctx).pop(),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadConversationHistory() async {
@@ -200,13 +223,6 @@ class _HomePageState extends State<HomePage> {
                   decoration: BoxDecoration(
                     color: AppColors.backgroundDark,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.backgroundDark.withValues(alpha: 0.35),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -354,13 +370,14 @@ class _HomePageState extends State<HomePage> {
                                 },
                                 onStartWithText: () {
                                   setState(() {
-                                        _activeConversationId = null;
-                                        _activeConversationType = ConversationType.proDealCloser;
+                                    _activeConversationId = null;
+                                    _activeConversationType = ConversationType.proDealCloser;
                                     _conversationKey++;
                                     _proDealCloserInitialMessages = null;
                                   });
                                   _scrollTo(viewportHeight);
                                 },
+                                onGetPickupLines: () => _showLinesThatLandTips(context),
                                 onExpressDealmakerPicked: (paths) {
                                   setState(() {
                                     _expressDealmakerItems = paths
@@ -402,6 +419,7 @@ class _HomePageState extends State<HomePage> {
                                     _activeInitialKeyword = null;
                                   });
                                 },
+                                onGetPickupLines: () => _showLinesThatLandTips(context),
                               ),
                   ),
                   ConstrainedBox(
@@ -466,8 +484,83 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     ),
-    );
-  }
+  );
+}
+}
+
+void _showRateUsDialog(BuildContext context, AppLocalizations l10n) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black54,
+    builder: (dialogContext) {
+      final config = di.sl<RemoteConfigService>().getRateUsModalConfig();
+      final useConfig = config != null &&
+          config.buttons.length >= 2 &&
+          config.title != null;
+
+      final String title = useConfig
+          ? (config!.title is MultilocaleText
+              ? (config.title as MultilocaleText).get(dialogContext)
+              : config.title?.toString() ?? '')
+          : l10n.areYouSatisfied;
+
+      final primaryConfig = useConfig
+          ? config!.buttons[1]
+          : ButtonConfig(
+              text: MultilocaleText({'en': l10n.yes}),
+              action: ButtonAction.continueAction,
+              buttonColor: '#4ECDC4',
+              glowColor: '#4ECDC4',
+              glowIntensity: 0.6,
+              glowPulse: true,
+              buttonStyle: ButtonVisualStyle.glow,
+              buttonVisual: 'assets/lottie/magic_stick_pointer.json',
+              buttonVisualWidth: 60,
+              buttonVisualHeight: 60,
+            );
+      final secondaryConfig = useConfig
+          ? config!.buttons[0]
+          : ButtonConfig(
+              text: MultilocaleText({'en': l10n.no}),
+              action: ButtonAction.continueAction,
+              buttonColor: '#9E9E9E',
+              glowColor: '#9E9E9E',
+              glowIntensity: 0.3,
+              buttonStyle: ButtonVisualStyle.glow,
+            );
+
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: GlassTwoChoiceModal(
+            title: title,
+            visualPath: useConfig ? config!.visual : 'assets/lottie/star_anim.json',
+            visualWidth: useConfig ? config!.visualWidth : 80.0,
+            visualHeight: useConfig ? config!.visualHeight : 80.0,
+            primaryButtonConfig: primaryConfig,
+            onPrimaryPressed: () async {
+              Navigator.of(dialogContext).pop();
+              final inAppReview = InAppReview.instance;
+              if (await inAppReview.isAvailable()) {
+                await inAppReview.requestReview();
+              }
+            },
+            secondaryButtonConfig: secondaryConfig,
+            onSecondaryPressed: () {
+              dialogContext.push(AppRoutes.feedback);
+              Navigator.of(dialogContext).pop();
+            },
+            onClose: () => Navigator.of(dialogContext).pop(),
+            borderRadius: BorderRadius.circular(32),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+            titleHighlightWords: useConfig ? config?.highlightWords : null,
+            titleHighlightColor: useConfig ? config?.highlightColor : null,
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _HomeDrawer extends StatelessWidget {
@@ -536,7 +629,7 @@ class _HomeDrawer extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // Menu Items
+                // Menu Items: Profile, Bargains History, Rate Us, then Logout last (if logged in)
                 _buildDrawerItem(
                   context: context,
                   icon: Icons.person_outline,
@@ -553,6 +646,15 @@ class _HomeDrawer extends StatelessWidget {
                   onTap: () {
                     Navigator.pop(context);
                     // TODO: Navigate to bargains history
+                  },
+                ),
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.star_outline,
+                  title: l10n.rateUs,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showRateUsDialog(context, l10n);
                   },
                 ),
                 BlocBuilder<AuthBloc, AuthState>(
@@ -615,6 +717,7 @@ class _ExpressDealmakerHistoryView extends StatelessWidget {
     required this.onDelete,
     this.onStartWithText,
     this.onExpressDealmakerPicked,
+    this.onGetPickupLines,
   });
 
   final AppLocalizations l10n;
@@ -623,10 +726,10 @@ class _ExpressDealmakerHistoryView extends StatelessWidget {
   final ValueChanged<_ConversationSnapshot> onDelete;
   final VoidCallback? onStartWithText;
   final ValueChanged<List<String>>? onExpressDealmakerPicked;
+  final VoidCallback? onGetPickupLines;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
+  Widget build(BuildContext context) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
@@ -797,9 +900,7 @@ class _ExpressDealmakerHistoryView extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        // TODO: Get pickup lines from history view
-                      },
+                      onPressed: onGetPickupLines,
                       icon: Icon(
                         Icons.auto_awesome,
                         size: 20,
@@ -836,7 +937,6 @@ class _ExpressDealmakerHistoryView extends StatelessWidget {
         ),
       ],
     );
-  }
 }
 
 class _EmptyStateContent extends StatelessWidget {
@@ -845,12 +945,14 @@ class _EmptyStateContent extends StatelessWidget {
     this.config,
     this.onStartWithText,
     this.onExpressDealmakerPicked,
+    this.onGetPickupLines,
   });
 
   final AppLocalizations l10n;
   final MainPageConfig? config;
   final VoidCallback? onStartWithText;
   final ValueChanged<List<String>>? onExpressDealmakerPicked;
+  final VoidCallback? onGetPickupLines;
 
   String _headerText(BuildContext context) =>
       (config?.headerText as MultilocaleText?)?.get(context) ??
@@ -906,30 +1008,42 @@ class _EmptyStateContent extends StatelessWidget {
             children: [
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final images = await GalleryPickerHelper.pickImages(context);
-                    if (!context.mounted || images.isEmpty) return;
-                    final paths = images.map((x) => x.path).toList();
-                    onExpressDealmakerPicked?.call(paths);
-                  },
-                  icon: Icon(
-                    Icons.add_photo_alternate_rounded,
-                    size: 22,
-                    color: Colors.white,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.backgroundDark.withValues(alpha: 0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  label: Text(
-                    _uploadText(context),
-                    style: AppTextStyles.buttonText,
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.backgroundDark,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final images = await GalleryPickerHelper.pickImages(context);
+                      if (!context.mounted || images.isEmpty) return;
+                      final paths = images.map((x) => x.path).toList();
+                      onExpressDealmakerPicked?.call(paths);
+                    },
+                    icon: Icon(
+                      Icons.add_photo_alternate_rounded,
+                      size: 22,
+                      color: Colors.white,
                     ),
-                    elevation: 0,
+                    label: Text(
+                      _uploadText(context),
+                      style: AppTextStyles.buttonText,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.backgroundDark,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      elevation: 0,
+                    ),
                   ),
                 ),
               ),
@@ -969,10 +1083,8 @@ class _EmptyStateContent extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        // TODO: Get pickup lines
-                      },
-                      icon: Icon(
+                      onPressed: onGetPickupLines,
+                      icon: const Icon(
                         Icons.auto_awesome,
                         size: 20,
                         color: AppColors.textPrimary,
@@ -1007,6 +1119,83 @@ class _EmptyStateContent extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Bottom sheet for "Lines that land" – same style as onboarding sign-in modal (glass, drag handle, close).
+class _LinesThatLandBottomSheet extends StatelessWidget {
+  const _LinesThatLandBottomSheet({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => GlassContainer(
+      blurSigma: 20.0,
+      color: Colors.white,
+      opacity: 0.25,
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(32),
+        topRight: Radius.circular(32),
+      ),
+      border: Border.all(
+        color: Colors.white.withValues(alpha: 0.3),
+        width: 1.5,
+      ),
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  size: 24,
+                ),
+                onPressed: onClose,
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.1),
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(40, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+            ),
+            child: SingleChildScrollView(
+              child: LinesThatLandSheet(
+                onClose: onClose,
+                showHeader: false,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
 }
 
 /// Simple message representation for Pro Deal Closer snapshot (UI only).

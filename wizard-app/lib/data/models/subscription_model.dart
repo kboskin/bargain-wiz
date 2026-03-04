@@ -1,17 +1,14 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import 'package:appwizard/domain/entities/subscription_status.dart';
 import 'package:appwizard/domain/entities/subscription_tier.dart';
 
+part 'subscription_model.g.dart';
+
 /// Data Transfer Object for subscription status
 /// Used for API responses and in-memory cache
+@JsonSerializable()
 class SubscriptionModel {
-  final SubscriptionTier tier;
-  final bool isActive;
-  final DateTime? expiryDate;
-  final String? productId;
-  final String? transactionId;
-  final String? originalTransactionId;
-  final String? platform;
-
   SubscriptionModel({
     required this.tier,
     required this.isActive,
@@ -21,6 +18,47 @@ class SubscriptionModel {
     this.originalTransactionId,
     this.platform,
   });
+
+  @JsonKey(fromJson: _tierFromJson, toJson: _tierToJson)
+  final SubscriptionTier tier;
+
+  @JsonKey(name: 'is_active', defaultValue: false)
+  final bool isActive;
+
+  @JsonKey(name: 'expiry_date', fromJson: _expiryDateFromJson, toJson: _expiryDateToJson)
+  final DateTime? expiryDate;
+
+  @JsonKey(name: 'product_id')
+  final String? productId;
+
+  @JsonKey(name: 'transaction_id')
+  final String? transactionId;
+
+  @JsonKey(name: 'original_transaction_id')
+  final String? originalTransactionId;
+
+  final String? platform;
+
+  factory SubscriptionModel.fromJson(Map<String, dynamic> json) =>
+      _$SubscriptionModelFromJson(json);
+
+  Map<String, dynamic> toJson() => _$SubscriptionModelToJson(this);
+
+  static SubscriptionTier _tierFromJson(dynamic value) {
+    if (value == null) return SubscriptionTier.free;
+    final name = value as String;
+    return SubscriptionTier.values.firstWhere(
+      (t) => t.name == name,
+      orElse: () => SubscriptionTier.free,
+    );
+  }
+
+  static String _tierToJson(SubscriptionTier tier) => tier.name;
+
+  static DateTime? _expiryDateFromJson(dynamic json) =>
+      json != null ? DateTime.parse(json as String) : null;
+
+  static String? _expiryDateToJson(DateTime? date) => date?.toIso8601String();
 
   /// Convert from domain entity
   factory SubscriptionModel.fromEntity(SubscriptionStatus entity) {
@@ -46,37 +84,6 @@ class SubscriptionModel {
       originalTransactionId: originalTransactionId,
       platform: platform,
     );
-  }
-
-  /// Convert from JSON (API response)
-  factory SubscriptionModel.fromJson(Map<String, dynamic> json) {
-    return SubscriptionModel(
-      tier: SubscriptionTier.values.firstWhere(
-        (t) => t.name == json['tier'],
-        orElse: () => SubscriptionTier.free,
-      ),
-      isActive: json['is_active'] as bool? ?? false,
-      expiryDate: json['expiry_date'] != null
-          ? DateTime.parse(json['expiry_date'] as String)
-          : null,
-      productId: json['product_id'] as String?,
-      transactionId: json['transaction_id'] as String?,
-      originalTransactionId: json['original_transaction_id'] as String?,
-      platform: json['platform'] as String?,
-    );
-  }
-
-  /// Convert to JSON (for API requests)
-  Map<String, dynamic> toJson() {
-    return {
-      'tier': tier.name,
-      'is_active': isActive,
-      'expiry_date': expiryDate?.toIso8601String(),
-      'product_id': productId,
-      'transaction_id': transactionId,
-      'original_transaction_id': originalTransactionId,
-      'platform': platform,
-    };
   }
 
   SubscriptionModel copyWith({

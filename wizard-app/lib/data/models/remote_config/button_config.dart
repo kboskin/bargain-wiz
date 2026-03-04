@@ -22,6 +22,13 @@ class ButtonConfig {
   final bool? glowPulse; // Whether glow should pulse/animate
   @JsonKey(name: 'button_style', fromJson: _buttonStyleFromJson, toJson: _buttonStyleToJson)
   final ButtonVisualStyle buttonStyle; // Visual style enum
+  /// Optional Lottie path shown below the button (e.g. magic stick), same as permission screen metadata.button_visual.
+  @JsonKey(name: 'button_visual')
+  final String? buttonVisual;
+  @JsonKey(name: 'button_visual_width')
+  final double? buttonVisualWidth;
+  @JsonKey(name: 'button_visual_height')
+  final double? buttonVisualHeight;
 
   ButtonConfig({
     this.text,
@@ -31,6 +38,9 @@ class ButtonConfig {
     this.glowIntensity,
     this.glowPulse,
     this.buttonStyle = ButtonVisualStyle.glow,
+    this.buttonVisual,
+    this.buttonVisualWidth,
+    this.buttonVisualHeight,
   });
 
   /// Create from JSON (parses from metadata button config)

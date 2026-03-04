@@ -6,6 +6,7 @@ class AppRoutes {
   /// Main app screen; use from paywall close in debug to land on HomePage.
   static const String main = '/main';
   static const String startWithText = '/start-with-text';
+  static const String feedback = '/feedback';
 
   // Specific Names (optional, good for named routes)
   static const String homeName = 'home';
@@ -13,4 +14,5 @@ class AppRoutes {
   static const String paywallName = 'paywall';
   static const String mainName = 'main';
   static const String startWithTextName = 'startWithText';
+  static const String feedbackName = 'feedback';
 }

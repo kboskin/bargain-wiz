@@ -27,6 +27,7 @@ class MainPageConfig {
     this.centerVisual,
     this.stripeOpacity,
     this.background,
+    this.showMic = true,
   });
 
   /// Text between the top view (app bar) and the center image. Part of main_page_config.
@@ -96,6 +97,11 @@ class MainPageConfig {
   /// Gradient background for the main screen. If null, app uses default gradient.
   @JsonKey(name: 'background')
   final GradientBackgroundConfig? background;
+
+  /// Whether the microphone button in the start-with-text input is shown.
+  /// RC key: show_mic. Defaults to true when missing.
+  @JsonKey(name: 'show_mic', defaultValue: true)
+  final bool showMic;
 
   static dynamic _multilocaleFromJson(dynamic json) =>
       json != null ? MultilocaleText.fromJson(json) : null;

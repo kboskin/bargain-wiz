@@ -178,5 +178,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logOut => 'Log out';
 
   @override
+  String get rateUs => 'Rate Us';
+
+  @override
+  String get areYouSatisfied => 'Are you satisfied?';
+
+  @override
+  String get yes => 'Yes';
+
+  @override
+  String get no => 'No';
+
+  @override
   String get signInError => 'Uh, something went wrong. Please try again.';
 }

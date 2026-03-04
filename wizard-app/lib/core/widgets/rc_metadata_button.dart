@@ -3,9 +3,11 @@ import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
+import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/data/models/remote_config/button_config.dart';
 
-/// Button widget that uses ButtonConfig from Remote Config metadata
+/// Button widget that uses ButtonConfig from Remote Config metadata.
+/// Optionally shows a floating Lottie below the button (e.g. magic stick) when [floatingVisualPath] is set.
 class RCMetadataButton extends StatefulWidget {
   final ButtonConfig config;
   final VoidCallback? onPressed;
@@ -16,6 +18,10 @@ class RCMetadataButton extends StatefulWidget {
   final ColorHelper? colorHelper;
   /// When set, the button is forced to this size so it matches adjacent buttons.
   final Size? fixedSize;
+  /// Optional Lottie (e.g. magic_stick_pointer) shown below the button; when null, uses [config.buttonVisual] if set.
+  final String? floatingVisualPath;
+  final double floatingVisualWidth;
+  final double floatingVisualHeight;
 
   const RCMetadataButton({
     super.key,
@@ -27,6 +33,9 @@ class RCMetadataButton extends StatefulWidget {
     this.textStyle,
     this.colorHelper,
     this.fixedSize,
+    this.floatingVisualPath,
+    this.floatingVisualWidth = 60.0,
+    this.floatingVisualHeight = 60.0,
   });
 
   @override
@@ -227,7 +236,39 @@ class _RCMetadataButtonState extends State<RCMetadataButton>
         break;
     }
 
-    return button;
+    return _buildWithOptionalFloatingVisual(button);
+  }
+
+  Widget _buildWithOptionalFloatingVisual(Widget button) {
+    final path = widget.floatingVisualPath ?? widget.config.buttonVisual;
+    if (path == null || path.isEmpty) {
+      return button;
+    }
+    final w = widget.floatingVisualWidth;
+    final h = widget.floatingVisualHeight;
+    final width = widget.config.buttonVisualWidth ?? w;
+    final height = widget.config.buttonVisualHeight ?? h;
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        button,
+        Positioned(
+          bottom: -height - 12,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: Center(
+              child: VisualAssetWidget(
+                visualPath: path,
+                width: width,
+                height: height,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   String _getButtonText() {

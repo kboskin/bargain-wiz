@@ -428,6 +428,30 @@ abstract class AppLocalizations {
   /// **'Log out'**
   String get logOut;
 
+  /// Drawer item to open rate/satisfaction flow
+  ///
+  /// In en, this message translates to:
+  /// **'Rate Us'**
+  String get rateUs;
+
+  /// Rate Us dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Are you satisfied?'**
+  String get areYouSatisfied;
+
+  /// Yes button
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get yes;
+
+  /// No button
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get no;
+
   /// Message shown when Google or Apple sign-in fails
   ///
   /// In en, this message translates to:

@@ -182,5 +182,17 @@ class AppLocalizationsEs extends AppLocalizations {
   String get logOut => 'Cerrar sesión';
 
   @override
+  String get rateUs => 'Valóranos';
+
+  @override
+  String get areYouSatisfied => '¿Estás satisfecho?';
+
+  @override
+  String get yes => 'Sí';
+
+  @override
+  String get no => 'No';
+
+  @override
   String get signInError => 'Algo salió mal. Por favor intenta de nuevo.';
 }

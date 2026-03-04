@@ -386,8 +386,8 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
   Widget _buildStyledTitle(BuildContext context, String title) {
     // Get highlight words from metadata (supports map or list format)
     final highlightWordsData = _getHighlightWords();
-    
-    if (highlightWordsData == null || 
+
+    if (highlightWordsData == null ||
         (highlightWordsData is List && highlightWordsData.isEmpty) ||
         (highlightWordsData is Map && highlightWordsData.isEmpty)) {
       // Simple title without highlighting
@@ -402,13 +402,11 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
       );
     }
 
-    // Rich text title with highlighted words (supports per-word colors)
+    // Rich text title with highlighted words
     return _buildRichTextTitle(context, title, highlightWordsData);
   }
 
-  /// Build rich text title with highlighted words (same as welcome screen)
-  /// Supports per-word colors via map: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
-  /// Or simple list for backward compatibility: ["Bargain", "Wiz"]
+  /// Build rich text title with highlighted words
   Widget _buildRichTextTitle(
     BuildContext context,
     String title,
@@ -421,7 +419,7 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
     // Parse highlight words using helper
     final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
 
-    for (int i = 0; i < parts.length; i++) {
+    for (var i = 0; i < parts.length; i++) {
       final word = parts[i];
       final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
 

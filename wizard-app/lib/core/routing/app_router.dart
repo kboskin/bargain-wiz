@@ -6,6 +6,7 @@ import 'package:dartz/dartz.dart';
 
 import '../../presentation/bloc/auth/auth_bloc.dart';
 import '../../presentation/bloc/auth/auth_state.dart';
+import '../../presentation/pages/feedback/feedback_form_page.dart';
 import '../../presentation/pages/home/home_page.dart';
 import '../../presentation/pages/onboarding/onboarding_screen.dart';
 import '../../presentation/pages/start_with_text/start_with_text_page.dart';
@@ -152,6 +153,11 @@ class AppRouter {
         path: AppRoutes.startWithText,
         name: AppRoutes.startWithTextName,
         builder: (context, state) => const StartWithTextPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.feedback,
+        name: AppRoutes.feedbackName,
+        builder: (context, state) => const FeedbackFormPage(),
       ),
       // Main screen route: used by paywall close in debug so close goes to HomePage
       GoRoute(

@@ -136,7 +136,7 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     final titleText = widget.config.title.get(context);
     final highlightWordsData = widget.config.highlightWords?.title;
 
-    if (highlightWordsData == null || 
+    if (highlightWordsData == null ||
         (highlightWordsData is List && highlightWordsData.isEmpty) ||
         (highlightWordsData is Map && highlightWordsData.isEmpty)) {
       // Simple title without highlighting

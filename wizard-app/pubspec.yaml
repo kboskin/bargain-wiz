@@ -103,6 +103,9 @@ dependencies:
   # In-app purchases
   in_app_purchase: ^3.2.3
 
+  # Native store review (Rate Us)
+  in_app_review: ^2.0.9
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

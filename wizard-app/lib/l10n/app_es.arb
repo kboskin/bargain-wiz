@@ -55,6 +55,10 @@
   "profile": "Perfil",
   "bargainsHistory": "Historial de ofertas",
   "logOut": "Cerrar sesión",
+  "rateUs": "Valóranos",
+  "areYouSatisfied": "¿Estás satisfecho?",
+  "yes": "Sí",
+  "no": "No",
   "signInError": "Algo salió mal. Por favor intenta de nuevo."
 }
 

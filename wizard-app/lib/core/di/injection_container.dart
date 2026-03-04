@@ -36,9 +36,20 @@ import 'package:appwizard/data/network/network_info_impl.dart';
 import 'package:appwizard/data/repositories/onboarding_repository_impl.dart';
 import 'package:appwizard/data/repositories/express_dealmaker_repository_impl.dart';
 import 'package:appwizard/data/repositories/conversation_repository_impl.dart';
+import 'package:appwizard/data/repositories/feedback_repository_impl.dart';
+import 'package:appwizard/data/repositories/lines_that_land_repository_impl.dart';
+import 'package:appwizard/data/datasources/feedback_remote_datasource.dart';
+import 'package:appwizard/data/datasources/feedback_remote_datasource_impl.dart';
+import 'package:appwizard/data/datasources/lines_that_land_remote_datasource.dart';
+import 'package:appwizard/data/mappers/feedback_form_mapper.dart';
+import 'package:appwizard/data/mappers/lines_that_land_mapper.dart';
 import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/domain/repositories/express_dealmaker_repository.dart';
 import 'package:appwizard/domain/repositories/conversation_repository.dart';
+import 'package:appwizard/domain/repositories/feedback_repository.dart';
+import 'package:appwizard/domain/repositories/lines_that_land_repository.dart';
+import 'package:appwizard/presentation/bloc/feedback/feedback_bloc.dart';
+import 'package:appwizard/presentation/bloc/lines_that_land/lines_that_land_bloc.dart';
 
 import 'package:appwizard/core/network/network_info.dart';
 
@@ -111,6 +122,16 @@ Future<void> init() async {
     ..registerLazySingleton<ExpressDealmakerRemoteDataSource>(
       () => MockExpressDealmakerRemoteDataSource(sl<AppLogger>()),
     )
+    ..registerLazySingleton<LinesThatLandRemoteDataSource>(
+      () => LinesThatLandRemoteDataSourceImpl(sl<RemoteConfigService>()),
+    )
+    ..registerLazySingleton<FeedbackRemoteDataSource>(
+      () => FeedbackRemoteDataSourceImpl(
+        sl<RemoteConfigService>(),
+        sl<Dio>(),
+        sl<AppLogger>(),
+      ),
+    )
     // Mappers (enum mappers registered first, then mappers that depend on them)
     ..registerLazySingleton<ConversationTypeMapper>(() => ConversationTypeMapper())
     ..registerLazySingleton<ConversationMapper>(
@@ -122,6 +143,8 @@ Future<void> init() async {
     )
     ..registerLazySingleton<UploadScreenshotResultMapper>(() => UploadScreenshotResultMapper())
     ..registerLazySingleton<DealReplyMapper>(() => DealReplyMapper())
+    ..registerLazySingleton<LinesThatLandMapper>(() => LinesThatLandMapper())
+    ..registerLazySingleton<FeedbackFormMapper>(() => FeedbackFormMapper())
     // Repositories
     ..registerLazySingleton<OnboardingRepository>(
       () => OnboardingRepositoryImpl(
@@ -144,6 +167,26 @@ Future<void> init() async {
         sl<DealReplyMapper>(),
         sl<AppLogger>(),
       ),
+    )
+    ..registerLazySingleton<LinesThatLandRepository>(
+      () => LinesThatLandRepositoryImpl(
+        sl<LinesThatLandRemoteDataSource>(),
+        sl<LinesThatLandMapper>(),
+        sl<AppLogger>(),
+      ),
+    )
+    ..registerLazySingleton<FeedbackRepository>(
+      () => FeedbackRepositoryImpl(
+        sl<FeedbackRemoteDataSource>(),
+        sl<FeedbackFormMapper>(),
+        sl<AppLogger>(),
+      ),
+    )
+    ..registerLazySingleton<LinesThatLandBloc>(
+      () => LinesThatLandBloc(sl<LinesThatLandRepository>()),
+    )
+    ..registerFactory<FeedbackBloc>(
+      () => FeedbackBloc(sl<FeedbackRepository>()),
     );
 
   // Subscription Services

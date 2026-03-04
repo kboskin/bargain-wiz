@@ -1,21 +1,31 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'onboarding_data.g.dart';
+
 /// Data Transfer Object (DTO) for local storage of onboarding data
 /// Used by OnboardingLocalDataSource for SharedPreferences persistence
 /// Answers are stored abstractly based on answerKey from screen configuration
+@JsonSerializable()
 class OnboardingData {
   OnboardingData({
     this.isCompleted = false,
     required this.answers,
   });
 
-  factory OnboardingData.fromJson(Map<String, dynamic> json) {
-    return OnboardingData(
-      isCompleted: json['isCompleted'] as bool? ?? false,
-      answers: (json['answers'] as Map<String, dynamic>?) ?? {},
-    );
-  }
-
+  @JsonKey(defaultValue: false)
   final bool isCompleted;
-  final Map<String, dynamic> answers; // Key-value pairs: answerKey -> answer value
+
+  /// Key-value pairs: answerKey -> answer value
+  @JsonKey(fromJson: _answersFromJson)
+  final Map<String, dynamic> answers;
+
+  factory OnboardingData.fromJson(Map<String, dynamic> json) =>
+      _$OnboardingDataFromJson(json);
+
+  Map<String, dynamic> toJson() => _$OnboardingDataToJson(this);
+
+  static Map<String, dynamic> _answersFromJson(dynamic json) =>
+      (json as Map<String, dynamic>?) ?? {};
 
   OnboardingData copyWith({
     bool? isCompleted,
@@ -26,12 +36,4 @@ class OnboardingData {
       answers: answers ?? this.answers,
     );
   }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'isCompleted': isCompleted,
-      'answers': answers,
-    };
-  }
 }
-

@@ -5,6 +5,7 @@ import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
+import 'package:appwizard/core/widgets/button_with_floating_visual.dart';
 import 'package:appwizard/core/widgets/rc_metadata_button.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
@@ -470,9 +471,11 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
     );
 
-    return _buildDecoratedButton(
-      button: button,
-      isActionPermission: true,
+    return ButtonWithFloatingVisual(
+      visualPath: widget.model.metadata?.buttonVisual ?? 'assets/lottie/magic_stick_pointer.json',
+      visualWidth: widget.model.metadata?.buttonVisualWidth ?? 60.0,
+      visualHeight: widget.model.metadata?.buttonVisualHeight ?? 60.0,
+      child: button,
     );
   }
 
@@ -496,44 +499,13 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
       fixedSize: cellSize,
     );
 
-    return _buildDecoratedButton(
-      button: button,
-      isActionPermission: action == ButtonAction.requestPermission,
-    );
-  }
+    if (action != ButtonAction.requestPermission) return button;
 
-  /// Builds a button optionally decorated with a floating visual.
-  /// Button keeps its natural size/position; visual is positioned below the button and can overflow (Clip.none).
-  Widget _buildDecoratedButton({
-    required Widget button,
-    required bool isActionPermission,
-  }) {
-    if (!isActionPermission) return button;
-
-    final buttonVisual = widget.model.metadata?.buttonVisual;
-    final visualWidth = widget.model.metadata?.buttonVisualWidth ?? 60.0;
-    final visualHeight = widget.model.metadata?.buttonVisualHeight ?? 60.0;
-
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
-      children: [
-        button,
-        Positioned(
-          bottom: -visualHeight - 12,
-          left: 0,
-          right: 0,
-          child: IgnorePointer(
-            child: Center(
-              child: VisualAssetWidget(
-                visualPath: buttonVisual ?? 'assets/lottie/magic_stick_pointer.json',
-                width: visualWidth,
-                height: visualHeight,
-              ),
-            ),
-          ),
-        ),
-      ],
+    return ButtonWithFloatingVisual(
+      visualPath: widget.model.metadata?.buttonVisual ?? 'assets/lottie/magic_stick_pointer.json',
+      visualWidth: widget.model.metadata?.buttonVisualWidth ?? 60.0,
+      visualHeight: widget.model.metadata?.buttonVisualHeight ?? 60.0,
+      child: button,
     );
   }
 

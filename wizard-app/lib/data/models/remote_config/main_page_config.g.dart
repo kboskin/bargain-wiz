@@ -62,6 +62,7 @@ MainPageConfig _$MainPageConfigFromJson(Map<String, dynamic> json) =>
           : GradientBackgroundConfig.fromJson(
               json['background'] as Map<String, dynamic>,
             ),
+      showMic: json['show_mic'] as bool? ?? true,
     );
 
 Map<String, dynamic> _$MainPageConfigToJson(
@@ -85,6 +86,7 @@ Map<String, dynamic> _$MainPageConfigToJson(
   'center_visual': instance.centerVisual,
   'stripe_opacity': instance.stripeOpacity,
   'background': instance.background,
+  'show_mic': instance.showMic,
 };
 
 MainPageCenterVisual _$MainPageCenterVisualFromJson(

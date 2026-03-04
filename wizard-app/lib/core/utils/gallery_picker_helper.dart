@@ -15,6 +15,11 @@ import 'package:appwizard/data/models/remote_config/main_page_config.dart';
 class GalleryPickerHelper {
   GalleryPickerHelper._();
 
+  /// Prevents opening the picker twice (e.g. duplicate tap or lifecycle after permission).
+  static bool _isPickerOpen = false;
+  static DateTime? _lastPickerClosedAt;
+  static const Duration _pickerCooldown = Duration(milliseconds: 600);
+
   static String _photoPermissionText(
     BuildContext context,
     dynamic source,
@@ -73,9 +78,15 @@ class GalleryPickerHelper {
   }
 
   /// Picks image(s) from the gallery. Requests [Permission.photos], shows
-  /// permission-denied dialog or snackbars on error. Returns the list of
-  /// picked files (empty if cancelled or error).
+  /// permission-denied dialog/snackbars on error. Returns the list of
+  /// picked files (empty if cancelled or error). Guards against double-open.
   static Future<List<XFile>> pickImages(BuildContext context) async {
+    if (_isPickerOpen) return [];
+    final now = DateTime.now();
+    if (_lastPickerClosedAt != null &&
+        now.difference(_lastPickerClosedAt!) < _pickerCooldown) {
+      return [];
+    }
     final config = di.sl<RemoteConfigService>().getMainPageConfig();
     final logger = di.sl<AppLogger>();
     try {
@@ -105,11 +116,24 @@ class GalleryPickerHelper {
         );
         if (!context.mounted) return [];
       }
-      final picker = ImagePicker();
-      final images = await picker.pickMultiImage();
+
+      // Defer opening the picker to the next frame so the permission dialog
+      // can fully dismiss and avoid the native picker opening twice.
+      await Future<void>.delayed(Duration.zero);
       if (!context.mounted) return [];
-      return images;
+
+      _isPickerOpen = true;
+      try {
+        final picker = ImagePicker();
+        final images = await picker.pickMultiImage();
+        if (!context.mounted) return [];
+        return images ?? [];
+      } finally {
+        _isPickerOpen = false;
+        _lastPickerClosedAt = DateTime.now();
+      }
     } on PlatformException catch (e, stackTrace) {
+      _isPickerOpen = false;
       logger.e('Gallery picker platform error: ${e.code}', e, stackTrace);
       if (!context.mounted) return [];
       final message = e.code == 'channel-error'
@@ -127,6 +151,7 @@ class GalleryPickerHelper {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       return [];
     } catch (e, stackTrace) {
+      _isPickerOpen = false;
       logger.e('Gallery picker error', e, stackTrace);
       if (!context.mounted) return [];
       final message = _photoPermissionText(

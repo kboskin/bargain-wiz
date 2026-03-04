@@ -48,7 +48,8 @@ class SimpleModeSection extends StatefulWidget {
   State<SimpleModeSection> createState() => _SimpleModeSectionState();
 }
 
-class _SimpleModeSectionState extends State<SimpleModeSection> {
+class _SimpleModeSectionState extends State<SimpleModeSection>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _keywordController = TextEditingController();
   final FocusNode _keywordFocusNode = FocusNode();
   /// Indices for which we've started an upload and not yet completed (success/failed).
@@ -62,10 +63,19 @@ class _SimpleModeSectionState extends State<SimpleModeSection> {
   bool _replyFailed = false;
   /// Prevents auto-fetch from running more than once per "batch"; reset when user adds more screenshots.
   bool _autoFetchTriggered = false;
+
+  late final AnimationController _hintController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _hintOffset = Tween<double>(begin: 0, end: -4)
+      .animate(CurvedAnimation(parent: _hintController, curve: Curves.easeInOut));
   @override
   void dispose() {
     _keywordController.dispose();
     _keywordFocusNode.dispose();
+    _hintController.dispose();
     super.dispose();
   }
 
@@ -205,10 +215,17 @@ class _SimpleModeSectionState extends State<SimpleModeSection> {
                           ],
                           const SizedBox(height: 20),
                           Center(
-                            child: Text(
-                              '👆 ${_hintTapReply(context)} 👆',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
+                            child: AnimatedBuilder(
+                              animation: _hintController,
+                              builder: (context, child) => Transform.translate(
+                                offset: Offset(0, _hintOffset.value),
+                                child: child,
+                              ),
+                              child: Text(
+                                '👇 ${_hintTapReply(context)} 👇',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                             ),
                           ),

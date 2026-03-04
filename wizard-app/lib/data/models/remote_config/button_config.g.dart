@@ -16,6 +16,9 @@ ButtonConfig _$ButtonConfigFromJson(Map<String, dynamic> json) => ButtonConfig(
   buttonStyle: json['button_style'] == null
       ? ButtonVisualStyle.glow
       : ButtonConfig._buttonStyleFromJson(json['button_style'] as String?),
+  buttonVisual: json['button_visual'] as String?,
+  buttonVisualWidth: (json['button_visual_width'] as num?)?.toDouble(),
+  buttonVisualHeight: (json['button_visual_height'] as num?)?.toDouble(),
 );
 
 Map<String, dynamic> _$ButtonConfigToJson(ButtonConfig instance) =>
@@ -27,4 +30,7 @@ Map<String, dynamic> _$ButtonConfigToJson(ButtonConfig instance) =>
       'glow_intensity': instance.glowIntensity,
       'glow_pulse': instance.glowPulse,
       'button_style': ButtonConfig._buttonStyleToJson(instance.buttonStyle),
+      'button_visual': instance.buttonVisual,
+      'button_visual_width': instance.buttonVisualWidth,
+      'button_visual_height': instance.buttonVisualHeight,
     };

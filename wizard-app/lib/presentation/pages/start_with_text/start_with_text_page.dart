@@ -8,6 +8,7 @@ import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/domain/entities/conversation.dart';
 import 'package:appwizard/core/utils/gallery_picker_helper.dart';
+import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/widgets/scanning_overlay.dart';
@@ -79,9 +80,9 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
   bool _isListening = false;
   bool _speechAvailable = false;
 
-  bool _isPointerDown = false; // Tracks physical touch state
-  bool _isRestarting = false; // Prevents overlapping restart calls
-  String _baseText = ''; // Stores text typed before holding the mic
+  /// While holding mic: text that was already in the field before press. New recognition appends after this.
+  String _baseText = '';
+  bool _isPointerDown = false;
 
   late final AppLogger _logger = di.sl<AppLogger>();
 
@@ -231,9 +232,9 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
                             if (_messages.isNotEmpty) {
                               final list = _messages
                                   .map((m) => ProDealCloserMessage(
-                                        text: m.text,
-                                        attachmentPaths: List<String>.from(m.attachmentPaths),
-                                      ))
+                                text: m.text,
+                                attachmentPaths: List<String>.from(m.attachmentPaths),
+                              ))
                                   .toList();
                               widget.onCloseConversation?.call(list);
                             }
@@ -307,86 +308,92 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
   }
 
   /// Input bar content (text field + attach + mic + send). Used in Stack overlay or at bottom of Column.
-  Widget _buildInputBar(BuildContext context) => Container(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.paddingOf(context).bottom + 16,
+  Widget _buildInputBar(BuildContext context) {
+    final showMic =
+        di.sl<RemoteConfigService>().getMainPageConfig()?.showMic ?? true;
+    return Container(
+    padding: EdgeInsets.only(
+      left: 20,
+      right: 20,
+      top: 20,
+      bottom: MediaQuery.paddingOf(context).bottom + 16,
+    ),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withValues(alpha: 0.0),
+          Colors.white.withValues(alpha: 0.85),
+        ],
       ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.white.withValues(alpha: 0.0),
-            Colors.white.withValues(alpha: 0.85),
-          ],
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          _buildActionButton(
-            icon: Icons.add_photo_alternate_outlined,
-            enabled: true,
-            onTap: _onAttachPressed,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: 40,
-                maxHeight: 120, // roughly 4 lines
-              ),
-              child: Scrollbar(
-                thumbVisibility: false,
-                child: TextField(
-                  controller: _messageController,
-                  keyboardType: TextInputType.multiline,
-                  minLines: 1,
-                  maxLines: null, // grow vertically as text wraps
-                  decoration: InputDecoration(
-                    hintText: _isListening ? 'Listening...' : 'Type a line...',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: _isListening ? AppColors.textPrimary : AppColors.textTertiary,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _buildActionButton(
+              icon: Icons.add_photo_alternate_outlined,
+              enabled: true,
+              onTap: _onAttachPressed,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: 40,
+                  maxHeight: 120, // roughly 4 lines
+                ),
+                child: Scrollbar(
+                  thumbVisibility: false,
+                  child: TextField(
+                    controller: _messageController,
+                    keyboardType: TextInputType.multiline,
+                    minLines: 1,
+                    maxLines: null, // grow vertically as text wraps
+                    decoration: InputDecoration(
+                      hintText: _isListening ? 'Listening...' : 'Type a line...',
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(
+                        color: _isListening ? AppColors.textPrimary : AppColors.textTertiary,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                     ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textPrimary,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
+                    onSubmitted: (_) => _onSendPressed(),
                   ),
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                  onSubmitted: (_) => _onSendPressed(),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _buildMicButton(context),
-          const SizedBox(width: 8),
-          _buildActionButton(
-            icon: Icons.send,
-            enabled: _canSend,
-            onTap: _onSendPressed,
-          ),
-        ],
-      ),
+            const SizedBox(width: 8),
+          if (showMic) ...[
+            _buildMicButton(context),
+            const SizedBox(width: 8),
+          ],
+            _buildActionButton(
+              icon: Icons.send,
+              enabled: _canSend,
+              onTap: _onSendPressed,
+            ),
+          ],
+        ),
         ],
       ),
     );
+  }
 
   void _onMessageChanged() {
     final text = _messageController.text.trim();
@@ -424,136 +431,6 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
         );
       }
     });
-  }
-
-  void _onMicPointerDown() {
-    if (_isListening) return;
-
-    HapticFeedback.lightImpact(); // Tactile feedback on press
-    _isPointerDown = true;
-    _baseText = _messageController.text; // Snapshot current text at the start
-
-    setState(() {
-      _isListening = true;
-    });
-
-    _startListening();
-  }
-
-  void _onMicPointerUp() {
-    if (!_isPointerDown) return;
-
-    HapticFeedback.lightImpact(); // Tactile feedback on release
-    _isPointerDown = false;
-
-    // Unconditionally stop to prevent orphaned listeners
-    _speech.stop();
-    setState(() => _isListening = false);
-  }
-
-  /// Cleanly stops and re-initializes the mic stream if the OS kills it prematurely
-  void _restartListening() {
-    if (!_isPointerDown || !mounted || _isRestarting) return;
-
-    _isRestarting = true;
-    _baseText = _messageController.text; // Lock in the text we successfully captured
-
-    _speech.stop(); // Force teardown of the old broken session
-
-    // Give the OS 150ms to release the hardware microphone lock
-    Future.delayed(const Duration(milliseconds: 150), () {
-      _isRestarting = false;
-      if (_isPointerDown && mounted) {
-        _startListening();
-      }
-    });
-  }
-
-  Future<void> _startListening() async {
-    if (!_speechAvailable) {
-      _speechAvailable = await _speech.initialize(
-        onError: (e) => _onSpeechError(e),
-        onStatus: (status) {
-          if (!mounted) return;
-
-          if (status == 'done' || status == 'notListening') {
-            if (_isPointerDown) {
-              // OS killed it, but user is still holding. Restart seamlessly!
-              _restartListening();
-            } else {
-              setState(() => _isListening = false);
-            }
-          }
-        },
-      );
-
-      if (!mounted) return;
-
-      if (!_speechAvailable) {
-        setState(() {
-          _isListening = false;
-          _isPointerDown = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Speech recognition not available on this device')),
-        );
-        return;
-      }
-    }
-
-    if (!_isPointerDown) return;
-    if (_speech.isListening) return;
-
-    await _speech.listen(
-      onResult: (result) {
-        if (!mounted) return;
-
-        final newWords = result.recognizedWords;
-
-        // Add a space between existing text and new words if needed
-        final separator = (_baseText.isNotEmpty &&
-            !_baseText.endsWith(' ') &&
-            newWords.isNotEmpty) ? ' ' : '';
-
-        _messageController.text = _baseText + separator + newWords;
-
-        // Keep the cursor at the end
-        _messageController.selection = TextSelection.collapsed(
-          offset: _messageController.text.length,
-        );
-
-        // Force immediate UI refresh for true real-time streaming
-        setState(() {});
-      },
-      partialResults: true,
-      pauseFor: const Duration(seconds: 10), // Tell OS to tolerate longer pauses
-      listenFor: const Duration(seconds: 60), // Tell OS to allow max session length
-    );
-  }
-
-  void _onSpeechError(dynamic error) {
-    if (!mounted) return;
-
-    final errorString = error.toString();
-
-    // If the user paused too long, the OS throws an error.
-    // If they are still holding the button, intercept it and restart seamlessly!
-    if (_isPointerDown) {
-      _restartListening();
-      return;
-    }
-
-    setState(() {
-      _isListening = false;
-      _isPointerDown = false;
-    });
-
-    // Filter out non-critical timeout errors that happen naturally on release
-    if (!errorString.contains('error_no_match') && !errorString.contains('error_speech_timeout')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Speech error: $errorString')),
-      );
-    }
   }
 
   void _onSendPressed() {
@@ -623,12 +500,12 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
     );
   }
 
-  /// Mic button: hold to record indefinitely, shows equalizer inside while recording.
+  // 1. Better gesture handling to prevent accidental cancellations
   Widget _buildMicButton(BuildContext context) {
-    return Listener(
-      onPointerDown: (_) => _onMicPointerDown(),
-      onPointerUp: (_) => _onMicPointerUp(),
-      onPointerCancel: (_) => _onMicPointerUp(),
+    return GestureDetector(
+      onTapDown: (_) => _onMicPointerDown(),
+      onTapUp: (_) => _onMicPointerUp(),
+      onTapCancel: () => _onMicPointerUp(),
       child: Container(
         width: 40,
         height: 40,
@@ -656,6 +533,132 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
           ],
         ),
       ),
+    );
+  }
+
+  // 2. Refactored Mic Lifecycle Methods
+  void _onMicPointerDown() async {
+    if (_isListening) return;
+    _isPointerDown = true;
+    _baseText = _messageController.text;
+
+    setState(() => _isListening = true);
+
+    if (!_speechAvailable) {
+      _speechAvailable = await _speech.initialize(
+        onError: _onSpeechError,
+        onStatus: _onSpeechStatus,
+      );
+      if (!mounted) return;
+      if (!_speechAvailable) {
+        setState(() {
+          _isListening = false;
+          _isPointerDown = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Speech recognition not available on this device')),
+        );
+        return;
+      }
+    }
+
+    if (!_isPointerDown) return;
+
+    // Clear any "ghost" stuck state before starting
+    if (_speech.isListening) {
+      await _speech.cancel();
+    }
+
+    _startListening();
+  }
+
+  void _onMicPointerUp() async {
+    if (!_isPointerDown) return;
+    _isPointerDown = false;
+    setState(() => _isListening = false);
+    await _speech.stop();
+  }
+
+  void _onSpeechStatus(String status) {
+    if (!mounted) return;
+
+    // The OS naturally timed out due to a pause or length limit
+    if (status == 'done' || status == 'notListening') {
+      if (_isPointerDown) {
+        // User is still holding the button! Quietly reboot the microphone.
+        _restartListening();
+      } else {
+        setState(() => _isListening = false);
+      }
+    }
+  }
+
+  void _onSpeechError(dynamic error) {
+    if (!mounted) return;
+
+    // If the OS throws an error because it heard silence (error_no_match)
+    // or timed out, we just ignore it and restart if they are holding the button.
+    if (_isPointerDown) {
+      _restartListening();
+      return;
+    }
+
+    setState(() {
+      _isListening = false;
+      _isPointerDown = false;
+    });
+
+    final errorString = error.toString();
+    if (!errorString.contains('error_no_match') && !errorString.contains('error_speech_timeout')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Speech error: $errorString')),
+      );
+    }
+  }
+
+  Future<void> _restartListening() async {
+    if (!_isPointerDown || !mounted) return;
+
+    // Only attempt to stop if it thinks it's still running, avoiding state conflicts
+    if (_speech.isListening) {
+      await _speech.stop();
+      // A tiny breather allows the OS audio thread to release the mic
+      // before we immediately request it again.
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+
+    if (!_isPointerDown || !mounted) return;
+
+    // Lock in the text we've recorded so far as the new baseline
+    _baseText = _messageController.text;
+
+    // Start listening again seamlessly
+    _startListening();
+  }
+
+  Future<void> _startListening() async {
+    if (!_isPointerDown || !mounted) return;
+
+    await _speech.listen(
+      onResult: (result) {
+        if (!mounted) return;
+        final words = result.recognizedWords.trim();
+        if (words.isEmpty) return;
+
+        final currentBase = _baseText.trimRight();
+        final newText = currentBase.isEmpty ? words : '$currentBase $words';
+
+        if (_messageController.text != newText) {
+          _messageController.value = TextEditingValue(
+            text: newText,
+            selection: TextSelection.collapsed(offset: newText.length),
+          );
+          setState(() {});
+        }
+      },
+      listenMode: stt.ListenMode.dictation,
+      partialResults: true,
+      cancelOnError: false, // Don't let native errors kill the UI state
     );
   }
 }
@@ -763,16 +766,16 @@ class _SuggestionBubble extends StatelessWidget {
         decoration: attachmentPaths.isNotEmpty
             ? null
             : BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           mainAxisSize: MainAxisSize.min,
