@@ -97,25 +97,89 @@ class AppLocalizationsEs extends AppLocalizations {
   String get skipForNow => 'Omitir por ahora';
 
   @override
-  String get homeEmptyTitle => 'Sube una captura de producto o negociación';
+  String get homeEmptyTitle => 'Tu oferta, mejorada.';
 
   @override
-  String get uploadScreenshot => 'Subir producto o chat';
+  String get homeModeChooserTitle => 'Elige tu magia';
 
   @override
-  String get enterTextManually => 'Empezar con texto';
+  String get simpleModeTitle => 'Express Dealmaker';
 
   @override
-  String get getPickupLines => 'Generar líneas de oferta';
+  String get simpleModeSubtitle =>
+      'Suelta una captura y recibe líneas de la IA';
+
+  @override
+  String get chatModeTitle => 'Pro Cierra Ofertas';
+
+  @override
+  String get chatModeSubtitle => 'Chatea con el mago';
+
+  @override
+  String get simpleModeDropHint => 'Suelta una captura';
+
+  @override
+  String get simpleModeAddScreenshot => 'Añadir captura';
+
+  @override
+  String get tapReplyToCopy => 'toca una respuesta para copiar';
+
+  @override
+  String get simpleModeSeeing => 'Viendo';
+
+  @override
+  String get getDealReply => 'Obtener respuesta';
+
+  @override
+  String get expressDealmakerKeywordHint =>
+      'Dinos una o dos palabras para enfocar';
+
+  @override
+  String get expressDealmakerKeywordHintShort => 'Palabras clave (opcional)';
+
+  @override
+  String get holdReplyForMore => 'mantén una respuesta para más';
+
+  @override
+  String get getMore => 'Obtener más';
+
+  @override
+  String get retry => 'Reintentar';
+
+  @override
+  String get linesSectionTitle => 'Frases para empezar e ideas de negociación';
+
+  @override
+  String get linesSectionSubtitle =>
+      'Toca una línea para copiar y usar en tu chat';
+
+  @override
+  String get linesPlaceholder =>
+      'Obtén frases para empezar conversaciones e ideas de negociación';
+
+  @override
+  String get uploadScreenshot => 'Express Dealmaker';
+
+  @override
+  String get enterTextManually => 'Pro Cierra Ofertas';
+
+  @override
+  String get getPickupLines => 'Líneas que cierran';
 
   @override
   String get startNewNegotiation => 'Nueva negociación';
+
+  @override
+  String get share => 'Compartir';
 
   @override
   String get profile => 'Perfil';
 
   @override
   String get bargainsHistory => 'Historial de ofertas';
+
+  @override
+  String get logOut => 'Cerrar sesión';
 
   @override
   String get signInError => 'Algo salió mal. Por favor intenta de nuevo.';

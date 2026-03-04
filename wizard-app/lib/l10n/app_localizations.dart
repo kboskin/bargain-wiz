@@ -266,28 +266,136 @@ abstract class AppLocalizations {
   /// **'Skip for now'**
   String get skipForNow;
 
-  /// Main empty state title on home
+  /// Main empty state title – confident, outcome-focused
   ///
   /// In en, this message translates to:
-  /// **'Add a product or negotiation screenshot'**
+  /// **'Your deal, upgraded.'**
   String get homeEmptyTitle;
 
-  /// Primary CTA to open gallery and pick screenshot
+  /// Title above Simple vs Chat mode choice
   ///
   /// In en, this message translates to:
-  /// **'Upload Product or Chat'**
+  /// **'Choose your magic'**
+  String get homeModeChooserTitle;
+
+  /// Simple mode: drop screenshot, get AI replies
+  ///
+  /// In en, this message translates to:
+  /// **'Express Dealmaker'**
+  String get simpleModeTitle;
+
+  /// Subtitle for simple mode card
+  ///
+  /// In en, this message translates to:
+  /// **'Drop a screenshot, get deal lines from the AI'**
+  String get simpleModeSubtitle;
+
+  /// Chat mode: conversation with wizard
+  ///
+  /// In en, this message translates to:
+  /// **'Pro Deal Closer'**
+  String get chatModeTitle;
+
+  /// Subtitle for chat mode card
+  ///
+  /// In en, this message translates to:
+  /// **'Chat with the wizard'**
+  String get chatModeSubtitle;
+
+  /// Hint in simple mode when no screenshots
+  ///
+  /// In en, this message translates to:
+  /// **'Drop a screenshot'**
+  String get simpleModeDropHint;
+
+  /// Button to add another screenshot
+  ///
+  /// In en, this message translates to:
+  /// **'Add screenshot'**
+  String get simpleModeAddScreenshot;
+
+  /// Hint below AI replies
+  ///
+  /// In en, this message translates to:
+  /// **'tap a reply to copy'**
+  String get tapReplyToCopy;
+
+  /// AI observation card title
+  ///
+  /// In en, this message translates to:
+  /// **'Seeing'**
+  String get simpleModeSeeing;
+
+  /// Button to get AI reply
+  ///
+  /// In en, this message translates to:
+  /// **'Get deal reply'**
+  String get getDealReply;
+
+  /// Placeholder for keyword input in Express Dealmaker (shown above reply card)
+  ///
+  /// In en, this message translates to:
+  /// **'Give us a word or two to focus on'**
+  String get expressDealmakerKeywordHint;
+
+  /// Short placeholder for keyword field in assist panel
+  ///
+  /// In en, this message translates to:
+  /// **'Optional keywords'**
+  String get expressDealmakerKeywordHintShort;
+
+  /// Hint that holding a reply shows more options
+  ///
+  /// In en, this message translates to:
+  /// **'hold a reply for more'**
+  String get holdReplyForMore;
+
+  /// Button to generate more AI replies
+  ///
+  /// In en, this message translates to:
+  /// **'Get More'**
+  String get getMore;
+
+  /// Retry button for failed upload
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
+
+  /// Section title for deal lines / reply options
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation starters & negotiation ideas'**
+  String get linesSectionTitle;
+
+  /// Hint below the lines section title
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a line to copy and use in your chat'**
+  String get linesSectionSubtitle;
+
+  /// Placeholder when no lines have been generated yet
+  ///
+  /// In en, this message translates to:
+  /// **'Get lines to start conversations and negotiation ideas'**
+  String get linesPlaceholder;
+
+  /// Primary CTA – screenshot/scan mode
+  ///
+  /// In en, this message translates to:
+  /// **'Express Dealmaker'**
   String get uploadScreenshot;
 
-  /// Secondary option to type text
+  /// Chat mode button
   ///
   /// In en, this message translates to:
-  /// **'Start with text'**
+  /// **'Pro Deal Closer'**
   String get enterTextManually;
 
-  /// Secondary option for deal lines
+  /// Deal lines – punchy, implies success
   ///
   /// In en, this message translates to:
-  /// **'Generate Deal Lines'**
+  /// **'Lines that land'**
   String get getPickupLines;
 
   /// App bar action for new negotiation
@@ -295,6 +403,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start new negotiation'**
   String get startNewNegotiation;
+
+  /// App bar share button label
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get share;
 
   /// Drawer item label
   ///
@@ -307,6 +421,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bargains History'**
   String get bargainsHistory;
+
+  /// Drawer logout button when user is signed in
+  ///
+  /// In en, this message translates to:
+  /// **'Log out'**
+  String get logOut;
 
   /// Message shown when Google or Apple sign-in fails
   ///

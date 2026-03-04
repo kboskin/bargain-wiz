@@ -95,25 +95,87 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skipForNow => 'Skip for now';
 
   @override
-  String get homeEmptyTitle => 'Add a product or negotiation screenshot';
+  String get homeEmptyTitle => 'Your deal, upgraded.';
 
   @override
-  String get uploadScreenshot => 'Upload Product or Chat';
+  String get homeModeChooserTitle => 'Choose your magic';
 
   @override
-  String get enterTextManually => 'Start with text';
+  String get simpleModeTitle => 'Express Dealmaker';
 
   @override
-  String get getPickupLines => 'Generate Deal Lines';
+  String get simpleModeSubtitle =>
+      'Drop a screenshot, get deal lines from the AI';
+
+  @override
+  String get chatModeTitle => 'Pro Deal Closer';
+
+  @override
+  String get chatModeSubtitle => 'Chat with the wizard';
+
+  @override
+  String get simpleModeDropHint => 'Drop a screenshot';
+
+  @override
+  String get simpleModeAddScreenshot => 'Add screenshot';
+
+  @override
+  String get tapReplyToCopy => 'tap a reply to copy';
+
+  @override
+  String get simpleModeSeeing => 'Seeing';
+
+  @override
+  String get getDealReply => 'Get deal reply';
+
+  @override
+  String get expressDealmakerKeywordHint => 'Give us a word or two to focus on';
+
+  @override
+  String get expressDealmakerKeywordHintShort => 'Optional keywords';
+
+  @override
+  String get holdReplyForMore => 'hold a reply for more';
+
+  @override
+  String get getMore => 'Get More';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get linesSectionTitle => 'Conversation starters & negotiation ideas';
+
+  @override
+  String get linesSectionSubtitle => 'Tap a line to copy and use in your chat';
+
+  @override
+  String get linesPlaceholder =>
+      'Get lines to start conversations and negotiation ideas';
+
+  @override
+  String get uploadScreenshot => 'Express Dealmaker';
+
+  @override
+  String get enterTextManually => 'Pro Deal Closer';
+
+  @override
+  String get getPickupLines => 'Lines that land';
 
   @override
   String get startNewNegotiation => 'Start new negotiation';
+
+  @override
+  String get share => 'Share';
 
   @override
   String get profile => 'Profile';
 
   @override
   String get bargainsHistory => 'Bargains History';
+
+  @override
+  String get logOut => 'Log out';
 
   @override
   String get signInError => 'Uh, something went wrong. Please try again.';

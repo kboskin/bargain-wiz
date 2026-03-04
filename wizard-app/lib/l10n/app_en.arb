@@ -117,25 +117,101 @@
   "@skipForNow": {
     "description": "Button text to skip paywall temporarily"
   },
-  "homeEmptyTitle": "Add a product or negotiation screenshot",
+  "homeEmptyTitle": "Your deal, upgraded.",
   "@homeEmptyTitle": {
-    "description": "Main empty state title on home"
+    "description": "Main empty state title – confident, outcome-focused"
   },
-  "uploadScreenshot": "Upload Product or Chat",
+  "homeModeChooserTitle": "Choose your magic",
+  "@homeModeChooserTitle": {
+    "description": "Title above Simple vs Chat mode choice"
+  },
+  "simpleModeTitle": "Express Dealmaker",
+  "@simpleModeTitle": {
+    "description": "Simple mode: drop screenshot, get AI replies"
+  },
+  "simpleModeSubtitle": "Drop a screenshot, get deal lines from the AI",
+  "@simpleModeSubtitle": {
+    "description": "Subtitle for simple mode card"
+  },
+  "chatModeTitle": "Pro Deal Closer",
+  "@chatModeTitle": {
+    "description": "Chat mode: conversation with wizard"
+  },
+  "chatModeSubtitle": "Chat with the wizard",
+  "@chatModeSubtitle": {
+    "description": "Subtitle for chat mode card"
+  },
+  "simpleModeDropHint": "Drop a screenshot",
+  "@simpleModeDropHint": {
+    "description": "Hint in simple mode when no screenshots"
+  },
+  "simpleModeAddScreenshot": "Add screenshot",
+  "@simpleModeAddScreenshot": {
+    "description": "Button to add another screenshot"
+  },
+  "tapReplyToCopy": "tap a reply to copy",
+  "@tapReplyToCopy": {
+    "description": "Hint below AI replies"
+  },
+  "simpleModeSeeing": "Seeing",
+  "@simpleModeSeeing": {
+    "description": "AI observation card title"
+  },
+  "getDealReply": "Get deal reply",
+  "@getDealReply": {
+    "description": "Button to get AI reply"
+  },
+  "expressDealmakerKeywordHint": "Give us a word or two to focus on",
+  "@expressDealmakerKeywordHint": {
+    "description": "Placeholder for keyword input in Express Dealmaker (shown above reply card)"
+  },
+  "expressDealmakerKeywordHintShort": "Optional keywords",
+  "@expressDealmakerKeywordHintShort": {
+    "description": "Short placeholder for keyword field in assist panel"
+  },
+  "holdReplyForMore": "hold a reply for more",
+  "@holdReplyForMore": {
+    "description": "Hint that holding a reply shows more options"
+  },
+  "getMore": "Get More",
+  "@getMore": {
+    "description": "Button to generate more AI replies"
+  },
+  "retry": "Retry",
+  "@retry": {
+    "description": "Retry button for failed upload"
+  },
+  "linesSectionTitle": "Conversation starters & negotiation ideas",
+  "@linesSectionTitle": {
+    "description": "Section title for deal lines / reply options"
+  },
+  "linesSectionSubtitle": "Tap a line to copy and use in your chat",
+  "@linesSectionSubtitle": {
+    "description": "Hint below the lines section title"
+  },
+  "linesPlaceholder": "Get lines to start conversations and negotiation ideas",
+  "@linesPlaceholder": {
+    "description": "Placeholder when no lines have been generated yet"
+  },
+  "uploadScreenshot": "Express Dealmaker",
   "@uploadScreenshot": {
-    "description": "Primary CTA to open gallery and pick screenshot"
+    "description": "Primary CTA – screenshot/scan mode"
   },
-  "enterTextManually": "Start with text",
+  "enterTextManually": "Pro Deal Closer",
   "@enterTextManually": {
-    "description": "Secondary option to type text"
+    "description": "Chat mode button"
   },
-  "getPickupLines": "Generate Deal Lines",
+  "getPickupLines": "Lines that land",
   "@getPickupLines": {
-    "description": "Secondary option for deal lines"
+    "description": "Deal lines – punchy, implies success"
   },
   "startNewNegotiation": "Start new negotiation",
   "@startNewNegotiation": {
     "description": "App bar action for new negotiation"
+  },
+  "share": "Share",
+  "@share": {
+    "description": "App bar share button label"
   },
   "profile": "Profile",
   "@profile": {
@@ -144,6 +220,10 @@
   "bargainsHistory": "Bargains History",
   "@bargainsHistory": {
     "description": "Drawer item label"
+  },
+  "logOut": "Log out",
+  "@logOut": {
+    "description": "Drawer logout button when user is signed in"
   },
   "signInError": "Uh, something went wrong. Please try again.",
   "@signInError": {

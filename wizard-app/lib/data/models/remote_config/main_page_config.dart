@@ -10,9 +10,12 @@ part 'main_page_config.g.dart';
 class MainPageConfig {
   MainPageConfig({
     this.headerText,
-    this.uploadButtonText,
-    this.enterTextButtonText,
-    this.getPickupLinesButtonText,
+    this.primaryCtaButton,
+    this.additionCtaButton,
+    this.generationCtaButton,
+    this.expressDealmakerKeywordHint,
+    this.expressDealmakerHoldReplyHint,
+    this.expressDealmakerTapReplyHint,
     this.photoPermissionDeniedTitle,
     this.photoPermissionDeniedMessage,
     this.photoPermissionSnackbar,
@@ -30,14 +33,26 @@ class MainPageConfig {
   @JsonKey(name: 'header_text', fromJson: _multilocaleFromJson)
   final dynamic headerText;
 
-  @JsonKey(name: 'upload_button_text', fromJson: _multilocaleFromJson)
-  final dynamic uploadButtonText;
+  @JsonKey(name: 'primary_cta_button', fromJson: _multilocaleFromJson)
+  final dynamic primaryCtaButton;
 
-  @JsonKey(name: 'enter_text_button_text', fromJson: _multilocaleFromJson)
-  final dynamic enterTextButtonText;
+  @JsonKey(name: 'addition_cta_button', fromJson: _multilocaleFromJson)
+  final dynamic additionCtaButton;
 
-  @JsonKey(name: 'get_pickup_lines_button_text', fromJson: _multilocaleFromJson)
-  final dynamic getPickupLinesButtonText;
+  @JsonKey(name: 'generation_cta_button', fromJson: _multilocaleFromJson)
+  final dynamic generationCtaButton;
+
+  /// Express Dealmaker: keyword input placeholder. RC key: express_dealmaker_keyword_hint.
+  @JsonKey(name: 'express_dealmaker_keyword_hint', fromJson: _multilocaleFromJson)
+  final dynamic expressDealmakerKeywordHint;
+
+  /// Express Dealmaker: "hold a reply for more" hint. RC key: express_dealmaker_hold_reply_hint.
+  @JsonKey(name: 'express_dealmaker_hold_reply_hint', fromJson: _multilocaleFromJson)
+  final dynamic expressDealmakerHoldReplyHint;
+
+  /// Express Dealmaker: tap reply to copy hint. RC key: express_dealmaker_tap_reply_hint.
+  @JsonKey(name: 'express_dealmaker_tap_reply_hint', fromJson: _multilocaleFromJson)
+  final dynamic expressDealmakerTapReplyHint;
 
   /// Title for the dialog when photo permission was permanently denied.
   @JsonKey(name: 'photo_permission_denied_title', fromJson: _multilocaleFromJson)

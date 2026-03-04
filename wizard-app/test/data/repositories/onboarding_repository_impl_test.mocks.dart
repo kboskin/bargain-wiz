@@ -5,6 +5,7 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i3;
 
+import 'package:appwizard/core/utils/app_logger.dart' as _i5;
 import 'package:appwizard/data/datasources/onboarding_local_datasource.dart'
     as _i2;
 import 'package:appwizard/data/models/onboarding_data.dart' as _i4;
@@ -59,4 +60,38 @@ class MockOnboardingLocalDataSource extends _i1.Mock
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
           as _i3.Future<void>);
+}
+
+/// A class which mocks [AppLogger].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockAppLogger extends _i1.Mock implements _i5.AppLogger {
+  MockAppLogger() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  void d(String? message) => super.noSuchMethod(
+    Invocation.method(#d, [message]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void e(String? message, [Object? error, StackTrace? stackTrace]) =>
+      super.noSuchMethod(
+        Invocation.method(#e, [message, error, stackTrace]),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void i(String? message) => super.noSuchMethod(
+    Invocation.method(#i, [message]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void w(String? message) => super.noSuchMethod(
+    Invocation.method(#w, [message]),
+    returnValueForMissingStub: null,
+  );
 }

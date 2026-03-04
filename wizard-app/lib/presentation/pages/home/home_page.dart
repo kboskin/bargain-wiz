@@ -1,21 +1,30 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
-import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/core/utils/gallery_picker_helper.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/data/models/multilocale_text.dart';
 import 'package:appwizard/data/models/remote_config/main_page_config.dart';
+import 'package:appwizard/data/models/remote_config/share_config.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_bloc.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_event.dart';
+import 'package:appwizard/presentation/bloc/auth/auth_state.dart';
 import 'package:appwizard/presentation/pages/start_with_text/start_with_text_page.dart';
+import 'package:appwizard/presentation/pages/home/simple_mode_section.dart';
+import 'package:appwizard/presentation/pages/home/screenshot_upload_item.dart';
+import 'package:appwizard/domain/repositories/express_dealmaker_repository.dart';
+import 'package:appwizard/domain/repositories/conversation_repository.dart';
+import 'package:appwizard/domain/entities/conversation.dart' show Conversation, ConversationType, ProDealCloserMessage;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -29,11 +38,19 @@ class _HomePageState extends State<HomePage> {
   static const double _kScrolledThreshold = 20;
   bool _isScrolledToChat = false;
   int _conversationKey = 0;
+  String? _activeConversationId;
+  ConversationType? _activeConversationType;
+  List<ScreenshotUploadItem> _expressDealmakerItems = [];
+  final List<_ConversationSnapshot> _conversationHistory = [];
+  List<String>? _activeInitialReplyOptions;
+  String? _activeInitialKeyword;
+  List<_ProDealCloserMessageSnapshot>? _proDealCloserInitialMessages;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScrollChanged);
+    _loadConversationHistory();
   }
 
   @override
@@ -51,8 +68,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _onStartNewNegotiation(BuildContext context) {
-    // TODO: Navigate to new negotiation / upload flow
+  void _onShare(BuildContext context) {
+    final config = di.sl<RemoteConfigService>().getShareConfig() ??
+        ShareConfig.defaultConfig;
+    final title = config.getTitle(context).trim();
+    final description = config.getDescription(context).trim();
+    final linkUrl = config.linkUrl?.trim() ?? '';
+    final parts = <String>[];
+    if (title.isNotEmpty) parts.add(title);
+    if (description.isNotEmpty) parts.add(description);
+    if (linkUrl.isNotEmpty) parts.add(linkUrl);
+    final text = parts.join('\n\n');
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nothing to share')),
+      );
+      return;
+    }
+    Share.share(
+      text,
+      subject: title.isNotEmpty ? title : null,
+    );
   }
 
   void _scrollTo(double offset) {
@@ -67,6 +103,52 @@ class _HomePageState extends State<HomePage> {
     if (_isScrolledToChat) {
       _scrollTo(0);
     }
+  }
+
+  Future<void> _loadConversationHistory() async {
+    final repo = di.sl<ConversationRepository>();
+    final result = await repo.getConversations();
+    result.fold(
+      (_) {},
+      (entities) {
+        if (!mounted) return;
+        setState(() {
+          _conversationHistory
+            ..clear()
+            ..addAll(
+              entities.map((e) {
+                if (e.type == ConversationType.proDealCloser) {
+                  return _ConversationSnapshot(
+                    id: e.id,
+                    type: e.type.name,
+                    screenshots: const [],
+                    replyOptions: e.replyOptions,
+                    keyword: e.keyword,
+                    messages: e.messages
+                        .map((m) => _ProDealCloserMessageSnapshot(
+                              text: m.text,
+                              attachmentPaths: List<String>.from(m.attachmentPaths),
+                            ))
+                        .toList(),
+                    createdAt: e.createdAt,
+                  );
+                }
+                return _ConversationSnapshot(
+                  id: e.id,
+                  type: e.type.name,
+                  screenshots: e.screenshotPaths
+                      .map((p) => ScreenshotUploadItem(path: p))
+                      .toList(),
+                  replyOptions: e.replyOptions,
+                  keyword: e.keyword,
+                  messages: const [],
+                  createdAt: e.createdAt,
+                );
+              }),
+            );
+        });
+      },
+    );
   }
 
   @override
@@ -106,10 +188,48 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _onStartNewNegotiation(context),
-            tooltip: l10n.startNewNegotiation,
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _onShare(context),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundDark,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.backgroundDark.withValues(alpha: 0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.share_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        l10n.share,
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -125,14 +245,164 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   SizedBox(
                     height: viewportHeight,
-                    child: _EmptyStateContent(
-                      l10n: l10n,
-                      config: mainPageConfig,
-                      onStartWithText: () {
-                        setState(() => _conversationKey++);
-                        _scrollTo(viewportHeight);
-                      },
-                    ),
+                    child: _expressDealmakerItems.isNotEmpty
+                        ? SimpleModeSection(
+                            screenshotItems: _expressDealmakerItems,
+                            onBack: () => setState(() {
+                              _expressDealmakerItems = [];
+                              _activeInitialReplyOptions = null;
+                              _activeInitialKeyword = null;
+                            }),
+                            onAddPaths: (paths) {
+                              setState(() {
+                                _activeConversationType = ConversationType.express;
+                                _activeConversationId ??= null;
+                                _expressDealmakerItems = [
+                                  ..._expressDealmakerItems,
+                                  ...paths.map((p) => ScreenshotUploadItem(path: p)),
+                                ];
+                              });
+                            },
+                            onItemStatusChange: (index, status) {
+                              if (index < 0 || index >= _expressDealmakerItems.length) return;
+                              setState(() {
+                                _expressDealmakerItems = [
+                                  ..._expressDealmakerItems.sublist(0, index),
+                                  _expressDealmakerItems[index].copyWith(status: status),
+                                  ..._expressDealmakerItems.sublist(index + 1),
+                                ];
+                              });
+                            },
+                            initialReplyOptions: _activeInitialReplyOptions,
+                            initialKeyword: _activeInitialKeyword,
+                            onCloseConversation: (screenshots, replyOptions, keyword) {
+                              final now = DateTime.now();
+                              final id = _activeConversationType == ConversationType.express &&
+                                      _activeConversationId != null
+                                  ? _activeConversationId!
+                                  : now.millisecondsSinceEpoch.toString();
+                              final paths = screenshots.map((e) => e.path).toList();
+                              final entity = Conversation(
+                                id: id,
+                                type: ConversationType.express,
+                                screenshotPaths: paths,
+                                replyOptions: replyOptions ?? const [],
+                                keyword: keyword,
+                                messages: const [],
+                                createdAt: now,
+                              );
+                              final repo = di.sl<ConversationRepository>();
+                              repo.saveConversation(entity);
+                              setState(() {
+                                _activeConversationId = id;
+                                _activeConversationType = ConversationType.express;
+                                _conversationHistory.removeWhere((c) => c.id == id);
+                                _conversationHistory.insert(
+                                  0,
+                                  _ConversationSnapshot(
+                                    id: id,
+                                    type: ConversationType.express.name,
+                                    screenshots: List<ScreenshotUploadItem>.from(screenshots),
+                                    replyOptions: replyOptions ?? const [],
+                                    keyword: keyword,
+                                    messages: const [],
+                                    createdAt: now,
+                                  ),
+                                );
+                              });
+                            },
+                            expressDealmakerRepository: di.sl<ExpressDealmakerRepository>(),
+                          )
+                        : _conversationHistory.isNotEmpty
+                            ? _ExpressDealmakerHistoryView(
+                                l10n: l10n,
+                                conversationHistory: _conversationHistory,
+                                onConversationSelected: (snapshot) {
+                                      if (snapshot.type == ConversationType.proDealCloser.name) {
+                                        setState(() {
+                                          _activeConversationId = snapshot.id;
+                                          _activeConversationType = ConversationType.proDealCloser;
+                                          _proDealCloserInitialMessages =
+                                              snapshot.messages.isNotEmpty
+                                                  ? List<_ProDealCloserMessageSnapshot>.from(
+                                                      snapshot.messages,
+                                                    )
+                                                  : null;
+                                          _conversationKey++;
+                                        });
+                                        _scrollTo(viewportHeight);
+                                      } else {
+                                        setState(() {
+                                          _activeConversationId = snapshot.id;
+                                          _activeConversationType = ConversationType.express;
+                                          _expressDealmakerItems =
+                                              List<ScreenshotUploadItem>.from(
+                                            snapshot.screenshots,
+                                          );
+                                          _activeInitialReplyOptions =
+                                              snapshot.replyOptions;
+                                          _activeInitialKeyword = snapshot.keyword;
+                                        });
+                                      }
+                                },
+                                onDelete: (snapshot) {
+                                  setState(() {
+                                    _conversationHistory.remove(snapshot);
+                                  });
+                                  final repo = di.sl<ConversationRepository>();
+                                  repo.deleteConversation(snapshot.id);
+                                },
+                                onStartWithText: () {
+                                  setState(() {
+                                        _activeConversationId = null;
+                                        _activeConversationType = ConversationType.proDealCloser;
+                                    _conversationKey++;
+                                    _proDealCloserInitialMessages = null;
+                                  });
+                                  _scrollTo(viewportHeight);
+                                },
+                                onExpressDealmakerPicked: (paths) {
+                                  setState(() {
+                                    _expressDealmakerItems = paths
+                                        .map(
+                                          (p) =>
+                                              ScreenshotUploadItem(path: p),
+                                        )
+                                        .toList();
+                                    _activeConversationId = null;
+                                    _activeConversationType = ConversationType.express;
+                                    _activeInitialReplyOptions = null;
+                                    _activeInitialKeyword = null;
+                                  });
+                                },
+                              )
+                            : _EmptyStateContent(
+                                l10n: l10n,
+                                config: mainPageConfig,
+                                onStartWithText: () {
+                                  setState(() {
+                                    _activeConversationId = null;
+                                    _activeConversationType = ConversationType.proDealCloser;
+                                    _conversationKey++;
+                                    _proDealCloserInitialMessages = null;
+                                  });
+                                  _scrollTo(viewportHeight);
+                                },
+                                onExpressDealmakerPicked: (paths) {
+                                  setState(() {
+                                    _expressDealmakerItems = paths
+                                        .map(
+                                          (p) =>
+                                              ScreenshotUploadItem(path: p),
+                                        )
+                                        .toList();
+                                    _activeConversationId = null;
+                                    _activeConversationType = ConversationType.express;
+                                    _activeInitialReplyOptions = null;
+                                    _activeInitialKeyword = null;
+                                  });
+                                },
+                              ),
                   ),
                   ConstrainedBox(
                     constraints: BoxConstraints(minHeight: viewportHeight),
@@ -142,6 +412,50 @@ class _HomePageState extends State<HomePage> {
                         key: ValueKey(_conversationKey),
                         embeddedInScrollView: true,
                         onScrollBackUp: () => _scrollTo(0),
+                        initialMessages: _proDealCloserInitialMessages
+                            ?.map((m) => ProDealCloserMessage(
+                                  text: m.text,
+                                  attachmentPaths: List<String>.from(m.attachmentPaths),
+                                ))
+                            .toList(),
+                        onCloseConversation: (messages) {
+                          if (messages.isEmpty) return;
+                          final now = DateTime.now();
+                          final id = _activeConversationType == ConversationType.proDealCloser &&
+                                  _activeConversationId != null
+                              ? _activeConversationId!
+                              : now.millisecondsSinceEpoch.toString();
+                          final entity = Conversation(
+                            id: id,
+                            type: ConversationType.proDealCloser,
+                            screenshotPaths: const [],
+                            replyOptions: const [],
+                            messages: messages,
+                            createdAt: now,
+                          );
+                          di.sl<ConversationRepository>().saveConversation(entity);
+                          setState(() {
+                            _activeConversationId = id;
+                            _activeConversationType = ConversationType.proDealCloser;
+                            _proDealCloserInitialMessages = null;
+                            _conversationHistory.removeWhere((c) => c.id == id);
+                            _conversationHistory.insert(
+                              0,
+                              _ConversationSnapshot(
+                                id: id,
+                                type: ConversationType.proDealCloser.name,
+                                screenshots: const [],
+                                messages: messages
+                                    .map((m) => _ProDealCloserMessageSnapshot(
+                                          text: m.text,
+                                          attachmentPaths: List<String>.from(m.attachmentPaths),
+                                        ))
+                                    .toList(),
+                                createdAt: now,
+                              ),
+                            );
+                          });
+                        },
                       ),
                     ),
                   ),
@@ -154,129 +468,6 @@ class _HomePageState extends State<HomePage> {
     ),
     );
   }
-}
-
-String _photoPermissionText(
-  BuildContext context,
-  dynamic source,
-  String fallback,
-) {
-  if (source == null) return fallback;
-  if (source is MultilocaleText) return source.get(context);
-  if (source is String && source.isNotEmpty) return source;
-  return fallback;
-}
-
-Future<void> _pickImageFromGallery(BuildContext context) async {
-  final config = di.sl<RemoteConfigService>().getMainPageConfig();
-  final logger = di.sl<AppLogger>();
-  try {
-    try {
-      final status = await Permission.photos.request();
-      if (!context.mounted) return;
-      if (!status.isGranted) {
-        if (status.isPermanentlyDenied) {
-          _showPhotoPermissionDeniedDialog(context, config);
-          return;
-        }
-        final snackbarText = _photoPermissionText(
-          context,
-          config?.photoPermissionSnackbar,
-          'Photo access is needed to pick a screenshot.',
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(snackbarText)),
-        );
-        return;
-      }
-    } on MissingPluginException catch (e, stackTrace) {
-      logger.e(
-        'Permission handler not registered (e.g. after hot restart), opening picker anyway',
-        e,
-        stackTrace,
-      );
-      if (!context.mounted) return;
-      // Fall through to open picker; system will prompt if needed
-    }
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    if (!context.mounted) return;
-    if (image != null) {
-      // TODO: use the picked screenshot (e.g. navigate to analysis flow)
-    }
-  } on PlatformException catch (e, stackTrace) {
-    logger.e('Gallery picker platform error: ${e.code}', e, stackTrace);
-    if (!context.mounted) return;
-    final message = e.code == 'channel-error'
-        ? _photoPermissionText(
-            context,
-            config?.galleryUnavailableMessage,
-            'Gallery is temporarily unavailable. Try fully restarting the app.',
-          )
-        : (e.message ?? _photoPermissionText(
-            context,
-            config?.galleryErrorMessage,
-            'Could not open gallery.',
-          ));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  } catch (e, stackTrace) {
-    logger.e('Gallery picker error', e, stackTrace);
-    if (!context.mounted) return;
-    final message = _photoPermissionText(
-      context,
-      config?.galleryErrorTryAgainMessage,
-      'Could not open gallery. Please try again.',
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-}
-
-void _showPhotoPermissionDeniedDialog(
-  BuildContext context,
-  MainPageConfig? config,
-) {
-  final title = _photoPermissionText(
-    context,
-    config?.photoPermissionDeniedTitle,
-    'Photo access',
-  );
-  final message = _photoPermissionText(
-    context,
-    config?.photoPermissionDeniedMessage,
-    'Photo library access was denied. To pick a screenshot, allow access in Settings.',
-  );
-  final openSettingsLabel = _photoPermissionText(
-    context,
-    config?.openSettingsButtonText,
-    'Open Settings',
-  );
-  final cancelLabel = _photoPermissionText(
-    context,
-    config?.cancelButtonText,
-    MaterialLocalizations.of(context).cancelButtonLabel,
-  );
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: Text(cancelLabel),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.of(ctx).pop();
-            openAppSettings();
-          },
-          child: Text(openSettingsLabel),
-        ),
-      ],
-    ),
-  );
 }
 
 class _HomeDrawer extends StatelessWidget {
@@ -364,6 +555,22 @@ class _HomeDrawer extends StatelessWidget {
                     // TODO: Navigate to bargains history
                   },
                 ),
+                BlocBuilder<AuthBloc, AuthState>(
+                  builder: (context, state) {
+                    if (state is AuthAuthenticated) {
+                      return _buildDrawerItem(
+                        context: context,
+                        icon: Icons.logout,
+                        title: l10n.logOut,
+                        onTap: () {
+                          context.read<AuthBloc>().add(const SignOutRequested());
+                          Navigator.pop(context);
+                        },
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
               ],
             ),
           ),
@@ -400,32 +607,265 @@ class _HomeDrawer extends StatelessWidget {
     );
 }
 
+class _ExpressDealmakerHistoryView extends StatelessWidget {
+  const _ExpressDealmakerHistoryView({
+    required this.l10n,
+    required this.conversationHistory,
+    required this.onConversationSelected,
+    required this.onDelete,
+    this.onStartWithText,
+    this.onExpressDealmakerPicked,
+  });
+
+  final AppLocalizations l10n;
+  final List<_ConversationSnapshot> conversationHistory;
+  final ValueChanged<_ConversationSnapshot> onConversationSelected;
+  final ValueChanged<_ConversationSnapshot> onDelete;
+  final VoidCallback? onStartWithText;
+  final ValueChanged<List<String>>? onExpressDealmakerPicked;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Center(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const crossAxisCount = 3;
+                  const spacing = 10.0;
+                  const cellWidth = 140.0;
+                  const cellHeight = 187.0; // 3:4 aspect
+                  final gridWidth =
+                      crossAxisCount * cellWidth + (crossAxisCount - 1) * spacing;
+
+                  return SizedBox(
+                    width: gridWidth,
+                    child: GridView.builder(
+                      padding: EdgeInsets.zero,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        mainAxisSpacing: spacing,
+                        crossAxisSpacing: spacing,
+                        childAspectRatio: cellWidth / cellHeight,
+                      ),
+                      itemCount: conversationHistory.length,
+                      itemBuilder: (context, index) {
+                        final snapshot = conversationHistory[index];
+                        final firstPath = snapshot.firstImagePath;
+                        final bool hasImage = firstPath != null &&
+                            firstPath.isNotEmpty &&
+                            File(firstPath).existsSync();
+
+                        Widget content;
+                        if (hasImage) {
+                          content = Image.file(
+                            File(firstPath!),
+                            fit: BoxFit.cover,
+                          );
+                        } else {
+                          content = Container(
+                            color: AppColors.border.withValues(alpha: 0.3),
+                            child: Center(
+                              child: Icon(
+                                Icons.chat_bubble_outline_rounded,
+                                size: 48,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Material(
+                              elevation: 2,
+                              borderRadius: BorderRadius.circular(12),
+                              shadowColor: Colors.black26,
+                              child: InkWell(
+                                onTap: () => onConversationSelected(snapshot),
+                                borderRadius: BorderRadius.circular(12),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: content,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: Material(
+                                color: Colors.black54,
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  onTap: () => onDelete(snapshot),
+                                  customBorder: const CircleBorder(),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(6),
+                                    child: Icon(
+                                      Icons.close,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final images = await GalleryPickerHelper.pickImages(context);
+                    if (!context.mounted || images.isEmpty) return;
+                    final paths = images.map((x) => x.path).toList();
+                    onExpressDealmakerPicked?.call(paths);
+                  },
+                  icon: const Icon(
+                    Icons.add_photo_alternate_rounded,
+                    size: 22,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    l10n.uploadScreenshot,
+                    style: AppTextStyles.buttonText,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.backgroundDark,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onStartWithText,
+                      icon: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 20,
+                        color: AppColors.textPrimary,
+                      ),
+                      label: Text(
+                        l10n.enterTextManually,
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.textPrimary,
+                        side: BorderSide(
+                          color: AppColors.border,
+                          width: 1.2,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        // TODO: Get pickup lines from history view
+                      },
+                      icon: Icon(
+                        Icons.auto_awesome,
+                        size: 20,
+                        color: AppColors.textPrimary,
+                      ),
+                      label: Text(
+                        l10n.getPickupLines,
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.textPrimary,
+                        side: BorderSide(
+                          color: AppColors.border,
+                          width: 1.2,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _EmptyStateContent extends StatelessWidget {
   const _EmptyStateContent({
     required this.l10n,
     this.config,
     this.onStartWithText,
+    this.onExpressDealmakerPicked,
   });
 
   final AppLocalizations l10n;
   final MainPageConfig? config;
-  /// When set, "Start with text" scrolls to the chat section instead of pushing a route.
   final VoidCallback? onStartWithText;
+  final ValueChanged<List<String>>? onExpressDealmakerPicked;
 
   String _headerText(BuildContext context) =>
       (config?.headerText as MultilocaleText?)?.get(context) ??
           l10n.homeEmptyTitle;
 
   String _uploadText(BuildContext context) =>
-      (config?.uploadButtonText as MultilocaleText?)?.get(context) ??
+      (config?.primaryCtaButton as MultilocaleText?)?.get(context) ??
           l10n.uploadScreenshot;
 
   String _enterTextText(BuildContext context) =>
-      (config?.enterTextButtonText as MultilocaleText?)?.get(context) ??
+      (config?.additionCtaButton as MultilocaleText?)?.get(context) ??
           l10n.enterTextManually;
 
   String _pickupLinesText(BuildContext context) =>
-      (config?.getPickupLinesButtonText as MultilocaleText?)?.get(context) ??
+      (config?.generationCtaButton as MultilocaleText?)?.get(context) ??
           l10n.getPickupLines;
 
   @override
@@ -434,7 +874,6 @@ class _EmptyStateContent extends StatelessWidget {
 
     return Column(
       children: [
-        // 1. TEXT: Centered in the flexible space between the top and the image
         Expanded(
           child: Center(
             child: Padding(
@@ -451,8 +890,6 @@ class _EmptyStateContent extends StatelessWidget {
             ),
           ),
         ),
-
-        // 2. IMAGE: Sits in the middle because it's sandwiched between an Expanded and a Spacer
         if (centerVisual != null)
           VisualAssetWidget(
             visualPath: centerVisual.visual,
@@ -461,11 +898,7 @@ class _EmptyStateContent extends StatelessWidget {
           )
         else
           const SizedBox(height: 200),
-
-        // 3. SPACER: Balances the top Expanded space to keep the image centered
         const Spacer(),
-
-        // 4. BUTTONS: Pinned safely to the bottom
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
           child: Column(
@@ -473,8 +906,22 @@ class _EmptyStateContent extends StatelessWidget {
             children: [
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => _pickImageFromGallery(context),
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final images = await GalleryPickerHelper.pickImages(context);
+                    if (!context.mounted || images.isEmpty) return;
+                    final paths = images.map((x) => x.path).toList();
+                    onExpressDealmakerPicked?.call(paths);
+                  },
+                  icon: Icon(
+                    Icons.add_photo_alternate_rounded,
+                    size: 22,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    _uploadText(context),
+                    style: AppTextStyles.buttonText,
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.backgroundDark,
                     foregroundColor: Colors.white,
@@ -484,29 +931,20 @@ class _EmptyStateContent extends StatelessWidget {
                     ),
                     elevation: 0,
                   ),
-                  child: Text(
-                    _uploadText(context),
-                    style: AppTextStyles.buttonText,
-                  ),
                 ),
               ),
               const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: OutlinedButton.icon(
                       onPressed: onStartWithText ?? () => context.push(AppRoutes.startWithText),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppColors.textPrimary,
-                        side: BorderSide(
-                            color: AppColors.border, width: 1.2),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
+                      icon: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 20,
+                        color: AppColors.textPrimary,
                       ),
-                      child: Text(
+                      label: Text(
                         _enterTextText(context),
                         style: AppTextStyles.labelLarge.copyWith(
                           color: AppColors.textPrimary,
@@ -516,14 +954,6 @@ class _EmptyStateContent extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        // TODO: Get pickup lines
-                      },
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: AppColors.textPrimary,
@@ -534,7 +964,20 @@ class _EmptyStateContent extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                       ),
-                      child: Text(
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        // TODO: Get pickup lines
+                      },
+                      icon: Icon(
+                        Icons.auto_awesome,
+                        size: 20,
+                        color: AppColors.textPrimary,
+                      ),
+                      label: Text(
                         _pickupLinesText(context),
                         style: AppTextStyles.labelLarge.copyWith(
                           color: AppColors.textPrimary,
@@ -543,6 +986,16 @@ class _EmptyStateContent extends StatelessWidget {
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.textPrimary,
+                        side: BorderSide(
+                            color: AppColors.border, width: 1.2),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                       ),
                     ),
                   ),
@@ -553,6 +1006,42 @@ class _EmptyStateContent extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Simple message representation for Pro Deal Closer snapshot (UI only).
+class _ProDealCloserMessageSnapshot {
+  _ProDealCloserMessageSnapshot({required this.text, this.attachmentPaths = const []});
+  final String text;
+  final List<String> attachmentPaths;
+}
+
+class _ConversationSnapshot {
+  _ConversationSnapshot({
+    required this.id,
+    required this.type,
+    required this.screenshots,
+    this.replyOptions = const [],
+    this.keyword,
+    this.messages = const [],
+    required this.createdAt,
+  });
+
+  final String id;
+  final String type;
+  final List<ScreenshotUploadItem> screenshots;
+  final List<String> replyOptions;
+  final String? keyword;
+  final List<_ProDealCloserMessageSnapshot> messages;
+  final DateTime createdAt;
+
+  /// First image path for history thumbnail: express = first screenshot, pro = first attachment from messages.
+  String? get firstImagePath {
+    if (screenshots.isNotEmpty) return screenshots.first.path;
+    for (final m in messages) {
+      if (m.attachmentPaths.isNotEmpty) return m.attachmentPaths.first;
+    }
+    return null;
   }
 }
 

@@ -384,38 +384,41 @@ Map<String, dynamic> _$DataUploadScreenModelToJson(
 
 CreateAccountScreenModel _$CreateAccountScreenModelFromJson(
   Map<String, dynamic> json,
-) =>
-    CreateAccountScreenModel(
-      title: CreateAccountScreenModel._multilocaleFromJson(json['title']),
-      description:
-          CreateAccountScreenModel._multilocaleFromJson(json['description']),
-      nextButtonText: CreateAccountScreenModel._multilocaleFromJson(
-          json['next_button_text']),
-      showTopBar: json['show_top_bar'] as bool? ?? true,
-      googleButtonLabel: CreateAccountScreenModel._multilocaleFromJson(
-          json['google_button_label']),
-      appleButtonLabel: CreateAccountScreenModel._multilocaleFromJson(
-          json['apple_button_label']),
-      googlePlatforms: (json['google_platforms'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-      applePlatforms: (json['apple_platforms'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-    );
+) => CreateAccountScreenModel(
+  title: CreateAccountScreenModel._multilocaleFromJson(json['title']),
+  description: CreateAccountScreenModel._multilocaleFromJson(
+    json['description'],
+  ),
+  nextButtonText: CreateAccountScreenModel._multilocaleFromJson(
+    json['next_button_text'],
+  ),
+  showTopBar: json['show_top_bar'] as bool? ?? true,
+  googleButtonLabel: CreateAccountScreenModel._multilocaleFromJson(
+    json['google_button_label'],
+  ),
+  appleButtonLabel: CreateAccountScreenModel._multilocaleFromJson(
+    json['apple_button_label'],
+  ),
+  googlePlatforms: (json['google_platforms'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
+  applePlatforms: (json['apple_platforms'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
+);
 
 Map<String, dynamic> _$CreateAccountScreenModelToJson(
-        CreateAccountScreenModel instance) =>
-    <String, dynamic>{
-      'title': instance.title?.toJson(),
-      'description': instance.description?.toJson(),
-      'next_button_text': instance.nextButtonText?.toJson(),
-      'show_top_bar': instance.showTopBar,
-      'google_button_label': instance.googleButtonLabel?.toJson(),
-      'apple_button_label': instance.appleButtonLabel?.toJson(),
-      'google_platforms': instance.googlePlatforms,
-      'apple_platforms': instance.applePlatforms,
-    };
+  CreateAccountScreenModel instance,
+) => <String, dynamic>{
+  'title': ?instance.title,
+  'description': ?instance.description,
+  'next_button_text': ?instance.nextButtonText,
+  'show_top_bar': instance.showTopBar,
+  'google_button_label': ?instance.googleButtonLabel,
+  'apple_button_label': ?instance.appleButtonLabel,
+  'google_platforms': ?instance.googlePlatforms,
+  'apple_platforms': ?instance.applePlatforms,
+};
 
 WarmupScreenModel _$WarmupScreenModelFromJson(Map<String, dynamic> json) =>
     WarmupScreenModel(

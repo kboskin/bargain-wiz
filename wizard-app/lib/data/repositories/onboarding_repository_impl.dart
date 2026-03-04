@@ -4,21 +4,20 @@ import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
 import 'package:appwizard/data/datasources/onboarding_local_datasource.dart';
-import 'package:appwizard/data/models/onboarding_data.dart';
-import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
+import 'package:appwizard/data/mappers/onboarding_data_mapper.dart';
 
 /// Implementation of OnboardingRepository
 class OnboardingRepositoryImpl implements OnboardingRepository {
-  final OnboardingLocalDataSource localDataSource;
-  final AppLogger _logger;
+  OnboardingRepositoryImpl(this.localDataSource, this._mapper, this._logger);
 
-  OnboardingRepositoryImpl(this.localDataSource, this._logger);
+  final OnboardingLocalDataSource localDataSource;
+  final OnboardingDataMapper _mapper;
+  final AppLogger _logger;
 
   @override
   Future<Either<Failure, void>> saveOnboardingData(OnboardingDataEntity entity) async {
     try {
-      // Convert entity to data model
-      final data = _entityToData(entity);
+      final data = _mapper.toModel(entity);
       await localDataSource.saveOnboardingData(data);
       return const Right(null);
     } catch (e, stackTrace) {
@@ -32,7 +31,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     try {
       final data = await localDataSource.getOnboardingData();
       if (data == null) return const Right(null);
-      return Right(_dataToEntity(data));
+      return Right(_mapper.toEntity(data));
     } catch (e, stackTrace) {
       _logger.e('Error loading onboarding data', e, stackTrace);
       return Left(CacheFailure(e.toString()));
@@ -66,80 +65,12 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       OnboardingDataEntity entity) async {
     try {
       // TODO: Replace with real backend API call (e.g. POST /api/onboarding/sync)
-      // Simulate network delay until backend is available
       await Future<void>.delayed(const Duration(seconds: 3));
       return const Right(null);
     } catch (e, stackTrace) {
       _logger.e('Error uploading onboarding user data', e, stackTrace);
       return Left(CacheFailure(e.toString()));
     }
-  }
-
-  /// Convert entity to data model
-  /// Answers are stored by their answerKey from the screen configuration
-  OnboardingData _entityToData(OnboardingDataEntity entity) {
-    final answersMap = <String, dynamic>{};
-    
-    for (final answer in entity.answers) {
-      // Use answerKey if available, otherwise fallback to screen index
-      final key = answer.answerKey ?? 'screen_${answer.screenIndex}';
-      answersMap[key] = answer.answer;
-    }
-
-    return OnboardingData(
-      isCompleted: entity.isCompleted,
-      answers: answersMap,
-    );
-  }
-
-  /// Convert data model to entity
-  /// Supports both new format (answerKey -> answer) and legacy format (screen_X -> answer data)
-  OnboardingDataEntity _dataToEntity(OnboardingData data) {
-    final answers = <OnboardingAnswer>[];
-
-    for (final entry in data.answers.entries) {
-      try {
-        final key = entry.key;
-        final answerValue = entry.value;
-        
-        // Check if this is legacy format (screen_X with full answer data)
-        if (key.startsWith('screen_') && answerValue is Map<String, dynamic>) {
-          // Legacy format: extract from map
-          final index = int.tryParse(key.replaceFirst('screen_', '')) ?? 0;
-          answers.add(OnboardingAnswer(
-            screenIndex: index,
-            screenTitle: answerValue['screenTitle'] as String? ?? '',
-            screenType: answerValue['screenType'] != null
-                ? OnboardingScreenType.fromString(answerValue['screenType'] as String)
-                : OnboardingScreenType.engagement,
-            answerKey: answerValue['answerKey'] as String?,
-            answer: answerValue['answer'],
-          ));
-        } else {
-          // New format: key is answerKey, value is the answer
-          // We need to determine screen index from key (fallback to 0)
-          final index = key.startsWith('screen_')
-              ? int.tryParse(key.replaceFirst('screen_', '')) ?? 0
-              : 0;
-          
-          answers.add(OnboardingAnswer(
-            screenIndex: index,
-            screenTitle: '', // Will be filled from config when available
-            screenType: OnboardingScreenType.engagement, // Default fallback
-            answerKey: key.startsWith('screen_') ? null : key,
-            answer: answerValue,
-          ));
-        }
-      } catch (e) {
-        _logger.w('Skipping invalid onboarding answer entry: $e');
-        continue;
-      }
-    }
-
-    return OnboardingDataEntity(
-      answers: answers,
-      isCompleted: data.isCompleted,
-    );
   }
 }
 

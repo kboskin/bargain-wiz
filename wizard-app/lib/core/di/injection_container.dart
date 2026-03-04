@@ -25,9 +25,20 @@ import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/utils/asset_path_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/data/datasources/onboarding_local_datasource.dart';
+import 'package:appwizard/data/datasources/express_dealmaker_remote_datasource.dart';
+import 'package:appwizard/data/datasources/conversation_local_datasource.dart';
+import 'package:appwizard/data/mappers/conversation_mapper.dart';
+import 'package:appwizard/data/mappers/conversation_type_mapper.dart';
+import 'package:appwizard/data/mappers/onboarding_data_mapper.dart';
+import 'package:appwizard/data/mappers/onboarding_screen_type_mapper.dart';
+import 'package:appwizard/data/mappers/express_dealmaker_mapper.dart';
 import 'package:appwizard/data/network/network_info_impl.dart';
 import 'package:appwizard/data/repositories/onboarding_repository_impl.dart';
+import 'package:appwizard/data/repositories/express_dealmaker_repository_impl.dart';
+import 'package:appwizard/data/repositories/conversation_repository_impl.dart';
 import 'package:appwizard/domain/repositories/onboarding_repository.dart';
+import 'package:appwizard/domain/repositories/express_dealmaker_repository.dart';
+import 'package:appwizard/domain/repositories/conversation_repository.dart';
 
 import 'package:appwizard/core/network/network_info.dart';
 
@@ -91,9 +102,48 @@ Future<void> init() async {
         sl<AppLogger>(),
       ),
     )
+    ..registerLazySingleton<ConversationLocalDataSource>(
+      () => ConversationLocalDataSourceImpl(
+        sl<SharedPreferences>(),
+        sl<AppLogger>(),
+      ),
+    )
+    ..registerLazySingleton<ExpressDealmakerRemoteDataSource>(
+      () => MockExpressDealmakerRemoteDataSource(sl<AppLogger>()),
+    )
+    // Mappers (enum mappers registered first, then mappers that depend on them)
+    ..registerLazySingleton<ConversationTypeMapper>(() => ConversationTypeMapper())
+    ..registerLazySingleton<ConversationMapper>(
+      () => ConversationMapper(sl<ConversationTypeMapper>(), sl<AppLogger>()),
+    )
+    ..registerLazySingleton<OnboardingScreenTypeMapper>(() => OnboardingScreenTypeMapper())
+    ..registerLazySingleton<OnboardingDataMapper>(
+      () => OnboardingDataMapper(sl<OnboardingScreenTypeMapper>(), sl<AppLogger>()),
+    )
+    ..registerLazySingleton<UploadScreenshotResultMapper>(() => UploadScreenshotResultMapper())
+    ..registerLazySingleton<DealReplyMapper>(() => DealReplyMapper())
     // Repositories
     ..registerLazySingleton<OnboardingRepository>(
-      () => OnboardingRepositoryImpl(sl<OnboardingLocalDataSource>(), sl<AppLogger>()),
+      () => OnboardingRepositoryImpl(
+        sl<OnboardingLocalDataSource>(),
+        sl<OnboardingDataMapper>(),
+        sl<AppLogger>(),
+      ),
+    )
+    ..registerLazySingleton<ConversationRepository>(
+      () => ConversationRepositoryImpl(
+        sl<ConversationLocalDataSource>(),
+        sl<ConversationMapper>(),
+        sl<AppLogger>(),
+      ),
+    )
+    ..registerLazySingleton<ExpressDealmakerRepository>(
+      () => ExpressDealmakerRepositoryImpl(
+        sl<ExpressDealmakerRemoteDataSource>(),
+        sl<UploadScreenshotResultMapper>(),
+        sl<DealReplyMapper>(),
+        sl<AppLogger>(),
+      ),
     );
 
   // Subscription Services

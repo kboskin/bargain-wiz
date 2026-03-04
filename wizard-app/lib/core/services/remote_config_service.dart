@@ -9,6 +9,7 @@ import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
 import 'package:appwizard/data/models/remote_config/subscription_config.dart';
 import 'package:appwizard/data/models/remote_config/main_page_config.dart';
 import 'package:appwizard/data/models/remote_config/paywall_config.dart';
+import 'package:appwizard/data/models/remote_config/share_config.dart';
 import 'package:appwizard/core/config/app_config.dart';
 
 /// Service for managing Firebase Remote Config values
@@ -314,6 +315,27 @@ class RemoteConfigService {
       return MainPageConfig.fromJson(json);
     } catch (e, stackTrace) {
       _logger.e('Error parsing main page config', e, stackTrace);
+      return null;
+    }
+  }
+
+  /// Get share configuration from Remote Config (key: [share_config]).
+  /// Used when the user taps Share to generate a Firebase link with title, description, imageUrl.
+  /// Returns null if not configured.
+  ShareConfig? getShareConfig() {
+    try {
+      final jsonString = getString('share_config');
+      if (jsonString.isEmpty) {
+        return null;
+      }
+      final json = jsonDecode(jsonString);
+      if (json is! Map<String, dynamic>) {
+        _logger.w('Invalid share_config format');
+        return null;
+      }
+      return ShareConfig.fromJson(json);
+    } catch (e, stackTrace) {
+      _logger.e('Error parsing share config', e, stackTrace);
       return null;
     }
   }

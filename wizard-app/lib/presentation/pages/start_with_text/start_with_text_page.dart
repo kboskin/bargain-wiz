@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/utils/app_logger.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:appwizard/domain/entities/conversation.dart';
+import 'package:appwizard/core/utils/gallery_picker_helper.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
-import 'package:appwizard/core/routing/app_routes.dart';
+import 'package:appwizard/core/widgets/scanning_overlay.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 /// Chat-style "Start with text" screen: input at top, AI suggestion bubbles
 /// that appear to stack from the bottom, with a persistent bottom action bar.
@@ -51,10 +54,14 @@ class StartWithTextSection extends StatefulWidget {
     super.key,
     this.embeddedInScrollView = false,
     this.onScrollBackUp,
+    this.initialMessages,
+    this.onCloseConversation,
   });
 
   final bool embeddedInScrollView;
   final VoidCallback? onScrollBackUp;
+  final List<ProDealCloserMessage>? initialMessages;
+  final void Function(List<ProDealCloserMessage> messages)? onCloseConversation;
 
   @override
   State<StartWithTextSection> createState() => _StartWithTextSectionState();
@@ -65,7 +72,8 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
   final ScrollController _scrollController = ScrollController();
   final stt.SpeechToText _speech = stt.SpeechToText();
 
-  final List<String> _suggestions = [];
+  /// Sent messages (user bubbles). Text may be empty if only attachments were sent.
+  final List<_ChatMessage> _messages = [];
 
   bool _hasMessageText = false;
   bool _isListening = false;
@@ -81,6 +89,16 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
   void initState() {
     super.initState();
     _messageController.addListener(_onMessageChanged);
+    final initial = widget.initialMessages;
+    if (initial != null && initial.isNotEmpty) {
+      for (final m in initial) {
+        _messages.add(_ChatMessage(
+          text: m.text,
+          attachmentPaths: List<String>.from(m.attachmentPaths),
+          isUploading: false,
+        ));
+      }
+    }
   }
 
   @override
@@ -102,9 +120,9 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
           top: 12,
           bottom: 100,
         ),
-        itemCount: _suggestions.length + 2,
+        itemCount: _messages.length + 2,
         itemBuilder: (context, index) {
-          if (index == _suggestions.length + 1) {
+          if (index == _messages.length + 1) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Column(
@@ -118,13 +136,17 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
               ),
             );
           }
-          if (index == _suggestions.length) {
+          if (index == _messages.length) {
             return const SizedBox(height: 120);
           }
-          final text = _suggestions[_suggestions.length - 1 - index];
+          final message = _messages[_messages.length - 1 - index];
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _SuggestionBubble(text: text),
+            child: _SuggestionBubble(
+              text: message.text,
+              attachmentPaths: message.attachmentPaths,
+              isUploading: message.isUploading,
+            ),
           );
         },
       ),
@@ -133,77 +155,123 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
   );
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.max,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (widget.onScrollBackUp != null)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 20, 4),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              onPressed: widget.onScrollBackUp,
-              icon: const Icon(Icons.chevron_left),
-              color: AppColors.textPrimary,
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.white,
-                padding: const EdgeInsets.all(8),
-              ),
-              tooltip: 'Back to main',
+  Widget build(BuildContext context) {
+    final chatColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            reverse: true,
+            padding: const EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 12,
+              bottom: 12,
             ),
+            itemCount: _messages.length + 2,
+            itemBuilder: (context, index) {
+              if (index == _messages.length + 1) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildPromptBubble(context),
+                      const SizedBox(height: 12),
+                      _buildHint(context),
+                    ],
+                  ),
+                );
+              }
+              if (index == _messages.length) {
+                return const SizedBox(height: 24);
+              }
+              final message = _messages[_messages.length - 1 - index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _SuggestionBubble(
+                  text: message.text,
+                  attachmentPaths: message.attachmentPaths,
+                  isUploading: message.isUploading,
+                ),
+              );
+            },
           ),
         ),
-      if (widget.embeddedInScrollView)
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  padding: const EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 12,
-                    bottom: 12,
-                  ),
-                  itemCount: _suggestions.length + 2,
-                  itemBuilder: (context, index) {
-                    if (index == _suggestions.length + 1) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildPromptBubble(context),
-                            const SizedBox(height: 12),
-                            _buildHint(context),
-                          ],
+        _buildInputBar(context),
+      ],
+    );
+
+    if (widget.onScrollBackUp != null && widget.embeddedInScrollView) {
+      return Column(
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                chatColumn,
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 20, 4),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
                         ),
-                      );
-                    }
-                    if (index == _suggestions.length) {
-                      return const SizedBox(height: 24);
-                    }
-                    final text = _suggestions[_suggestions.length - 1 - index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _SuggestionBubble(text: text),
-                    );
-                  },
+                        child: IconButton(
+                          onPressed: () {
+                            if (_messages.isNotEmpty) {
+                              final list = _messages
+                                  .map((m) => ProDealCloserMessage(
+                                        text: m.text,
+                                        attachmentPaths: List<String>.from(m.attachmentPaths),
+                                      ))
+                                  .toList();
+                              widget.onCloseConversation?.call(list);
+                            }
+                            widget.onScrollBackUp?.call();
+                          },
+                          icon: const Icon(Icons.chevron_left),
+                          color: AppColors.textPrimary,
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            padding: const EdgeInsets.all(8),
+                          ),
+                          tooltip: 'Back to main',
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              _buildInputBar(context),
-            ],
+              ],
+            ),
           ),
-        )
-      else
-        Expanded(child: _buildChatArea()),
-    ],
-  );
+        ],
+      );
+    }
+
+    if (widget.embeddedInScrollView) {
+      return Column(
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [Expanded(child: chatColumn)],
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [Expanded(child: _buildChatArea())],
+    );
+  }
 
   Widget _buildPromptBubble(BuildContext context) => Align(
     alignment: Alignment.centerLeft,
@@ -227,14 +295,7 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
     ),
   );
 
-  Widget _buildHint(BuildContext context) => Center(
-    child: Text(
-      '⚡ hold a reply for more ⚡',
-      style: AppTextStyles.bodySmall.copyWith(
-        color: AppColors.textSecondary,
-      ),
-    ),
-  );
+  Widget _buildHint(BuildContext context) => const SizedBox.shrink();
 
   Widget _buildBottomBar(BuildContext context) {
     return Positioned(
@@ -245,9 +306,8 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
     );
   }
 
-  /// Input bar content (text field + mic + send). Used in Stack overlay or at bottom of Column.
-  Widget _buildInputBar(BuildContext context) {
-    return Container(
+  /// Input bar content (text field + attach + mic + send). Used in Stack overlay or at bottom of Column.
+  Widget _buildInputBar(BuildContext context) => Container(
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
@@ -264,31 +324,54 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
           ],
         ),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _buildActionButton(
+            icon: Icons.add_photo_alternate_outlined,
+            enabled: true,
+            onTap: _onAttachPressed,
+          ),
+          const SizedBox(width: 8),
           Expanded(
-            child: TextField(
-              controller: _messageController,
-              decoration: InputDecoration(
-                hintText: _isListening ? 'Listening...' : 'Type a line...',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(
-                  color: _isListening ? AppColors.textPrimary : AppColors.textTertiary,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: 40,
+                maxHeight: 120, // roughly 4 lines
+              ),
+              child: Scrollbar(
+                thumbVisibility: false,
+                child: TextField(
+                  controller: _messageController,
+                  keyboardType: TextInputType.multiline,
+                  minLines: 1,
+                  maxLines: null, // grow vertically as text wraps
+                  decoration: InputDecoration(
+                    hintText: _isListening ? 'Listening...' : 'Type a line...',
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: _isListening ? AppColors.textPrimary : AppColors.textTertiary,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                  ),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                  onSubmitted: (_) => _onSendPressed(),
                 ),
               ),
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textPrimary,
-              ),
-              onSubmitted: (_) => _onSendPressed(),
             ),
           ),
           const SizedBox(width: 8),
@@ -296,13 +379,14 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
           const SizedBox(width: 8),
           _buildActionButton(
             icon: Icons.send,
-            enabled: _hasMessageText,
+            enabled: _canSend,
             onTap: _onSendPressed,
           ),
         ],
       ),
+        ],
+      ),
     );
-  }
 
   void _onMessageChanged() {
     final text = _messageController.text.trim();
@@ -313,6 +397,33 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
         _hasMessageText = hasText;
       });
     }
+  }
+
+  bool get _canSend => _hasMessageText;
+
+  Future<void> _onAttachPressed() async {
+    final picked = await GalleryPickerHelper.pickImages(context);
+    if (!mounted || picked.isEmpty) return;
+    final paths = picked.map((x) => x.path).toList();
+    setState(() {
+      _messages.add(_ChatMessage(
+        text: '',
+        attachmentPaths: paths,
+        isUploading: true,
+      ));
+    });
+    _scheduleUploadDone(_messages.length - 1);
+
+    // Scroll so the new message is visible
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   void _onMicPointerDown() {
@@ -449,9 +560,9 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
     setState(() {
-      _suggestions.add('⚡ $text');
+      _messages.add(_ChatMessage(text: text, attachmentPaths: const []));
+      _messageController.clear();
     });
-    _messageController.clear();
 
     // Clean up states
     _isPointerDown = false;
@@ -467,6 +578,21 @@ class _StartWithTextSectionState extends State<StartWithTextSection> {
           curve: Curves.easeOut,
         );
       }
+    });
+  }
+
+  /// Simulates upload completion after a delay; replace message at [index] with isUploading: false.
+  void _scheduleUploadDone(int index) {
+    Future.delayed(const Duration(milliseconds: 2200), () {
+      if (!mounted || index >= _messages.length) return;
+      setState(() {
+        final m = _messages[index];
+        _messages[index] = _ChatMessage(
+          text: m.text,
+          attachmentPaths: m.attachmentPaths,
+          isUploading: false,
+        );
+      });
     });
   }
 
@@ -600,34 +726,94 @@ class _RecordingEqualizerState extends State<_RecordingEqualizer>
   }
 }
 
-class _SuggestionBubble extends StatelessWidget {
-  const _SuggestionBubble({required this.text});
+class _ChatMessage {
+  const _ChatMessage({
+    required this.text,
+    this.attachmentPaths = const [],
+    this.isUploading = false,
+  });
 
   final String text;
+  final List<String> attachmentPaths;
+  final bool isUploading;
+}
+
+class _SuggestionBubble extends StatelessWidget {
+  const _SuggestionBubble({
+    required this.text,
+    this.attachmentPaths = const [],
+    this.isUploading = false,
+  });
+
+  final String text;
+  final List<String> attachmentPaths;
+  final bool isUploading;
 
   @override
   Widget build(BuildContext context) {
+    const imageWidth = 165.0;
+    const imageHeight = 280.0;
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: attachmentPaths.isNotEmpty
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.85),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
+        decoration: attachmentPaths.isNotEmpty
+            ? null
+            : BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (attachmentPaths.isNotEmpty) ...[
+              SizedBox(
+                height: imageHeight,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  shrinkWrap: true,
+                  itemCount: attachmentPaths.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: ImageWithScanningOverlay(
+                        width: imageWidth,
+                        height: imageHeight,
+                        borderRadius: 8,
+                        isUploading: isUploading,
+                        child: Image.file(
+                          File(attachmentPaths[index]),
+                          width: imageWidth,
+                          height: imageHeight,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (text.isNotEmpty) const SizedBox(height: 8),
+            ],
+            if (text.isNotEmpty)
+              Text(
+                text,
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
+              ),
           ],
-        ),
-        child: Text(
-          text,
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
         ),
       ),
     );
   }
-}T
+}

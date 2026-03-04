@@ -11,10 +11,9 @@ OnboardingConfig _$OnboardingConfigFromJson(Map<String, dynamic> json) =>
       background: json['background'] == null
           ? null
           : GradientBackgroundConfig.fromJson(
-              json['background'] as Map<String, dynamic>),
+              json['background'] as Map<String, dynamic>,
+            ),
     );
 
 Map<String, dynamic> _$OnboardingConfigToJson(OnboardingConfig instance) =>
-    <String, dynamic>{
-      'background': instance.background?.toJson(),
-    };
+    <String, dynamic>{'background': instance.background};
