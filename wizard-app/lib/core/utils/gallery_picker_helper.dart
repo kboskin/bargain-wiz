@@ -6,8 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
-import 'package:appwizard/data/models/multilocale_text.dart';
-import 'package:appwizard/data/models/remote_config/main_page_config.dart';
+import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
+import 'package:appwizard/features/home/data/models/main_page_config.dart';
 
 /// Shared gallery picker: requests photo permission, shows configurable
 /// dialogs/snackbars, and returns picked image file(s). Use for "Upload Product

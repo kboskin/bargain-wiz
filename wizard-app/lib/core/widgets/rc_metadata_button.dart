@@ -4,7 +4,7 @@ import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
-import 'package:appwizard/data/models/remote_config/button_config.dart';
+import 'package:appwizard/features/shared/data/models/remote_config/button_config.dart';
 
 /// Button widget that uses ButtonConfig from Remote Config metadata.
 /// Optionally shows a floating Lottie below the button (e.g. magic stick) when [floatingVisualPath] is set.

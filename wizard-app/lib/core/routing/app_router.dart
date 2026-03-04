@@ -4,18 +4,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dartz/dartz.dart';
 
-import '../../presentation/bloc/auth/auth_bloc.dart';
-import '../../presentation/bloc/auth/auth_state.dart';
-import '../../presentation/pages/feedback/feedback_form_page.dart';
-import '../../presentation/pages/home/home_page.dart';
-import '../../presentation/pages/onboarding/onboarding_screen.dart';
-import '../../presentation/pages/start_with_text/start_with_text_page.dart';
-import '../../presentation/pages/onboarding/welcome_screen_page.dart';
-import '../../presentation/pages/paywall/paywall_page.dart';
-import '../../presentation/bloc/subscription/subscription_bloc.dart';
-import '../../core/di/injection_container.dart' as di;
-import '../../domain/repositories/onboarding_repository.dart';
-import '../error/failures.dart';
+import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:appwizard/features/auth/presentation/bloc/auth_state.dart';
+import 'package:appwizard/features/feedback/presentation/pages/feedback_form_page.dart';
+import 'package:appwizard/features/home/presentation/pages/home_page.dart';
+import 'package:appwizard/features/onboarding/presentation/pages/onboarding_screen.dart';
+import 'package:appwizard/features/start_with_text/presentation/pages/start_with_text_page.dart';
+import 'package:appwizard/features/onboarding/presentation/pages/welcome_screen_page.dart';
+import 'package:appwizard/features/paywall/presentation/pages/paywall_page.dart';
+import 'package:appwizard/features/subscription/presentation/bloc/subscription_bloc.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
+import 'package:appwizard/core/error/failures.dart';
 import 'app_routes.dart';
 
 /// App router configuration

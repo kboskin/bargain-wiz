@@ -1,4 +1,4 @@
-import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'remote_config_service.dart';
 

@@ -1,14 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dartz/dartz.dart';
-import 'package:appwizard/data/repositories/onboarding_repository_impl.dart';
-import 'package:appwizard/domain/entities/onboarding_data_entity.dart';
-import 'package:appwizard/data/datasources/onboarding_local_datasource.dart';
-import 'package:appwizard/data/models/onboarding_data.dart';
+import 'package:appwizard/features/onboarding/data/repositories/onboarding_repository_impl.dart';
+import 'package:appwizard/features/onboarding/domain/entities/onboarding_data_entity.dart';
+import 'package:appwizard/features/onboarding/data/datasources/onboarding_local_datasource.dart';
+import 'package:appwizard/features/onboarding/data/models/onboarding_data.dart';
 import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
-import 'package:appwizard/data/models/remote_config/onboarding_screen_config.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
 
 import 'onboarding_repository_impl_test.mocks.dart';
 

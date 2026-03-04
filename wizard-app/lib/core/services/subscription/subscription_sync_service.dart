@@ -3,8 +3,8 @@ import 'package:dio/dio.dart';
 import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
-import 'package:appwizard/data/models/subscription_model.dart';
-import 'package:appwizard/domain/entities/subscription_status.dart';
+import 'package:appwizard/features/subscription/data/models/subscription_model.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
 import 'package:appwizard/core/config/app_config.dart';
 
 /// Service for syncing subscription status with backend

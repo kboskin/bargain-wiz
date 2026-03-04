@@ -2,15 +2,15 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/services/firebase_service.dart';
-import 'package:appwizard/data/models/remote_config/onboarding_model.dart';
-import 'package:appwizard/data/models/remote_config/gradient_background_config.dart';
-import 'package:appwizard/data/models/remote_config/onboarding_config.dart';
-import 'package:appwizard/data/models/remote_config/welcome_screen_config.dart';
-import 'package:appwizard/data/models/remote_config/subscription_config.dart';
-import 'package:appwizard/data/models/remote_config/main_page_config.dart';
-import 'package:appwizard/data/models/remote_config/paywall_config.dart';
-import 'package:appwizard/data/models/remote_config/rate_us_modal_config.dart';
-import 'package:appwizard/data/models/remote_config/share_config.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/gradient_background_config.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_config.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/welcome_screen_config.dart';
+import 'package:appwizard/features/subscription/data/models/subscription_config.dart';
+import 'package:appwizard/features/home/data/models/main_page_config.dart';
+import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
+import 'package:appwizard/features/home/data/models/rate_us_modal_config.dart';
+import 'package:appwizard/features/home/data/models/share_config.dart';
 import 'package:appwizard/core/config/app_config.dart';
 
 /// Service for managing Firebase Remote Config values

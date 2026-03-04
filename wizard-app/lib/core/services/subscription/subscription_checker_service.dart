@@ -1,6 +1,6 @@
-import 'package:appwizard/domain/repositories/subscription_repository.dart';
-import 'package:appwizard/domain/entities/subscription_status.dart';
-import 'package:appwizard/domain/entities/subscription_tier.dart';
+import 'package:appwizard/features/subscription/domain/repositories/subscription_repository.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 
 /// Service for checking subscription-based feature access
