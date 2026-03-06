@@ -5,14 +5,17 @@ import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
+import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 
 class WarmupScreenWidget extends StatefulWidget {
   final WarmupScreenModel model;
+  final Color? textColor;
 
   const WarmupScreenWidget({
     super.key,
     required this.model,
+    this.textColor,
   });
 
   @override
@@ -44,7 +47,7 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
           Text(
             title,
             style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-              color: AppColors.backgroundDark,
+              color: widget.textColor ?? AppColors.backgroundDark,
               fontWeight: FontWeight.bold,
               fontSize: 32,
             ),
@@ -65,19 +68,20 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
           if (description.isNotEmpty)
             StyledDescriptionWidget(
               description: description,
-              highlightWordsData: _getDescriptionHighlightWords(),
+              highlightWordsData: widget.model.metadata?.highlightWords?.description,
               highlightColor: _getHighlightColor(),
               textHighlightHelper: _textHighlightHelper,
-              onRichTextDescription: _buildRichTextDescription,
+              onRichTextDescription: (ctx, desc, data) => StyledRichTextDescriptionWidget(
+                description: desc,
+                highlightWordsData: data,
+                baseColor: widget.textColor ?? AppColors.backgroundDark,
+                highlightColor: _getHighlightColor(),
+                textAlign: TextAlign.center,
+              ),
             ),
         ],
       ),
     );
-  }
-
-  /// Get description highlight words from metadata
-  dynamic _getDescriptionHighlightWords() {
-    return widget.model.metadata?.highlightWords?.description;
   }
 
   /// Get highlight color from metadata
@@ -250,51 +254,4 @@ class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
     );
   }
 
-  /// Build rich text description with highlighted words
-  /// Supports isHighlight (color), isBold (bold + highlight_color), isBoldLarge (bold + slightly bigger).
-  Widget _buildRichTextDescription(
-    BuildContext context,
-    String description,
-    dynamic highlightWordsData,
-  ) {
-    final parts = description.split(' ');
-    final textSpans = <TextSpan>[];
-    final defaultHighlightColor = _getHighlightColor();
-    const double bodySize = 18.0;
-    const double boldLargeSize = 22.0;
-
-    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
-
-    for (final word in parts) {
-      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
-      final useBold = result.isHighlight || result.isBold || result.isBoldLarge;
-      final color = useBold
-          ? (result.wordColor ?? defaultHighlightColor ?? AppColors.backgroundDark)
-          : AppColors.backgroundDark.withValues(alpha: 0.9);
-      final fontSize = result.isBoldLarge ? boldLargeSize : (result.isHighlight ? 20.0 : bodySize);
-
-      textSpans.add(
-        TextSpan(
-          text: '$word ',
-          style: useBold
-              ? TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: fontSize,
-                  height: 1.5,
-                )
-              : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: color,
-                  height: 1.5,
-                  fontSize: bodySize,
-                ),
-        ),
-      );
-    }
-
-    return RichText(
-      textAlign: TextAlign.center,
-      text: TextSpan(children: textSpans),
-    );
-  }
 }

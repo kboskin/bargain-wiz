@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
+import 'package:appwizard/core/widgets/styled_title_widget.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
@@ -14,12 +14,14 @@ import 'package:flutter/material.dart';
 class ReferralCodeScreenWidget extends StatefulWidget {
   final ReferralCodeScreenModel model;
   final String? selectedValue;
+  final Color? textColor;
   final Function(String) onValueChanged;
 
   const ReferralCodeScreenWidget({
     super.key,
     required this.model,
     this.selectedValue,
+    this.textColor,
     required this.onValueChanged,
   });
 
@@ -79,7 +81,7 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Title
-          _buildStyledTitle(context, title),
+          StyledTitleWidget(title: title, baseColor: widget.textColor ?? AppColors.backgroundDark),
           if (description != null) ...[
             const SizedBox(height: 16),
             // Description
@@ -98,17 +100,6 @@ class _ReferralCodeScreenWidgetState extends State<ReferralCodeScreenWidget> {
       ),
     );
   }
-
-  /// Build styled title
-  Widget _buildStyledTitle(final BuildContext context, String title) => Text(
-      title,
-      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-            color: AppColors.backgroundDark,
-            fontWeight: FontWeight.bold,
-            fontSize: 32,
-          ),
-      textAlign: TextAlign.center,
-    );
 
   /// Build referral code input field
   Widget _buildReferralCodeInput(final BuildContext context) => TextField(

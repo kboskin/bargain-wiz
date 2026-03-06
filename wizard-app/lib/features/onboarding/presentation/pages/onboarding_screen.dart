@@ -416,6 +416,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     OnboardingBloc bloc, {
     required int screenIndex,
     required int currentPageIndex,
+    Color? textColor,
   }) {
     final isActive = screenIndex == currentPageIndex;
     // Config is inline in the onboarding screen (visual + metadata), same as other screens
@@ -459,6 +460,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       isActivePage: isActive,
       highlightWordsData: highlightWordsData,
       highlightColor: highlightColor,
+      textColor: textColor,
     );
   }
 
@@ -528,19 +530,26 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       );
     }
 
+    final onboardingConfig = di.sl<RemoteConfigService>().getOnboardingConfig();
+    final textColorHex = screen.metadata?.textColor ?? onboardingConfig?.textColor ?? '#000000';
+    final colorHelper = di.sl<ColorHelper>();
+    final textColor = colorHelper.getColor(textColorHex) ?? AppColors.backgroundDark;
+
     // Map each screen type to its dedicated widget using when pattern matching
     return screen.when<Widget>(
-      engagement: (model) => EngagementScreenWidget(model: model),
+      engagement: (model) => EngagementScreenWidget(model: model, textColor: textColor),
       dataUpload: (model) => _buildDataUploadScreen(
             model,
             state,
             bloc,
             screenIndex: index,
             currentPageIndex: currentPageIndex,
+            textColor: textColor,
           ),
       select: (model) => SelectScreenWidget(
         model: model,
         selectedValue: state.answers[index],
+        textColor: textColor,
         onOptionSelected: (value) {
           bloc.add(
             OnboardingAnswerChanged(
@@ -556,6 +565,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       slider: (model) => SliderScreenWidget(
         model: model,
         selectedValue: state.answers[index],
+        textColor: textColor,
         onValueChanged: (value) {
           bloc.add(
             OnboardingAnswerChanged(
@@ -570,12 +580,14 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       ),
       permission: (model) => PermissionScreenWidget(
         model: model,
+        textColor: textColor,
         onContinue: () => _handleNext(state, _onboardingBloc),
       ),
       imageList: (model) => ImageListScreenWidget(model: model),
       referralCode: (model) => ReferralCodeScreenWidget(
         model: model,
         selectedValue: state.answers[index] as String?,
+        textColor: textColor,
         onValueChanged: (value) {
           bloc.add(
             OnboardingAnswerChanged(
@@ -594,7 +606,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
             ? () => context.go(AppRoutes.main)
             : () => _handleNext(state, _onboardingBloc),
       ),
-      warmup: (model) => WarmupScreenWidget(model: model),
+      warmup: (model) => WarmupScreenWidget(model: model, textColor: textColor),
       createAccount: (model) => CreateAccountScreenWidget(
         model: model,
         onContinue: () => _handleNext(state, _onboardingBloc),

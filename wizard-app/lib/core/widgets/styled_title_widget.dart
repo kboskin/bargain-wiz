@@ -16,6 +16,7 @@ class StyledTitleWidget extends StatelessWidget {
     this.fontSize = 32.0,
     this.fontSizeHighlight = 36.0,
     this.fontWeight = FontWeight.w700,
+    this.padding,
   });
 
   final String title;
@@ -26,6 +27,7 @@ class StyledTitleWidget extends StatelessWidget {
   final double fontSize;
   final double fontSizeHighlight;
   final FontWeight fontWeight;
+  final EdgeInsets? padding;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +39,7 @@ class StyledTitleWidget extends StatelessWidget {
     if (highlightWordsData == null ||
         (highlightWordsData is List && highlightWordsData.isEmpty) ||
         (highlightWordsData is Map && highlightWordsData.isEmpty)) {
-      return Text(
+      final text = Text(
         title,
         textAlign: TextAlign.center,
         style: TextStyle(
@@ -46,6 +48,8 @@ class StyledTitleWidget extends StatelessWidget {
           fontSize: fontSize,
         ),
       );
+      if (padding != null) return Padding(padding: padding!, child: text);
+      return text;
     }
 
     final textHighlightHelper = TextHighlightHelper(colorHelper);
@@ -57,20 +61,19 @@ class StyledTitleWidget extends StatelessWidget {
       final word = parts[i];
       final result = textHighlightHelper.processWord(word, config, defaultHighlightColor);
       final useBold = result.isHighlight || result.isBold || result.isBoldLarge;
-      final color = useBold
-          ? (result.wordColor ?? defaultHighlightColor ?? baseColor)
-          : baseColor;
+      // Highlight: same text color as rest of title (baseColor), with colored glow in shadow
+      final glowColor = result.wordColor ?? defaultHighlightColor;
       textSpans.add(
         TextSpan(
           text: i > 0 ? ' $word' : word,
           style: useBold
               ? TextStyle(
-                  color: color,
+                  color: baseColor,
                   fontWeight: FontWeight.w900,
                   fontSize: fontSizeHighlight,
                   shadows: [
                     Shadow(
-                      color: color.withValues(alpha: 0.5),
+                      color: (glowColor ?? baseColor).withValues(alpha: 0.5),
                       blurRadius: 20,
                       offset: const Offset(0, 0),
                     ),
@@ -85,9 +88,11 @@ class StyledTitleWidget extends StatelessWidget {
       );
     }
 
-    return RichText(
+    final rich = RichText(
       textAlign: TextAlign.center,
       text: TextSpan(children: textSpans),
     );
+    if (padding != null) return Padding(padding: padding!, child: rich);
+    return rich;
   }
 }

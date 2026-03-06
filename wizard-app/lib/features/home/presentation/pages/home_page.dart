@@ -10,16 +10,22 @@ import 'package:share_plus/share_plus.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/gallery_picker_helper.dart';
+import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/widgets/glass_container.dart';
+import 'package:appwizard/core/widgets/styled_description_widget.dart';
+import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
+import 'package:appwizard/core/widgets/styled_title_widget.dart';
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
 import 'package:appwizard/features/shared/data/models/remote_config/button_config.dart';
 import 'package:appwizard/features/home/data/models/rate_us_modal_config.dart';
 import 'package:appwizard/features/home/presentation/widgets/glass_two_choice_modal.dart';
 import 'package:appwizard/features/home/data/models/main_page_config.dart';
+import 'package:appwizard/features/home/data/models/refer_config.dart';
 import 'package:appwizard/features/home/data/models/share_config.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
@@ -111,6 +117,45 @@ class _HomePageState extends State<HomePage> {
     if (_isScrolledToChat) {
       _scrollTo(0);
     }
+  }
+
+  void _showReferBenefitsSheet(BuildContext context, AppLocalizations l10n) {
+    final referConfig = di.sl<RemoteConfigService>().getReferConfig();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _ReferBenefitsSheet(
+        l10n: l10n,
+        referConfig: referConfig,
+        onShareInvite: () {
+          Navigator.of(ctx).pop();
+          _onShareRefer(ctx, referConfig);
+        },
+        onClose: () => Navigator.of(ctx).pop(),
+      ),
+    );
+  }
+
+  void _onShareRefer(BuildContext context, ReferConfig? referConfig) {
+    if (referConfig != null &&
+        (referConfig.getShareTitle(context).isNotEmpty ||
+            referConfig.getShareDescription(context).isNotEmpty ||
+            (referConfig.shareLinkUrl ?? '').isNotEmpty)) {
+      final parts = <String>[];
+      final title = referConfig.getShareTitle(context).trim();
+      final description = referConfig.getShareDescription(context).trim();
+      final linkUrl = (referConfig.shareLinkUrl ?? '').trim();
+      if (title.isNotEmpty) parts.add(title);
+      if (description.isNotEmpty) parts.add(description);
+      if (linkUrl.isNotEmpty) parts.add(linkUrl);
+      final text = parts.join('\n\n');
+      if (text.isNotEmpty) {
+        Share.share(text, subject: title.isNotEmpty ? title : null);
+        return;
+      }
+    }
+    _onShare(context);
   }
 
   void _showLinesThatLandTips(BuildContext context) {
@@ -249,7 +294,10 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      drawer: _HomeDrawer(l10n: l10n),
+      drawer: _HomeDrawer(
+        l10n: l10n,
+        onReferTap: () => _showReferBenefitsSheet(context, l10n),
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -564,9 +612,10 @@ void _showRateUsDialog(BuildContext context, AppLocalizations l10n) {
 }
 
 class _HomeDrawer extends StatelessWidget {
-  const _HomeDrawer({required this.l10n});
+  const _HomeDrawer({required this.l10n, required this.onReferTap});
 
   final AppLocalizations l10n;
+  final VoidCallback onReferTap;
 
   @override
   Widget build(final BuildContext context) => Drawer(
@@ -655,6 +704,15 @@ class _HomeDrawer extends StatelessWidget {
                   onTap: () {
                     Navigator.pop(context);
                     _showRateUsDialog(context, l10n);
+                  },
+                ),
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.card_giftcard_rounded,
+                  title: l10n.refer,
+                  onTap: () {
+                    Navigator.pop(context);
+                    onReferTap();
                   },
                 ),
                 BlocBuilder<AuthBloc, AuthState>(
@@ -1119,6 +1177,266 @@ class _EmptyStateContent extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Bottom sheet for referral benefits – explains rewards and offers share invite link.
+/// Content is remote-configurable via [refer_config]; falls back to [l10n] when config is null or empty.
+/// Reuses onboarding-style text config: [StyledDescriptionWidget] for benefits and rich title when
+/// [refer_config] has [highlight_words] / [highlight_color].
+class _ReferBenefitsSheet extends StatelessWidget {
+  const _ReferBenefitsSheet({
+    required this.l10n,
+    this.referConfig,
+    required this.onShareInvite,
+    required this.onClose,
+  });
+
+  final AppLocalizations l10n;
+  final ReferConfig? referConfig;
+  final VoidCallback onShareInvite;
+  final VoidCallback onClose;
+
+  String _title(BuildContext context) {
+    if (referConfig != null) {
+      final t = referConfig!.getTitle(context);
+      if (t.isNotEmpty) return t;
+    }
+    return l10n.referModalTitle;
+  }
+
+  List<String> _benefits(BuildContext context) {
+    if (referConfig != null && referConfig!.benefits.isNotEmpty) {
+      return referConfig!.getBenefits(context)
+          .where((s) => s.trim().isNotEmpty)
+          .toList();
+    }
+    return [l10n.referBenefit1, l10n.referBenefit2, l10n.referBenefit3];
+  }
+
+  String _ctaText(BuildContext context) {
+    if (referConfig != null) {
+      final t = referConfig!.getCtaButtonText(context);
+      if (t.isNotEmpty) return t;
+    }
+    return l10n.referShareInvite;
+  }
+
+  dynamic _getHighlightWordsTitle() {
+    if (referConfig?.highlightWords is Map) {
+      final v = (referConfig!.highlightWords as Map)['title'];
+      if (v != null && (v is! Map || v.isNotEmpty) && (v is! List || v.isNotEmpty)) return v;
+    }
+    return null;
+  }
+
+  dynamic _getHighlightWordsDescription() {
+    if (referConfig?.highlightWords is Map) {
+      final v = (referConfig!.highlightWords as Map)['description'];
+      if (v != null && (v is! Map || v.isNotEmpty) && (v is! List || v.isNotEmpty)) return v;
+    }
+    return null;
+  }
+
+  Color? _getHighlightColor(ColorHelper colorHelper) {
+    final s = referConfig?.highlightColor;
+    if (s != null && s.isNotEmpty) return colorHelper.getColor(s);
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorHelper = di.sl<ColorHelper>();
+    final textHighlightHelper = TextHighlightHelper(colorHelper);
+    final defaultHighlightColor = _getHighlightColor(colorHelper);
+    final highlightWordsTitle = _getHighlightWordsTitle();
+    final highlightWordsDescription = _getHighlightWordsDescription();
+    final titleText = _title(context);
+    final benefits = _benefits(context);
+    final useStyledBenefits = highlightWordsDescription != null;
+    final textColor = referConfig?.getTextColor(colorHelper) ?? Colors.white;
+
+    return GlassContainer(
+      blurSigma: 20.0,
+      color: Colors.white,
+      opacity: 0.25,
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(32),
+        topRight: Radius.circular(32),
+      ),
+      border: Border.all(
+        color: Colors.white.withValues(alpha: 0.3),
+        width: 1.5,
+      ),
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(width: 40),
+              Expanded(
+                child: StyledTitleWidget(
+                  title: titleText,
+                  baseColor: textColor,
+                  highlightWordsData: highlightWordsTitle,
+                  highlightColor: referConfig?.highlightColor,
+                  fontSize: 22,
+                  fontSizeHighlight: 24,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  size: 24,
+                ),
+                onPressed: onClose,
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.1),
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(40, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < benefits.length; i++) ...[
+                  useStyledBenefits
+                      ? _benefitBulletStyled(
+                          context,
+                          benefits[i],
+                          highlightWordsDescription,
+                          defaultHighlightColor,
+                          textHighlightHelper,
+                          textColor,
+                        )
+                      : _benefitBullet(benefits[i], textColor),
+                  if (i < benefits.length - 1) const SizedBox(height: 12),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onShareInvite,
+                icon: const Icon(Icons.share_rounded, size: 22, color: Colors.white),
+                label: Text(
+                  _ctaText(context),
+                  style: AppTextStyles.buttonText,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.backgroundDark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _benefitBullet(String text, Color textColor) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Icon(
+          Icons.check_circle_rounded,
+          size: 22,
+          color: textColor.withValues(alpha: 0.9),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Text(
+          text,
+          style: AppTextStyles.bodyLarge?.copyWith(
+            color: textColor,
+            height: 1.4,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _benefitBulletStyled(
+    BuildContext context,
+    String text,
+    dynamic highlightWordsData,
+    Color? highlightColor,
+    TextHighlightHelper textHighlightHelper,
+    Color textColor,
+  ) =>
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Icon(
+              Icons.check_circle_rounded,
+              size: 22,
+              color: textColor.withValues(alpha: 0.9),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: StyledDescriptionWidget(
+              description: text,
+              highlightWordsData: highlightWordsData,
+              highlightColor: highlightColor,
+              textHighlightHelper: textHighlightHelper,
+              textAlign: TextAlign.start,
+              onRichTextDescription: (ctx, desc, data) => StyledRichTextDescriptionWidget(
+                description: desc,
+                highlightWordsData: data,
+                baseColor: textColor,
+                highlightColor: highlightColor,
+                textAlign: TextAlign.start,
+                bodyFontSize: 16,
+                boldFontSize: 17,
+                boldLargeFontSize: 18,
+                baseColorOpacity: 1.0,
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 /// Bottom sheet for "Lines that land" – same style as onboarding sign-in modal (glass, drag handle, close).

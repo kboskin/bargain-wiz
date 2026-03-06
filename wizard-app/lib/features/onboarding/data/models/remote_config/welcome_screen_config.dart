@@ -24,6 +24,9 @@ class WelcomeScreenConfig extends ValidatableEntity {
   final SecondaryActionConfig? secondaryAction;
   @JsonKey(name: 'highlight_color')
   final String? highlightColor; // Optional: Hex color for highlights (defaults to amber)
+  /// Base text color for title/description (hex string). Defaults to black when null.
+  @JsonKey(name: 'text_color')
+  final String? textColor;
 
   WelcomeScreenConfig({
     required this.title,
@@ -34,6 +37,7 @@ class WelcomeScreenConfig extends ValidatableEntity {
     this.highlightWords,
     this.secondaryAction,
     this.highlightColor,
+    this.textColor,
   });
 
   factory WelcomeScreenConfig.fromJson(Map<String, dynamic> json) => _$WelcomeScreenConfigFromJson(json);
@@ -53,6 +57,12 @@ class WelcomeScreenConfig extends ValidatableEntity {
       final hexCode = highlightColor!.replaceAll('#', '');
       if (!RegExp(r'^[0-9A-Fa-f]{6}$|^[0-9A-Fa-f]{8}$').hasMatch(hexCode)) {
         throw FormatException('Invalid hex color format for highlightColor: $highlightColor');
+      }
+    }
+    if (textColor != null) {
+      final hexCode = textColor!.replaceAll('#', '');
+      if (!RegExp(r'^[0-9A-Fa-f]{6}$|^[0-9A-Fa-f]{8}$').hasMatch(hexCode)) {
+        throw FormatException('Invalid hex color format for textColor: $textColor');
       }
     }
   }

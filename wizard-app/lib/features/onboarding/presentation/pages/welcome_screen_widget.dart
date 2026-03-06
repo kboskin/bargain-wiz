@@ -5,9 +5,10 @@ import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
+import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
+import 'package:appwizard/core/widgets/styled_title_widget.dart';
 import 'package:appwizard/core/widgets/glass_container.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/welcome_screen_config.dart';
@@ -55,7 +56,15 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
                       _buildVisual(),
                       const SizedBox(height: 32),
                       // Title with optional highlighting
-                      _buildTitle(context),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40),
+                        child: StyledTitleWidget(
+                          title: widget.config.title.get(context),
+                          baseColor: _getTextColor(),
+                          highlightWordsData: widget.config.highlightWords?.title,
+                          highlightColor: widget.config.highlightColor,
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       // Description with optional highlighting
                       _buildDescription(context),
@@ -131,86 +140,6 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
     );
   }
 
-  /// Build title with optional word highlighting
-  Widget _buildTitle(BuildContext context) {
-    final titleText = widget.config.title.get(context);
-    final highlightWordsData = widget.config.highlightWords?.title;
-
-    if (highlightWordsData == null ||
-        (highlightWordsData is List && highlightWordsData.isEmpty) ||
-        (highlightWordsData is Map && highlightWordsData.isEmpty)) {
-      // Simple title without highlighting
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Text(
-          titleText,
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-            color: AppColors.backgroundDark,
-            fontWeight: FontWeight.bold,
-            fontSize: 32,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-
-    // Rich text title with highlighted words (supports per-word colors)
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: _buildRichTextTitle(context, titleText, highlightWordsData),
-    );
-  }
-
-  /// Build rich text title with highlighted words
-  /// Supports per-word colors via map: {"Bargain": "#FF6B35", "Wiz": "#4ECDC4"}
-  /// Or simple list for backward compatibility: ["best", "deals"]
-  Widget _buildRichTextTitle(
-    BuildContext context,
-    String title,
-    dynamic highlightWordsData,
-  ) {
-    final parts = title.split(' ');
-    final textSpans = <TextSpan>[];
-    final defaultHighlightColor = _getHighlightColor();
-
-    // Parse highlight words using helper
-    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
-
-    for (int i = 0; i < parts.length; i++) {
-      final word = parts[i];
-      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
-
-      textSpans.add(
-        TextSpan(
-          text: i > 0 ? ' $word' : word,
-          style: result.isHighlight
-              ? TextStyle(
-                  color: AppColors.backgroundDark,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 36,
-                  shadows: [
-                    Shadow(
-                      color: result.wordColor?.withValues(alpha: 0.5) ?? Colors.transparent,
-                      blurRadius: 20,
-                      offset: const Offset(0, 0),
-                    ),
-                  ],
-                )
-              : Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  color: AppColors.backgroundDark,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 32,
-                ),
-        ),
-      );
-    }
-
-    return RichText(
-      textAlign: TextAlign.center,
-      text: TextSpan(children: textSpans),
-    );
-  }
-
   /// Build description with optional HTML or word highlighting
   Widget _buildDescription(BuildContext context) {
     final description = widget.config.description.get(context);
@@ -223,56 +152,23 @@ class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
       highlightColor: highlightColor,
       textHighlightHelper: _textHighlightHelper,
       padding: const EdgeInsets.symmetric(horizontal: 40),
-      onRichTextDescription: _buildRichTextDescription,
+      onRichTextDescription: (ctx, desc, data) => StyledRichTextDescriptionWidget(
+        description: desc,
+        highlightWordsData: data,
+        baseColor: _getTextColor(),
+        highlightColor: _getHighlightColor(),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 
-  /// Build rich text description with highlighted words (fallback for non-HTML).
-  /// Supports isHighlight (color), isBold ("bold"), isBoldLarge ("bold_large").
-  Widget _buildRichTextDescription(
-    BuildContext context,
-    String description,
-    dynamic highlightWordsData,
-  ) {
-    final parts = description.split(' ');
-    final textSpans = <TextSpan>[];
-    final defaultHighlightColor = _getHighlightColor();
-    const double bodySize = 18.0;
-    const double boldLargeSize = 22.0;
-
-    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
-
-    for (final word in parts) {
-      final result = _textHighlightHelper.processWord(word, config, defaultHighlightColor);
-      final useBold = result.isHighlight || result.isBold || result.isBoldLarge;
-      final color = useBold
-          ? (result.wordColor ?? defaultHighlightColor ?? AppColors.backgroundDark)
-          : AppColors.backgroundDark.withValues(alpha: 0.9);
-      final fontSize = result.isBoldLarge ? boldLargeSize : (result.isHighlight || result.isBold ? 20.0 : bodySize);
-
-      textSpans.add(
-        TextSpan(
-          text: '$word ',
-          style: useBold
-              ? TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: fontSize,
-                  height: 1.5,
-                )
-              : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: color,
-                  height: 1.5,
-                  fontSize: bodySize,
-                ),
-        ),
-      );
+  /// Base text color from config (title/description). Defaults to black when null or invalid.
+  Color _getTextColor() {
+    final hex = widget.config.textColor;
+    if (hex != null && hex.isNotEmpty) {
+      return _colorHelper.getColor(hex) ?? AppColors.backgroundDark;
     }
-
-    return RichText(
-      textAlign: TextAlign.center,
-      text: TextSpan(children: textSpans),
-    );
+    return AppColors.backgroundDark;
   }
 
   /// Get highlight color from config

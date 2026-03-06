@@ -14,6 +14,7 @@ OnboardingMetadata _$OnboardingMetadataFromJson(Map<String, dynamic> json) =>
               json['highlight_words'] as Map<String, dynamic>,
             ),
       highlightColor: json['highlight_color'] as String?,
+      textColor: json['text_color'] as String?,
       description: OnboardingMetadata._multilocaleFromJson(json['description']),
       sideTextAlignment: OnboardingMetadata._sideTextAlignmentFromJson(
         json['side_text_alignment'] as String?,
@@ -47,6 +48,7 @@ Map<String, dynamic> _$OnboardingMetadataToJson(OnboardingMetadata instance) =>
     <String, dynamic>{
       'highlight_words': instance.highlightWords,
       'highlight_color': instance.highlightColor,
+      'text_color': instance.textColor,
       'description': instance.description,
       'side_text_alignment': OnboardingMetadata._sideTextAlignmentToJson(
         instance.sideTextAlignment,

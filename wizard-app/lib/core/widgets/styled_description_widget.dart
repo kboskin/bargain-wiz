@@ -14,6 +14,7 @@ class StyledDescriptionWidget extends StatelessWidget {
     required this.textHighlightHelper,
     this.onRichTextDescription,
     this.padding,
+    this.textAlign = TextAlign.center,
   });
 
   final String description;
@@ -21,6 +22,7 @@ class StyledDescriptionWidget extends StatelessWidget {
   final Color? highlightColor;
   final TextHighlightHelper textHighlightHelper;
   final EdgeInsets? padding;
+  final TextAlign textAlign;
   final Widget Function(BuildContext, String, dynamic)? onRichTextDescription;
 
   @override
@@ -91,7 +93,7 @@ class StyledDescriptionWidget extends StatelessWidget {
             height: 1.5,
             fontSize: 18,
           ),
-      textAlign: TextAlign.center,
+      textAlign: textAlign,
     );
 
     if (padding != null) {

@@ -244,6 +244,30 @@
   "signInError": "Uh, something went wrong. Please try again.",
   "@signInError": {
     "description": "Message shown when Google or Apple sign-in fails"
+  },
+  "refer": "Refer",
+  "@refer": {
+    "description": "Drawer and button label for referral / invite friends"
+  },
+  "referModalTitle": "Invite friends & earn",
+  "@referModalTitle": {
+    "description": "Title of the referral benefits bottom sheet"
+  },
+  "referBenefit1": "Give friends access to Bargain Wiz – smarter deals and negotiation help.",
+  "@referBenefit1": {
+    "description": "First referral benefit bullet"
+  },
+  "referBenefit2": "You earn rewards when friends join using your invite link.",
+  "@referBenefit2": {
+    "description": "Second referral benefit bullet"
+  },
+  "referBenefit3": "The more you share, the more you can earn.",
+  "@referBenefit3": {
+    "description": "Third referral benefit bullet"
+  },
+  "referShareInvite": "Share invite link",
+  "@referShareInvite": {
+    "description": "CTA button to share referral / invite link"
   }
 }
 

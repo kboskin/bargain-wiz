@@ -32,6 +32,7 @@ WelcomeScreenConfig _$WelcomeScreenConfigFromJson(Map<String, dynamic> json) =>
               json['secondary_action'] as Map<String, dynamic>,
             ),
       highlightColor: json['highlight_color'] as String?,
+      textColor: json['text_color'] as String?,
     );
 
 Map<String, dynamic> _$WelcomeScreenConfigToJson(
@@ -45,6 +46,7 @@ Map<String, dynamic> _$WelcomeScreenConfigToJson(
   'highlight_words': instance.highlightWords,
   'secondary_action': instance.secondaryAction,
   'highlight_color': instance.highlightColor,
+  'text_color': instance.textColor,
 };
 
 GlassContainerConfig _$GlassContainerConfigFromJson(

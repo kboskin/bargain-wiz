@@ -457,6 +457,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Uh, something went wrong. Please try again.'**
   String get signInError;
+
+  /// Drawer and button label for referral / invite friends
+  ///
+  /// In en, this message translates to:
+  /// **'Refer'**
+  String get refer;
+
+  /// Title of the referral benefits bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Invite friends & earn'**
+  String get referModalTitle;
+
+  /// First referral benefit bullet
+  ///
+  /// In en, this message translates to:
+  /// **'Give friends access to Bargain Wiz – smarter deals and negotiation help.'**
+  String get referBenefit1;
+
+  /// Second referral benefit bullet
+  ///
+  /// In en, this message translates to:
+  /// **'You earn rewards when friends join using your invite link.'**
+  String get referBenefit2;
+
+  /// Third referral benefit bullet
+  ///
+  /// In en, this message translates to:
+  /// **'The more you share, the more you can earn.'**
+  String get referBenefit3;
+
+  /// CTA button to share referral / invite link
+  ///
+  /// In en, this message translates to:
+  /// **'Share invite link'**
+  String get referShareInvite;
 }
 
 class _AppLocalizationsDelegate

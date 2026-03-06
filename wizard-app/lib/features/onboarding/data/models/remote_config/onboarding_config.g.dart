@@ -13,7 +13,11 @@ OnboardingConfig _$OnboardingConfigFromJson(Map<String, dynamic> json) =>
           : GradientBackgroundConfig.fromJson(
               json['background'] as Map<String, dynamic>,
             ),
+      textColor: json['text_color'] as String?,
     );
 
 Map<String, dynamic> _$OnboardingConfigToJson(OnboardingConfig instance) =>
-    <String, dynamic>{'background': instance.background};
+    <String, dynamic>{
+      'background': instance.background,
+      'text_color': instance.textColor,
+    };

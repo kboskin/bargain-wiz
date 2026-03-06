@@ -195,4 +195,24 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get signInError => 'Algo salió mal. Por favor intenta de nuevo.';
+
+  @override
+  String get refer => 'Referir';
+
+  @override
+  String get referModalTitle => 'Invita amigos y gana';
+
+  @override
+  String get referBenefit1 =>
+      'Dale a tus amigos acceso a Bargain Wiz: ofertas y negociación más inteligentes.';
+
+  @override
+  String get referBenefit2 =>
+      'Gana recompensas cuando tus amigos se unan con tu enlace.';
+
+  @override
+  String get referBenefit3 => 'Cuanto más compartas, más puedes ganar.';
+
+  @override
+  String get referShareInvite => 'Compartir enlace de invitación';
 }

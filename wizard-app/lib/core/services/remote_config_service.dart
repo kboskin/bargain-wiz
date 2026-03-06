@@ -10,6 +10,7 @@ import 'package:appwizard/features/subscription/data/models/subscription_config.
 import 'package:appwizard/features/home/data/models/main_page_config.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
 import 'package:appwizard/features/home/data/models/rate_us_modal_config.dart';
+import 'package:appwizard/features/home/data/models/refer_config.dart';
 import 'package:appwizard/features/home/data/models/share_config.dart';
 import 'package:appwizard/core/config/app_config.dart';
 
@@ -404,6 +405,27 @@ class RemoteConfigService {
       return RateUsModalConfig.fromJson(json);
     } catch (e, stackTrace) {
       _logger.e('Error parsing rate_us_modal_config', e, stackTrace);
+      return null;
+    }
+  }
+
+  /// Refer / invite-friends config (key: [refer_config]).
+  /// Title, benefits list, CTA button text; optional share_title, share_description, share_link_url.
+  /// Returns null if not configured or parsing fails.
+  ReferConfig? getReferConfig() {
+    try {
+      final jsonString = getString('refer_config');
+      if (jsonString.isEmpty) {
+        return null;
+      }
+      final json = jsonDecode(jsonString);
+      if (json is! Map<String, dynamic>) {
+        _logger.w('Invalid refer_config format');
+        return null;
+      }
+      return ReferConfig.fromJson(json);
+    } catch (e, stackTrace) {
+      _logger.e('Error parsing refer_config', e, stackTrace);
       return null;
     }
   }

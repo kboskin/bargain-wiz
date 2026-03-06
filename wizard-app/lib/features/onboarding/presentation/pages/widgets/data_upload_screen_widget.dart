@@ -8,6 +8,7 @@ import 'package:appwizard/core/utils/asset_path_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
+import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/upload_progress_screen_config.dart';
 
@@ -23,6 +24,7 @@ class DataUploadScreenWidget extends StatefulWidget {
     this.isActivePage = true,
     this.highlightWordsData,
     this.highlightColor,
+    this.textColor,
   });
 
   final UploadProgressScreenConfig config;
@@ -33,6 +35,8 @@ class DataUploadScreenWidget extends StatefulWidget {
   final dynamic highlightWordsData;
   /// Optional highlight color (e.g. from metadata.highlight_color).
   final Color? highlightColor;
+  /// Base text color for segment text. Defaults to black when null.
+  final Color? textColor;
 
   @override
   State<DataUploadScreenWidget> createState() => _DataUploadScreenWidgetState();
@@ -169,59 +173,6 @@ class _DataUploadScreenWidgetState extends State<DataUploadScreenWidget>
     if (c != null) c.value = _progress.clamp(0.0, 1.0);
   }
 
-  /// Build rich text for segment label with highlighted words (same as engagement/select).
-  /// Supports isHighlight (color), isBold ("bold"), isBoldLarge ("bold_large").
-  Widget _buildRichTextDescription(
-    BuildContext context,
-    String description,
-    dynamic highlightWordsData,
-  ) {
-    const double bodySize = 18.0;
-    const double boldLargeSize = 22.0;
-    final defaultHighlightColor = widget.highlightColor;
-    final config = _textHighlightHelper.parseHighlightWords(highlightWordsData);
-    final textSpans = <TextSpan>[];
-    final parts = description.split(' ');
-
-    for (final word in parts) {
-      final result = _textHighlightHelper.processWord(
-        word,
-        config,
-        defaultHighlightColor,
-      );
-      final useBold = result.isHighlight || result.isBold || result.isBoldLarge;
-      final color = useBold
-          ? (result.wordColor ?? defaultHighlightColor ?? AppColors.backgroundDark)
-          : AppColors.backgroundDark.withValues(alpha: 0.9);
-      final fontSize = result.isBoldLarge
-          ? boldLargeSize
-          : (result.isHighlight || result.isBold ? 20.0 : bodySize);
-
-      textSpans.add(
-        TextSpan(
-          text: '$word ',
-          style: useBold
-              ? TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: fontSize,
-                  height: 1.5,
-                )
-              : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: color,
-                  height: 1.5,
-                  fontSize: bodySize,
-                ),
-        ),
-      );
-    }
-
-    return RichText(
-      textAlign: TextAlign.center,
-      text: TextSpan(children: textSpans),
-    );
-  }
-
   @override
   void dispose() {
     _rampTimer?.cancel();
@@ -257,7 +208,13 @@ class _DataUploadScreenWidgetState extends State<DataUploadScreenWidget>
                 highlightWordsData: widget.highlightWordsData,
                 highlightColor: widget.highlightColor,
                 textHighlightHelper: _textHighlightHelper,
-                onRichTextDescription: _buildRichTextDescription,
+                onRichTextDescription: (ctx, desc, data) => StyledRichTextDescriptionWidget(
+                  description: desc,
+                  highlightWordsData: data,
+                  baseColor: widget.textColor ?? AppColors.backgroundDark,
+                  highlightColor: widget.highlightColor,
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
           const SizedBox(height: 24),

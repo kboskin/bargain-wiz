@@ -37,6 +37,7 @@ class OnboardingMetadata {
   OnboardingMetadata({
     this.highlightWords,
     this.highlightColor,
+    this.textColor,
     this.description,
     this.sideTextAlignment,
     this.sideText,
@@ -72,6 +73,9 @@ class OnboardingMetadata {
   final HighlightWordsConfig? highlightWords;
   @JsonKey(name: 'highlight_color')
   final String? highlightColor;
+  /// Base text color for title/description (hex string). When null, use onboarding_config.text_color or black.
+  @JsonKey(name: 'text_color')
+  final String? textColor;
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic description; // Optional supplemental description
   @JsonKey(name: 'side_text_alignment', fromJson: _sideTextAlignmentFromJson, toJson: _sideTextAlignmentToJson)
@@ -215,6 +219,9 @@ abstract class OnboardingModel extends ValidatableEntity {
 
   /// Get the screen type as an enum
   OnboardingScreenType get type;
+
+  /// Optional metadata (highlight words, text color, etc.). Subclasses with metadata override this.
+  OnboardingMetadata? get metadata => null;
 
   Map<String, dynamic> toJson();
 

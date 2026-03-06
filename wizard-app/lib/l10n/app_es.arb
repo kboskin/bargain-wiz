@@ -59,6 +59,12 @@
   "areYouSatisfied": "¿Estás satisfecho?",
   "yes": "Sí",
   "no": "No",
-  "signInError": "Algo salió mal. Por favor intenta de nuevo."
+  "signInError": "Algo salió mal. Por favor intenta de nuevo.",
+  "refer": "Referir",
+  "referModalTitle": "Invita amigos y gana",
+  "referBenefit1": "Dale a tus amigos acceso a Bargain Wiz: ofertas y negociación más inteligentes.",
+  "referBenefit2": "Gana recompensas cuando tus amigos se unan con tu enlace.",
+  "referBenefit3": "Cuanto más compartas, más puedes ganar.",
+  "referShareInvite": "Compartir enlace de invitación"
 }
 
