@@ -13,7 +13,9 @@ class StyledRichTextDescriptionWidget extends StatelessWidget {
     required this.description,
     required this.highlightWordsData,
     required this.baseColor,
+    this.baseColorHex,
     this.highlightColor,
+    this.highlightColorHex,
     this.textAlign = TextAlign.center,
     this.bodyFontSize = 18.0,
     this.boldFontSize = 20.0,
@@ -26,6 +28,13 @@ class StyledRichTextDescriptionWidget extends StatelessWidget {
   final dynamic highlightWordsData;
   final Color baseColor;
   final Color? highlightColor;
+  /// Optional hex string for base text color (e.g. "#FFFFFF"). When provided,
+  /// this overrides [baseColor] after being resolved via [ColorHelper].
+  final String? baseColorHex;
+  /// Optional hex string for default highlight color (e.g. "#4ECDC4"). When
+  /// provided, this is resolved via [ColorHelper] and used when words don't
+  /// specify their own color.
+  final String? highlightColorHex;
   final TextAlign textAlign;
   final double bodyFontSize;
   final double boldFontSize;
@@ -37,17 +46,25 @@ class StyledRichTextDescriptionWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorHelper = di.sl<ColorHelper>();
     final textHighlightHelper = TextHighlightHelper(colorHelper);
-    final defaultHighlightColor = highlightColor;
+    // Resolve base color: allow either direct Color or hex string override.
+    final effectiveBaseColor = (baseColorHex != null && baseColorHex!.isNotEmpty)
+        ? (colorHelper.getColor(baseColorHex!) ?? baseColor)
+        : baseColor;
+    // Resolve default highlight color: prefer explicit Color, then hex string.
+    final resolvedHighlightFromHex = (highlightColorHex != null && highlightColorHex!.isNotEmpty)
+        ? colorHelper.getColor(highlightColorHex!)
+        : null;
+    final defaultHighlightColor = highlightColor ?? resolvedHighlightFromHex;
     final config = textHighlightHelper.parseHighlightWords(highlightWordsData);
     final parts = description.split(' ');
     final textSpans = <TextSpan>[];
-    final plainColor = baseColor.withValues(alpha: baseColorOpacity);
+    final plainColor = effectiveBaseColor.withValues(alpha: baseColorOpacity);
 
     for (final word in parts) {
       final result = textHighlightHelper.processWord(word, config, defaultHighlightColor);
       final useBold = result.isHighlight || result.isBold || result.isBoldLarge;
       final color = useBold
-          ? (result.wordColor ?? defaultHighlightColor ?? baseColor)
+          ? (result.wordColor ?? defaultHighlightColor ?? effectiveBaseColor)
           : plainColor;
       final fontSize = result.isBoldLarge
           ? boldLargeFontSize
