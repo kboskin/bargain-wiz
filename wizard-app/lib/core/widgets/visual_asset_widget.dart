@@ -13,12 +13,15 @@ class VisualAssetWidget extends StatefulWidget {
     this.width = 200,
     this.height = 200,
     this.fit = BoxFit.contain,
+    /// When true (default), Lottie animations loop. Set via metadata (e.g. paywall animation_looped).
+    this.repeat = true,
   });
 
   final String visualPath;
   final double width;
   final double height;
   final BoxFit fit;
+  final bool repeat;
 
   @override
   State<VisualAssetWidget> createState() => _VisualAssetWidgetState();
@@ -56,6 +59,7 @@ class _VisualAssetWidgetState extends State<VisualAssetWidget> {
           fit: widget.fit,
           frameRate: const FrameRate(60),
           options: LottieOptions(enableMergePaths: true),
+          repeat: widget.repeat,
         );
       } else if (isSvg) {
         visualWidget = SvgPicture.network(widget.visualPath, fit: widget.fit);
@@ -71,6 +75,7 @@ class _VisualAssetWidgetState extends State<VisualAssetWidget> {
           fit: widget.fit,
           frameRate: FrameRate(60),
           options: LottieOptions(enableMergePaths: true),
+          repeat: widget.repeat,
         );
       } else if (isSvg) {
         visualWidget = SvgPicture.asset(normalizedPath, fit: widget.fit);

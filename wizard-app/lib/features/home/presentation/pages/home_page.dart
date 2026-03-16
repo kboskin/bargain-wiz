@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:in_app_review/in_app_review.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
@@ -47,7 +48,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   static const double _kScrolledThreshold = 20;
   bool _isScrolledToChat = false;
@@ -63,15 +64,34 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScrollChanged);
     _loadConversationHistory();
+    // Simple overlay trigger
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.push(AppRoutes.paywall);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.removeListener(_onScrollChanged);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.push(AppRoutes.paywall);
+    }
   }
 
   void _onScrollChanged() {
@@ -297,6 +317,8 @@ class _HomePageState extends State<HomePage> {
       drawer: _HomeDrawer(
         l10n: l10n,
         onReferTap: () => _showReferBenefitsSheet(context, l10n),
+        termsUrl: di.sl<RemoteConfigService>().getTermsOfUseUrl(),
+        privacyUrl: di.sl<RemoteConfigService>().getPrivacyPolicyUrl(),
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -612,10 +634,17 @@ void _showRateUsDialog(BuildContext context, AppLocalizations l10n) {
 }
 
 class _HomeDrawer extends StatelessWidget {
-  const _HomeDrawer({required this.l10n, required this.onReferTap});
+  const _HomeDrawer({
+    required this.l10n,
+    required this.onReferTap,
+    this.termsUrl,
+    this.privacyUrl,
+  });
 
   final AppLocalizations l10n;
   final VoidCallback onReferTap;
+  final String? termsUrl;
+  final String? privacyUrl;
 
   @override
   Widget build(final BuildContext context) => Drawer(
@@ -715,6 +744,26 @@ class _HomeDrawer extends StatelessWidget {
                     onReferTap();
                   },
                 ),
+                if (termsUrl != null && termsUrl!.isNotEmpty)
+                  _buildDrawerItem(
+                    context: context,
+                    icon: Icons.description_outlined,
+                    title: l10n.terms,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _launchUrl(termsUrl!);
+                    },
+                  ),
+                if (privacyUrl != null && privacyUrl!.isNotEmpty)
+                  _buildDrawerItem(
+                    context: context,
+                    icon: Icons.privacy_tip_outlined,
+                    title: l10n.privacy,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _launchUrl(privacyUrl!);
+                    },
+                  ),
                 BlocBuilder<AuthBloc, AuthState>(
                   builder: (context, state) {
                     if (state is AuthAuthenticated) {
@@ -738,6 +787,13 @@ class _HomeDrawer extends StatelessWidget {
       ),
     ),
   );
+
+  static Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   // Helper widget for cleaner, pill-shaped list items
   Widget _buildDrawerItem({

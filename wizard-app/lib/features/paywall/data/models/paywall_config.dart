@@ -1,4 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/gradient_background_config.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/highlight_words_config.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_layout.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
@@ -30,6 +32,41 @@ class PaywallConfig {
   /// Payment provider to use for this paywall: "iap" or "stripe".
   @JsonKey(name: 'payment_provider')
   final String? paymentProvider;
+  /// Trial length in days (e.g. 3). Used for timeline and billing date copy.
+  @JsonKey(name: 'trial_days')
+  final int trialDays;
+  /// Optional multi-step flow configuration. When non-empty, steps are shown
+  /// before the main pricing screen, similar to a 2–3 screen trial explainer.
+  @JsonKey(name: 'steps')
+  final List<PaywallStepConfig> steps;
+  /// Optional gradient background (same structure as onboarding). When set, paywall uses it instead of solid white.
+  @JsonKey(name: 'background')
+  final GradientBackgroundConfig? background;
+  /// Optional highlight words for various texts
+  @JsonKey(name: 'title_highlight_words')
+  final HighlightWordsConfig? titleHighlightWords;
+  @JsonKey(name: 'description_highlight_words')
+  final HighlightWordsConfig? descriptionHighlightWords;
+  @JsonKey(name: 'no_payment_highlight_words')
+  final HighlightWordsConfig? noPaymentHighlightWords;
+  /// Optional override for the "No payment due now" text.
+  @JsonKey(name: 'no_payment_due_text', fromJson: _multilocaleFromJson)
+  final dynamic noPaymentDueText;
+  /// Optional override for timeline "Today" label.
+  @JsonKey(name: 'timeline_today_text', fromJson: _multilocaleFromJson)
+  final dynamic timelineTodayText;
+  /// Optional override for timeline "Reminder" label.
+  @JsonKey(name: 'timeline_reminder_text', fromJson: _multilocaleFromJson)
+  final dynamic timelineReminderText;
+  /// Optional override for timeline "Billing starts" label.
+  @JsonKey(name: 'timeline_billing_text', fromJson: _multilocaleFromJson)
+  final dynamic timelineBillingText;
+  @JsonKey(name: 'timeline_today_subtitle', fromJson: _multilocaleFromJson)
+  final dynamic timelineTodaySubtitle;
+  @JsonKey(name: 'timeline_reminder_subtitle', fromJson: _multilocaleFromJson)
+  final dynamic timelineReminderSubtitle;
+  @JsonKey(name: 'timeline_billing_subtitle', fromJson: _multilocaleFromJson)
+  final dynamic timelineBillingSubtitle;
 
   PaywallConfig({
     required this.type,
@@ -43,6 +80,19 @@ class PaywallConfig {
     this.showClose = false,
     this.closeButtonDelaySeconds = 5.0,
     this.paymentProvider,
+    this.trialDays = 3,
+    this.steps = const [],
+    this.background,
+    this.noPaymentDueText,
+    this.timelineTodayText,
+    this.timelineReminderText,
+    this.timelineBillingText,
+    this.timelineTodaySubtitle,
+    this.timelineReminderSubtitle,
+    this.timelineBillingSubtitle,
+    this.titleHighlightWords,
+    this.descriptionHighlightWords,
+    this.noPaymentHighlightWords,
   });
 
   factory PaywallConfig.fromJson(Map<String, dynamic> json) => _$PaywallConfigFromJson(json);
@@ -51,6 +101,57 @@ class PaywallConfig {
       json != null ? MultilocaleText.fromJson(json) : null;
 
   Map<String, dynamic> toJson() => _$PaywallConfigToJson(this);
+}
+
+/// Optional configuration for an additional paywall step shown *before* the
+/// main pricing/options screen. Inspired by multi-step trial flows:
+/// e.g. "We want you to try X for free", "We'll remind you before trial ends".
+@JsonSerializable()
+class PaywallStepConfig {
+  /// Optional identifier (e.g. "intro", "reminder", "timeline").
+  final String? id;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic description;
+
+  /// Optional visual (Lottie or image asset path).
+  final String? visual;
+
+  /// Small line of text under the primary CTA (e.g. "No payment due now").
+  @JsonKey(name: 'note_text', fromJson: _multilocaleFromJson)
+  final dynamic noteText;
+
+  /// Primary CTA label for this step (e.g. "Try for $0.00", "Continue for FREE").
+  @JsonKey(name: 'button_text', fromJson: _multilocaleFromJson)
+  final dynamic buttonText;
+
+  @JsonKey(name: 'title_highlight_words')
+  final HighlightWordsConfig? titleHighlightWords;
+
+  @JsonKey(name: 'highlight_color')
+  final String? highlightColor;
+
+  PaywallStepConfig({
+    this.id,
+    this.title,
+    this.description,
+    this.visual,
+    this.noteText,
+    this.buttonText,
+    this.titleHighlightWords,
+    this.highlightColor,
+  });
+
+  factory PaywallStepConfig.fromJson(Map<String, dynamic> json) =>
+      _$PaywallStepConfigFromJson(json);
+
+  static dynamic _multilocaleFromJson(dynamic json) =>
+      json != null ? MultilocaleText.fromJson(json) : null;
+
+  Map<String, dynamic> toJson() => _$PaywallStepConfigToJson(this);
 }
 
 /// Paywall option (subscription tier)
@@ -108,8 +209,13 @@ class PaywallMetadata {
   final double? visualHeight;
   @JsonKey(name: 'visual_opacity')
   final double? visualOpacity;
+  /// When true (default), Lottie animations loop. Set to false in remote config for one-shot animations.
+  @JsonKey(name: 'animation_looped')
+  final bool? animationLooped;
   @JsonKey(name: 'option_visuals')
   final Map<String, String> optionVisuals; // Map of option_id -> lottie path
+  @JsonKey(name: 'highlight_color')
+  final String? highlightColor;
 
   PaywallMetadata({
     required this.defaultSelectedOptionId,
@@ -118,8 +224,13 @@ class PaywallMetadata {
     this.visualWidth,
     this.visualHeight,
     this.visualOpacity,
+    this.animationLooped,
     required this.optionVisuals,
+    this.highlightColor,
   });
+
+  /// Whether the option visuals should loop. Defaults to true when not set in remote config.
+  bool get isAnimationLooped => animationLooped ?? true;
 
   factory PaywallMetadata.fromJson(Map<String, dynamic> json) => _$PaywallMetadataFromJson(json);
 

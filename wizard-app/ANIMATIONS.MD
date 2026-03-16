@@ -15,6 +15,9 @@
 ## Pot
 - [Pot burst](https://lottiefiles.com/free-animation/cauldron-explosion-9BHHY7KXRD)
 
+## Notifications
+- [Bell](https://lottiefiles.com/free-animation/notification-animation-pcoOI7JNU4)
+
 ## Stars
 - [Looped stars](https://lottiefiles.com/free-animation/sparkles-loop-loader-ai-HsFpotZmnU)
 - [Looped stars 2](https://lottiefiles.com/free-animation/magic-stars-Rkb0ffGjLN)

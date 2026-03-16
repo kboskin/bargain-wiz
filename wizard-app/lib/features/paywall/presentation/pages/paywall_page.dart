@@ -1,14 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/analytics_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/core/widgets/configurable_gradient_background.dart';
+import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
+import 'package:appwizard/core/widgets/styled_title_widget.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/core/routing/app_routes.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
@@ -32,12 +35,16 @@ class PaywallPage extends StatefulWidget {
   State<PaywallPage> createState() => _PaywallPageState();
 }
 
-class _PaywallPageState extends State<PaywallPage> {
+class _PaywallPageState extends State<PaywallPage> with TickerProviderStateMixin {
+  late AnimationController _timelineAnimationController;
+  final List<Animation<double>> _timelineItemAnimations = [];
   PaywallConfig? _paywallConfig;
   String? _selectedOptionId;
   List<SubscriptionProduct> _products = [];
   bool _isLoading = true;
   bool _isPurchasing = false;
+  int _currentStepIndex = 0; // For multi-step paywall flows
+  bool _stepTransitionForward = true; // true = next, false = back (for animation direction)
   final AppLogger _logger = di.sl<AppLogger>();
   final AnalyticsService _analytics = di.sl<AnalyticsService>();
   final RemoteConfigService _remoteConfigService = di.sl<RemoteConfigService>();
@@ -47,6 +54,36 @@ class _PaywallPageState extends State<PaywallPage> {
     super.initState();
     _loadPaywallConfig();
     _loadProducts();
+    _timelineAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timelineAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _setupTimelineAnimations(int count) {
+    if (_timelineItemAnimations.isNotEmpty) return;
+    for (int i = 0; i < count; i++) {
+      // More spread out intervals for a slower feel
+      final start = (i * 0.25).clamp(0.0, 1.0);
+      final end = (start + 0.5).clamp(0.0, 1.0);
+      _timelineItemAnimations.add(
+        CurvedAnimation(
+          parent: _timelineAnimationController,
+          curve: Interval(start, end, curve: Curves.easeOutCubic),
+        ),
+      );
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _timelineAnimationController.forward();
+      }
+    });
   }
 
   @override
@@ -101,12 +138,16 @@ class _PaywallPageState extends State<PaywallPage> {
   }
 
   SubscriptionProduct? _getProductForOption(PaywallOption option) {
+    if (_products.isEmpty) return null;
     try {
-      return _products.firstWhere(
-        (p) => p.tier == option.tierEnum,
-      );
+      final tier = option.tierEnum;
+      // Using a loop for safer lookup
+      for (final p in _products) {
+        if (p.tier == tier) return p;
+      }
+      return null;
     } catch (e) {
-      _logger.w('Product not found for option tier ${option.tier}: $e');
+      _logger.w('Error looking up product for tier ${option.tier}: $e');
       return null;
     }
   }
@@ -142,44 +183,68 @@ class _PaywallPageState extends State<PaywallPage> {
     bloc.add(PurchaseSubscriptionRequested(product.productId));
   }
 
-  Future<void> _handleRestore() async {
-    if (_paywallConfig == null) return;
-
-    _analytics.logEvent(
-      name: 'restore_tap',
-      parameters: {
-        'paywall_type': _paywallConfig!.type,
-      },
-    );
-
-    final bloc = context.read<SubscriptionBloc>();
-    bloc.add(const RestorePurchasesRequested());
-  }
-
   void _onClose() {
-    if (kDebugMode) {
-      context.go(AppRoutes.main);
+    if (context.canPop()) {
+      context.pop();
     } else {
-      context.go(AppRoutes.home);
+      if (kDebugMode) {
+        context.go(AppRoutes.main);
+      } else {
+        context.go(AppRoutes.home);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    const overlayStyle = SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    );
+
     if (_isLoading || _paywallConfig == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: overlayStyle,
+        child: const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white, // Or theme background
+    final config = _paywallConfig!;
+    final hasSteps = config.steps.isNotEmpty;
+    final isOnStep = hasSteps && _currentStepIndex < config.steps.length;
+    final showBack = hasSteps && _currentStepIndex > 0;
+
+    final bgConfig = config.background;
+    final hasGradient = bgConfig != null &&
+        bgConfig.colorObjects.isNotEmpty;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: Scaffold(
+      backgroundColor: hasGradient ? Colors.transparent : Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
+        leading: showBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.backgroundDark, size: 22),
+                onPressed: () {
+                  setState(() {
+                    _stepTransitionForward = false;
+                    _currentStepIndex--;
+                  });
+                },
+              )
+            : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.close, color: AppColors.backgroundDark),
@@ -188,13 +253,28 @@ class _PaywallPageState extends State<PaywallPage> {
         ],
       ),
       extendBodyBehindAppBar: true,
-      body: BlocListener<SubscriptionBloc, SubscriptionState>(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (hasGradient)
+            Positioned.fill(
+              child: ConfigurableGradientBackground(
+                colors: bgConfig!.colorObjects,
+                stops: bgConfig.stops.length == bgConfig.colorObjects.length
+                    ? bgConfig.stops
+                    : null,
+                child: const SizedBox.shrink(),
+              ),
+            )
+          else
+            const ColoredBox(color: Colors.white),
+          BlocListener<SubscriptionBloc, SubscriptionState>(
         listener: (context, state) {
           if (state is PurchaseSuccess) {
             setState(() {
               _isPurchasing = false;
             });
-            
+
             if (_paywallConfig != null) {
               final selectedOption = _paywallConfig!.options.firstWhere(
                 (opt) => opt.id == _selectedOptionId,
@@ -208,22 +288,21 @@ class _PaywallPageState extends State<PaywallPage> {
                 },
               );
             }
-            
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(AppLocalizations.of(context)!.subscriptionActivated),
                 backgroundColor: Colors.green,
               ),
             );
-            
-            // Navigate home handled by listener logic in app usually, but we force it here
+
             context.go(AppRoutes.home);
-            
+
           } else if (state is PurchaseError) {
             setState(() {
               _isPurchasing = false;
             });
-            
+
             if (_paywallConfig != null) {
               final selectedOption = _paywallConfig!.options.firstWhere(
                 (opt) => opt.id == _selectedOptionId,
@@ -238,7 +317,7 @@ class _PaywallPageState extends State<PaywallPage> {
                 },
               );
             }
-            
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.message),
@@ -269,11 +348,24 @@ class _PaywallPageState extends State<PaywallPage> {
         },
         child: _buildPaywallContent(context),
       ),
+        ],
+      ),
+    ),
     );
   }
 
   Widget _buildPaywallContent(BuildContext context) {
     final config = _paywallConfig!;
+    final hasSteps = config.steps.isNotEmpty;
+
+    // When steps are configured, show them before the main pricing/options
+    // screen. Steps are simple explainer screens; the final "step" is the
+    // existing paywall UI.
+    if (hasSteps && _currentStepIndex < config.steps.length) {
+      final step = config.steps[_currentStepIndex];
+      return _buildStepLayout(context, config, step);
+    }
+
     final selectedOption = config.options.firstWhere(
       (opt) => opt.id == _selectedOptionId,
       orElse: () => config.options.first,
@@ -289,6 +381,334 @@ class _PaywallPageState extends State<PaywallPage> {
     }
   }
 
+  /// Single step layout (intro / reminder-style screen). Title + visual + description +
+  /// "No payment due now" row + CTA that advances to next step or pricing screen.
+  Widget _buildStepLayout(
+    BuildContext context,
+    PaywallConfig config,
+    PaywallStepConfig step,
+  ) {
+    final titleText = _getMultilocaleText(step.title, context);
+    final descriptionText = _getMultilocaleText(step.description, context);
+    final noteText = _getMultilocaleText(step.noteText, context);
+    final stepButtonText = _getMultilocaleText(step.buttonText, context);
+    final buttonLabel = (stepButtonText != null && stepButtonText.isNotEmpty)
+        ? stepButtonText
+        : (_getMultilocaleText(config.nextButtonText, context) ?? AppLocalizations.of(context)!.next);
+
+    final topPadding = MediaQuery.paddingOf(context).top + kToolbarHeight + 24;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24;
+    final availableHeight = MediaQuery.sizeOf(context).height - topPadding - bottomPadding;
+
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding, left: 24, right: 24, bottom: bottomPadding),
+      child: SizedBox(
+        height: availableHeight,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (titleText != null && titleText.isNotEmpty)
+                  StyledTitleWidget(
+                    title: titleText,
+                    highlightWordsData: step.titleHighlightWords?.description,
+                    highlightColor: step.highlightColor,
+                    baseColor: AppColors.backgroundDark,
+                    fontSize: 26,
+                    fontSizeHighlight: 28,
+                  ),
+                if (titleText != null && titleText.isNotEmpty) const SizedBox(height: 20),
+                if (step.visual != null && step.visual!.isNotEmpty) ...[
+                  VisualAssetWidget(
+                    visualPath: step.visual!,
+                    width: 260,
+                    height: 260,
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                if (descriptionText != null && descriptionText.isNotEmpty)
+                  Text(
+                    descriptionText,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      color: AppColors.backgroundDark.withValues(alpha: 0.85),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+              ],
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildNoPaymentDueNow(context, config),
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _stepTransitionForward = true;
+                        _currentStepIndex++;
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.backgroundDark,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(buttonLabel, style: AppTextStyles.buttonText),
+                  ),
+                ),
+                if (noteText != null && noteText.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    noteText,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.backgroundDark.withValues(alpha: 0.6),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _getMultilocaleText(dynamic ml, BuildContext context) {
+    if (ml == null) return null;
+    if (ml is String) return ml.isEmpty ? null : ml;
+    try {
+      final s = (ml as dynamic).get(context) as String?;
+      return s?.isEmpty == true ? null : s;
+    } catch (_) {
+      return ml.toString();
+    }
+  }
+
+  /// "No payment due now" row with checkmark, shown above the main CTA on all screens.
+  /// Uses [StyledRichTextDescriptionWidget] so the line can support highlight words via config later.
+  Widget _buildNoPaymentDueNow(BuildContext context, PaywallConfig config) {
+    final text = _getMultilocaleText(config.noPaymentDueText, context) ?? 'No payment due now';
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.check_circle, size: 20, color: AppColors.backgroundDark),
+        const SizedBox(width: 8),
+        StyledRichTextDescriptionWidget(
+          description: text,
+          highlightWordsData: config.noPaymentHighlightWords?.description ?? const {},
+          baseColor: AppColors.backgroundDark,
+          bodyFontSize: 16,
+          baseColorOpacity: 1.0,
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  /// Vertical timeline for trial: Today (unlock), In N days (reminder), In trialDays (billing starts).
+
+  Widget _buildTrialTimeline(BuildContext context, PaywallConfig config) {
+    final days = config.trialDays.clamp(1, 365);
+    final now = DateTime.now();
+    final billingDate = now.add(Duration(days: days));
+    final billingStr = '${billingDate.day} ${_monthName(billingDate.month)} ${billingDate.year}';
+    final colorTrial = const Color(0xFFFF9800);
+    final colorBilling = AppColors.backgroundDark;
+
+    _setupTimelineAnimations(3);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAnimatedTimelineRow(
+            0,
+            icon: Icons.lock_open,
+            iconColor: colorTrial,
+            title: _getMultilocaleText(config.timelineTodayText, context) ?? 'Today',
+            subtitle: _getMultilocaleText(config.timelineTodaySubtitle, context) ?? "Unlock all the app's features.",
+            nextColor: colorTrial,
+          ),
+          _buildAnimatedTimelineRow(
+            1,
+            icon: Icons.notifications_active,
+            iconColor: colorTrial,
+            title: _getMultilocaleText(config.timelineReminderText, context) ?? (days > 1 ? 'In ${days - 1} day${days == 2 ? '' : 's'} – Reminder' : 'Reminder'),
+            subtitle: _getMultilocaleText(config.timelineReminderSubtitle, context) ?? "We'll send you a reminder that your trial is ending soon.",
+            nextColor: colorBilling,
+          ),
+          _buildAnimatedTimelineRow(
+            2,
+            icon: Icons.workspace_premium,
+            iconColor: colorBilling,
+            title: _getMultilocaleText(config.timelineBillingText, context) ?? 'In $days days – Billing starts',
+            subtitle: _getMultilocaleText(config.timelineBillingSubtitle, context) ?? "You'll be charged on $billingStr unless you cancel before.",
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnimatedTimelineRow(
+    int index, {
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    Color? nextColor,
+    bool isLast = false,
+  }) {
+    final animation = _timelineItemAnimations[index];
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        return Opacity(
+          opacity: animation.value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - animation.value)),
+            child: child,
+          ),
+        );
+      },
+      child: _timelineRow(
+        context,
+        icon: icon,
+        iconColor: iconColor,
+        title: title,
+        subtitle: subtitle,
+        nextColor: nextColor,
+        isLast: isLast,
+      ),
+    );
+  }
+
+  String _monthName(int month) {
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return names[(month - 1).clamp(0, 11)];
+  }
+
+  Widget _timelineRow(
+    BuildContext context, {
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    Color? nextColor,
+    bool isLast = false,
+    int index = 0,
+  }) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 36,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Connecting lines
+                Column(
+                  children: [
+                    // Line coming from above (except for first item)
+                    Expanded(
+                      child: Container(
+                        width: 6,
+                        color: index == 0 ? Colors.transparent : iconColor,
+                      ),
+                    ),
+                    // Space where the circle sits
+                    const SizedBox(height: 36),
+                    // Line going below (except for last item)
+                    Expanded(
+                      child: Container(
+                        width: 6,
+                        decoration: BoxDecoration(
+                          gradient: isLast
+                              ? null
+                              : LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    iconColor,
+                                    iconColor,
+                                    nextColor ?? iconColor,
+                                    nextColor ?? iconColor,
+                                  ],
+                                  stops: const [0.0, 0.4, 0.6, 1.0],
+                                ),
+                          color: isLast ? Colors.transparent : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                // The actual icon circle, centered to the IntrinsicHeight of the row
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white, // Background to cover the line
+                    border: Border.all(color: iconColor, width: 2),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 30, // Inner circle
+                      height: 30,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: iconColor.withValues(alpha: 0.15),
+                      ),
+                      child: Icon(icon, size: 18, color: iconColor),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center, // Center text block vertically
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.heading3.copyWith(
+                      color: AppColors.backgroundDark,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.backgroundDark.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Layout methods (reusing the same logic roughly)
 
   Widget _buildCardsLayout(
@@ -296,52 +716,63 @@ class _PaywallPageState extends State<PaywallPage> {
     PaywallConfig config,
     PaywallOption selectedOption,
   ) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(top: kToolbarHeight + 20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+    final topPadding = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24;
+    final availableHeight = MediaQuery.sizeOf(context).height - topPadding - bottomPadding;
+
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding, left: 24, right: 24, bottom: bottomPadding),
+      child: SizedBox(
+        height: availableHeight,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const SizedBox(height: 12),
-            Text(
-              config.title.get(context),
-              style: AppTextStyles.heading1.copyWith(
-                color: AppColors.backgroundDark,
-              ),
-              textAlign: TextAlign.center,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StyledTitleWidget(
+                  title: _getMultilocaleText(config.title, context) ?? '',
+                  highlightWordsData: config.titleHighlightWords?.description ?? const {},
+                  highlightColor: config.metadata.highlightColor,
+                  baseColor: AppColors.backgroundDark,
+                  fontSize: 34,
+                  fontSizeHighlight: 38,
+                ),
+                const SizedBox(height: 16),
+                StyledRichTextDescriptionWidget(
+                  description: _getMultilocaleText(config.description, context) ?? '',
+                  highlightWordsData: config.descriptionHighlightWords?.description ?? const {},
+                  baseColor: AppColors.backgroundDark,
+                  baseColorOpacity: 0.7,
+                  bodyFontSize: 16,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                if (config.trialDays >= 1) _buildTrialTimeline(context, config),
+                ...config.options.map((option) => _buildOptionCard(
+                      context,
+                      option,
+                      config,
+                      isSelected: option.id == _selectedOptionId,
+                    )),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              config.description.get(context),
-              style: AppTextStyles.bodyLarge.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildNoPaymentDueNow(context, config),
+                const SizedBox(height: 4),
+                _buildCtaButton(context, config, selectedOption),
+                const SizedBox(height: 12),
+                Text(
+                  _getMultilocaleText(config.noteText, context) ?? '',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.backgroundDark.withValues(alpha: 0.6),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            const SizedBox(height: 32),
-            _buildVisual(selectedOption.id, config.metadata),
-            const SizedBox(height: 32),
-            ...config.options.map((option) => _buildOptionCard(
-                  context,
-                  option,
-                  config,
-                  isSelected: option.id == _selectedOptionId,
-                )),
-            const SizedBox(height: 24),
-            _buildCtaButton(context, config, selectedOption),
-            const SizedBox(height: 12),
-            Text(
-              config.noteText.get(context),
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.6),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            if (config.showRestore) _buildRestoreButton(context),
-            _buildTermsAndPrivacyLinks(context),
-            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -353,66 +784,77 @@ class _PaywallPageState extends State<PaywallPage> {
     PaywallConfig config,
     PaywallOption selectedOption,
   ) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(top: kToolbarHeight + 20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+    final topPadding = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24;
+    final availableHeight = MediaQuery.sizeOf(context).height - topPadding - bottomPadding;
+
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding, left: 24, right: 24, bottom: bottomPadding),
+      child: SizedBox(
+        height: availableHeight,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const SizedBox(height: 12),
-            Text(
-              config.title.get(context),
-              style: AppTextStyles.heading1.copyWith(
-                color: AppColors.backgroundDark,
-              ),
-              textAlign: TextAlign.center,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StyledTitleWidget(
+                  title: _getMultilocaleText(config.title, context) ?? '',
+                  highlightWordsData: config.titleHighlightWords?.description ?? const {},
+                  highlightColor: config.metadata.highlightColor,
+                  baseColor: AppColors.backgroundDark,
+                  fontSize: 34,
+                  fontSizeHighlight: 38,
+                ),
+                const SizedBox(height: 16),
+                StyledRichTextDescriptionWidget(
+                  description: _getMultilocaleText(config.description, context) ?? '',
+                  highlightWordsData: config.descriptionHighlightWords?.description ?? const {},
+                  baseColor: AppColors.backgroundDark,
+                  baseColorOpacity: 0.7,
+                  bodyFontSize: 16,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                if (config.trialDays >= 1) _buildTrialTimeline(context, config),
+                SizedBox(
+                  height: 140,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: config.options.length,
+                    separatorBuilder: (context, index) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final option = config.options[index];
+                      return SizedBox(
+                        width: 200,
+                        child: _buildOptionCard(
+                          context,
+                          option,
+                          config,
+                          isSelected: option.id == _selectedOptionId,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              config.description.get(context),
-              style: AppTextStyles.bodyLarge.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildNoPaymentDueNow(context, config),
+                const SizedBox(height: 4),
+                _buildCtaButton(context, config, selectedOption),
+                const SizedBox(height: 12),
+                Text(
+                  _getMultilocaleText(config.noteText, context) ?? '',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.backgroundDark.withValues(alpha: 0.6),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            _buildVisual(selectedOption.id, config.metadata),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 140,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: config.options.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final option = config.options[index];
-                  return SizedBox(
-                    width: 200,
-                    child: _buildOptionCard(
-                      context,
-                      option,
-                      config,
-                      isSelected: option.id == _selectedOptionId,
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-            _buildCtaButton(context, config, selectedOption),
-            const SizedBox(height: 12),
-            Text(
-              config.noteText.get(context),
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.6),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            if (config.showRestore) _buildRestoreButton(context),
-            _buildTermsAndPrivacyLinks(context),
-            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -424,53 +866,64 @@ class _PaywallPageState extends State<PaywallPage> {
     PaywallConfig config,
     PaywallOption selectedOption,
   ) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(top: kToolbarHeight + 20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+    final topPadding = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24;
+    final availableHeight = MediaQuery.sizeOf(context).height - topPadding - bottomPadding;
+
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding, left: 24, right: 24, bottom: bottomPadding),
+      child: SizedBox(
+        height: availableHeight,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const SizedBox(height: 12),
-            Text(
-              config.title.get(context),
-              style: AppTextStyles.heading2.copyWith(
-                color: AppColors.backgroundDark,
-              ),
-              textAlign: TextAlign.center,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StyledTitleWidget(
+                  title: _getMultilocaleText(config.title, context) ?? '',
+                  highlightWordsData: config.titleHighlightWords?.description ?? const {},
+                  highlightColor: config.metadata.highlightColor,
+                  baseColor: AppColors.backgroundDark,
+                  fontSize: 28,
+                  fontSizeHighlight: 32,
+                ),
+                const SizedBox(height: 8),
+                StyledRichTextDescriptionWidget(
+                  description: _getMultilocaleText(config.description, context) ?? '',
+                  highlightWordsData: config.descriptionHighlightWords?.description ?? const {},
+                  baseColor: AppColors.backgroundDark,
+                  baseColorOpacity: 0.7,
+                  bodyFontSize: 14,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                if (config.trialDays >= 1) _buildTrialTimeline(context, config),
+                ...config.options.map((option) => _buildOptionCard(
+                      context,
+                      option,
+                      config,
+                      isSelected: option.id == _selectedOptionId,
+                      compact: true,
+                    )),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              config.description.get(context),
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildNoPaymentDueNow(context, config),
+                const SizedBox(height: 4),
+                _buildCtaButton(context, config, selectedOption),
+                const SizedBox(height: 12),
+                Text(
+                  _getMultilocaleText(config.noteText, context) ?? '',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.backgroundDark.withValues(alpha: 0.6),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            _buildVisual(selectedOption.id, config.metadata),
-            const SizedBox(height: 16),
-            ...config.options.map((option) => _buildOptionCard(
-                  context,
-                  option,
-                  config,
-                  isSelected: option.id == _selectedOptionId,
-                  compact: true,
-                )),
-            const SizedBox(height: 16),
-            _buildCtaButton(context, config, selectedOption),
-            const SizedBox(height: 8),
-            Text(
-              config.noteText.get(context),
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.6),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            if (config.showRestore) _buildRestoreButton(context),
-            _buildTermsAndPrivacyLinks(context),
-            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -507,21 +960,9 @@ class _PaywallPageState extends State<PaywallPage> {
                 ),
               )
             : Text(
-                config.nextButtonText.get(context),
+                _getMultilocaleText(config.nextButtonText, context) ?? '',
                 style: AppTextStyles.buttonText,
               ),
-      ),
-    );
-  }
-
-  Widget _buildRestoreButton(BuildContext context) {
-    return TextButton(
-      onPressed: _isPurchasing ? null : _handleRestore,
-      child: Text(
-        AppLocalizations.of(context)!.restorePurchases,
-        style: AppTextStyles.bodyMedium.copyWith(
-          color: AppColors.backgroundDark.withValues(alpha: 0.7),
-        ),
       ),
     );
   }
@@ -538,6 +979,7 @@ class _PaywallPageState extends State<PaywallPage> {
         visualPath: visualPath,
         width: metadata.visualWidth ?? 170.0,
         height: metadata.visualHeight ?? 170.0,
+        repeat: metadata.isAnimationLooped,
       ),
     );
   }
@@ -614,7 +1056,7 @@ class _PaywallPageState extends State<PaywallPage> {
                       children: [
                         Expanded(
                           child: Text(
-                              option.title.get(context),
+                              _getMultilocaleText(option.title, context) ?? '',
                             style: AppTextStyles.heading3.copyWith(
                               color: AppColors.backgroundDark,
                             ),
@@ -631,7 +1073,7 @@ class _PaywallPageState extends State<PaywallPage> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              option.badge!.get(context),
+                              _getMultilocaleText(option.badge, context) ?? '',
                               style: AppTextStyles.caption.copyWith(
                                 color: Colors.white,
                               ),
@@ -641,7 +1083,7 @@ class _PaywallPageState extends State<PaywallPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      option.description.get(context),
+                      _getMultilocaleText(option.description, context) ?? '',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.backgroundDark.withValues(alpha: 0.7),
                       ),
@@ -672,56 +1114,4 @@ class _PaywallPageState extends State<PaywallPage> {
     );
   }
 
-  Widget _buildTermsAndPrivacyLinks(BuildContext context) {
-    final remoteConfig = di.sl<RemoteConfigService>();
-    final privacyUrl = remoteConfig.getPrivacyPolicyUrl();
-    final termsUrl = remoteConfig.getTermsOfUseUrl();
-
-    if (privacyUrl.isEmpty && termsUrl.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (termsUrl.isNotEmpty)
-            TextButton(
-              onPressed: () => _launchUrl(termsUrl),
-              child: Text(
-                AppLocalizations.of(context)!.terms,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.backgroundDark.withValues(alpha: 0.6),
-                ),
-              ),
-            ),
-          if (privacyUrl.isNotEmpty && termsUrl.isNotEmpty)
-            Text(
-              ' • ',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.6),
-              ),
-            ),
-          if (privacyUrl.isNotEmpty)
-            TextButton(
-              onPressed: () => _launchUrl(privacyUrl),
-              child: Text(
-                AppLocalizations.of(context)!.privacy,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.backgroundDark.withValues(alpha: 0.6),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
 }

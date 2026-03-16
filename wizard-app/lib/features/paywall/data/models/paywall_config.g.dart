@@ -23,6 +23,53 @@ PaywallConfig _$PaywallConfigFromJson(
   closeButtonDelaySeconds:
       (json['close_button_delay_seconds'] as num?)?.toDouble() ?? 5.0,
   paymentProvider: json['payment_provider'] as String?,
+  trialDays: (json['trial_days'] as num?)?.toInt() ?? 3,
+  steps:
+      (json['steps'] as List<dynamic>?)
+          ?.map((e) => PaywallStepConfig.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const [],
+  background: json['background'] == null
+      ? null
+      : GradientBackgroundConfig.fromJson(
+          json['background'] as Map<String, dynamic>,
+        ),
+  noPaymentDueText: PaywallConfig._multilocaleFromJson(
+    json['no_payment_due_text'],
+  ),
+  timelineTodayText: PaywallConfig._multilocaleFromJson(
+    json['timeline_today_text'],
+  ),
+  timelineReminderText: PaywallConfig._multilocaleFromJson(
+    json['timeline_reminder_text'],
+  ),
+  timelineBillingText: PaywallConfig._multilocaleFromJson(
+    json['timeline_billing_text'],
+  ),
+  timelineTodaySubtitle: PaywallConfig._multilocaleFromJson(
+    json['timeline_today_subtitle'],
+  ),
+  timelineReminderSubtitle: PaywallConfig._multilocaleFromJson(
+    json['timeline_reminder_subtitle'],
+  ),
+  timelineBillingSubtitle: PaywallConfig._multilocaleFromJson(
+    json['timeline_billing_subtitle'],
+  ),
+  titleHighlightWords: json['title_highlight_words'] == null
+      ? null
+      : HighlightWordsConfig.fromJson(
+          json['title_highlight_words'] as Map<String, dynamic>,
+        ),
+  descriptionHighlightWords: json['description_highlight_words'] == null
+      ? null
+      : HighlightWordsConfig.fromJson(
+          json['description_highlight_words'] as Map<String, dynamic>,
+        ),
+  noPaymentHighlightWords: json['no_payment_highlight_words'] == null
+      ? null
+      : HighlightWordsConfig.fromJson(
+          json['no_payment_highlight_words'] as Map<String, dynamic>,
+        ),
 );
 
 Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
@@ -38,6 +85,47 @@ Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
       'show_close': instance.showClose,
       'close_button_delay_seconds': instance.closeButtonDelaySeconds,
       'payment_provider': instance.paymentProvider,
+      'trial_days': instance.trialDays,
+      'steps': instance.steps,
+      'background': instance.background,
+      'title_highlight_words': instance.titleHighlightWords,
+      'description_highlight_words': instance.descriptionHighlightWords,
+      'no_payment_highlight_words': instance.noPaymentHighlightWords,
+      'no_payment_due_text': instance.noPaymentDueText,
+      'timeline_today_text': instance.timelineTodayText,
+      'timeline_reminder_text': instance.timelineReminderText,
+      'timeline_billing_text': instance.timelineBillingText,
+      'timeline_today_subtitle': instance.timelineTodaySubtitle,
+      'timeline_reminder_subtitle': instance.timelineReminderSubtitle,
+      'timeline_billing_subtitle': instance.timelineBillingSubtitle,
+    };
+
+PaywallStepConfig _$PaywallStepConfigFromJson(Map<String, dynamic> json) =>
+    PaywallStepConfig(
+      id: json['id'] as String?,
+      title: PaywallStepConfig._multilocaleFromJson(json['title']),
+      description: PaywallStepConfig._multilocaleFromJson(json['description']),
+      visual: json['visual'] as String?,
+      noteText: PaywallStepConfig._multilocaleFromJson(json['note_text']),
+      buttonText: PaywallStepConfig._multilocaleFromJson(json['button_text']),
+      titleHighlightWords: json['title_highlight_words'] == null
+          ? null
+          : HighlightWordsConfig.fromJson(
+              json['title_highlight_words'] as Map<String, dynamic>,
+            ),
+      highlightColor: json['highlight_color'] as String?,
+    );
+
+Map<String, dynamic> _$PaywallStepConfigToJson(PaywallStepConfig instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'title': instance.title,
+      'description': instance.description,
+      'visual': instance.visual,
+      'note_text': instance.noteText,
+      'button_text': instance.buttonText,
+      'title_highlight_words': instance.titleHighlightWords,
+      'highlight_color': instance.highlightColor,
     };
 
 PaywallOption _$PaywallOptionFromJson(Map<String, dynamic> json) =>
@@ -66,7 +154,9 @@ PaywallMetadata _$PaywallMetadataFromJson(Map<String, dynamic> json) =>
       visualWidth: (json['visual_width'] as num?)?.toDouble(),
       visualHeight: (json['visual_height'] as num?)?.toDouble(),
       visualOpacity: (json['visual_opacity'] as num?)?.toDouble(),
+      animationLooped: json['animation_looped'] as bool?,
       optionVisuals: Map<String, String>.from(json['option_visuals'] as Map),
+      highlightColor: json['highlight_color'] as String?,
     );
 
 Map<String, dynamic> _$PaywallMetadataToJson(PaywallMetadata instance) =>
@@ -77,5 +167,7 @@ Map<String, dynamic> _$PaywallMetadataToJson(PaywallMetadata instance) =>
       'visual_width': instance.visualWidth,
       'visual_height': instance.visualHeight,
       'visual_opacity': instance.visualOpacity,
+      'animation_looped': instance.animationLooped,
       'option_visuals': instance.optionVisuals,
+      'highlight_color': instance.highlightColor,
     };

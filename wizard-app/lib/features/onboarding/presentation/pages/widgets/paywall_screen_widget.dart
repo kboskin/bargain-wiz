@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/analytics_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
@@ -11,6 +10,7 @@ import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
+import 'package:appwizard/core/widgets/styled_title_widget.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_layout.dart';
@@ -347,12 +347,13 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
           children: [
             const SizedBox(height: 32),
             // Title
-            Text(
-              config.title.get(context),
-              style: AppTextStyles.heading1.copyWith(
-                color: AppColors.backgroundDark,
-              ),
-              textAlign: TextAlign.center,
+            StyledTitleWidget(
+              title: config.title.get(context),
+              highlightWordsData: config.titleHighlightWords?.description,
+              highlightColor: config.metadata.highlightColor,
+              baseColor: AppColors.backgroundDark,
+              fontSize: 34,
+              fontSizeHighlight: 38,
             ),
             const SizedBox(height: 16),
             // Description
@@ -389,8 +390,6 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 16),
             // Restore purchases button
             if (config.showRestore) _buildRestoreButton(context),
-            // Terms & Privacy links
-            _buildTermsAndPrivacyLinks(context),
             const SizedBox(height: 24),
           ],
         ),
@@ -412,12 +411,13 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
           children: [
             const SizedBox(height: 32),
             // Title
-            Text(
-              config.title.get(context),
-              style: AppTextStyles.heading1.copyWith(
-                color: AppColors.backgroundDark,
-              ),
-              textAlign: TextAlign.center,
+            StyledTitleWidget(
+              title: config.title.get(context),
+              highlightWordsData: config.titleHighlightWords?.description,
+              highlightColor: config.metadata.highlightColor,
+              baseColor: AppColors.backgroundDark,
+              fontSize: 34,
+              fontSizeHighlight: 38,
             ),
             const SizedBox(height: 16),
             // Description
@@ -468,8 +468,6 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             const SizedBox(height: 16),
             // Restore purchases button
             if (config.showRestore) _buildRestoreButton(context),
-            // Terms & Privacy links
-            _buildTermsAndPrivacyLinks(context),
             const SizedBox(height: 24),
           ],
         ),
@@ -491,12 +489,13 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
           children: [
             const SizedBox(height: 24),
             // Title
-            Text(
-              config.title.get(context),
-              style: AppTextStyles.heading2.copyWith(
-                color: AppColors.backgroundDark,
-              ),
-              textAlign: TextAlign.center,
+            StyledTitleWidget(
+              title: config.title.get(context),
+              highlightWordsData: config.titleHighlightWords?.description,
+              highlightColor: config.metadata.highlightColor,
+              baseColor: AppColors.backgroundDark,
+              fontSize: 28,
+              fontSizeHighlight: 32,
             ),
             const SizedBox(height: 8),
             // Description
@@ -535,7 +534,6 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
             // Restore purchases button
             if (config.showRestore) _buildRestoreButton(context),
             // Terms & Privacy links
-            _buildTermsAndPrivacyLinks(context),
             const SizedBox(height: 16),
           ],
         ),
@@ -741,56 +739,4 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
     );
   }
 
-  Widget _buildTermsAndPrivacyLinks(BuildContext context) {
-    final remoteConfig = di.sl<RemoteConfigService>();
-    final privacyUrl = remoteConfig.getPrivacyPolicyUrl();
-    final termsUrl = remoteConfig.getTermsOfUseUrl();
-
-    if (privacyUrl.isEmpty && termsUrl.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (termsUrl.isNotEmpty)
-            TextButton(
-              onPressed: () => _launchUrl(termsUrl),
-              child: Text(
-                AppLocalizations.of(context)!.terms,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.backgroundDark.withValues(alpha: 0.6),
-                ),
-              ),
-            ),
-          if (privacyUrl.isNotEmpty && termsUrl.isNotEmpty)
-            Text(
-              ' • ',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.backgroundDark.withValues(alpha: 0.6),
-              ),
-            ),
-          if (privacyUrl.isNotEmpty)
-            TextButton(
-              onPressed: () => _launchUrl(privacyUrl),
-              child: Text(
-                AppLocalizations.of(context)!.privacy,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.backgroundDark.withValues(alpha: 0.6),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
 }

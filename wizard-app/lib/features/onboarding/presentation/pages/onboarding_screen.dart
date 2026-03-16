@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/onboarding_service.dart';
+import 'package:appwizard/core/widgets/configurable_gradient_background.dart';
 import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/theme/app_text_styles.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
@@ -318,21 +319,10 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       final colors = onboardingGradientConfig.colorObjects;
       final stops = onboardingGradientConfig.stops;
       if (colors.isNotEmpty) {
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: colors,
-                  stops: stops.length == colors.length ? stops : null,
-                ),
-              ),
-            ),
-            content,
-          ],
+        return ConfigurableGradientBackground(
+          colors: colors,
+          stops: stops.length == colors.length ? stops : null,
+          child: content,
         );
       }
     }

@@ -8,7 +8,8 @@ import 'dart:async' as _i3;
 import 'package:appwizard/core/utils/app_logger.dart' as _i5;
 import 'package:appwizard/features/onboarding/data/datasources/onboarding_local_datasource.dart'
     as _i2;
-import 'package:appwizard/features/onboarding/data/models/onboarding_data.dart' as _i4;
+import 'package:appwizard/features/onboarding/data/models/onboarding_data.dart'
+    as _i4;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
