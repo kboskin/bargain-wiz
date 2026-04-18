@@ -16,7 +16,8 @@ enum OnboardingScreenType {
   paywall,
   warmup,
   dataUpload,
-  createAccount;
+  createAccount,
+  sliderLottie;
 
   static OnboardingScreenType fromString(String value) {
     switch (value.toLowerCase()) {
@@ -44,6 +45,9 @@ enum OnboardingScreenType {
       case 'createaccount':
       case 'create_account':
         return OnboardingScreenType.createAccount;
+      case 'sliderlottie':
+      case 'slider_lottie':
+        return OnboardingScreenType.sliderLottie;
       default:
         return OnboardingScreenType.engagement;
     }

@@ -150,7 +150,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40.0),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           // Title
           StyledTitleWidget(
@@ -191,56 +191,61 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
             ),
           ],
 
-          // Scrollable options list with animations
           Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              itemCount: widget.model.options.length,
-              itemBuilder: (context, index) {
-                final option = widget.model.options[index];
-                // Extract text from multilocale value/label for comparison
-                final optionValueText = option.value?.get(context);
-                final optionLabelText = option.label.get(context);
-                final isSelected = widget.selectedValue != null &&
-                    (optionValueText == widget.selectedValue ||
-                        optionLabelText == widget.selectedValue ||
-                        option.value == widget.selectedValue ||
-                        option.label == widget.selectedValue);
-                final animation = index < _itemAnimations.length
-                    ? _itemAnimations[index]
-                    : const AlwaysStoppedAnimation(1.0);
+            child: Align(
+              alignment: widget.model.options.length <= 4
+                  ? const Alignment(0, -0.5) // Shift up proportionally for few items
+                  : Alignment.center, // Occupy whole space/center for many items
+              child: ListView.builder(
+                shrinkWrap: true, // Allow it to grow in both directions from center
+                padding: EdgeInsets.zero,
+                itemCount: widget.model.options.length,
+                itemBuilder: (context, index) {
+                  final option = widget.model.options[index];
+                  // Extract text from multilocale value/label for comparison
+                  final optionValueText = option.value?.get(context);
+                  final optionLabelText = option.label.get(context);
+                  final isSelected = widget.selectedValue != null &&
+                      (optionValueText == widget.selectedValue ||
+                          optionLabelText == widget.selectedValue ||
+                          option.value == widget.selectedValue ||
+                          option.label == widget.selectedValue);
+                  final animation = index < _itemAnimations.length
+                      ? _itemAnimations[index]
+                      : const AlwaysStoppedAnimation(1.0);
 
-                return AnimatedBuilder(
-                  animation: animation,
-                  builder: (context, child) {
-                    return Opacity(
-                      opacity: animation.value,
-                      child: Transform.translate(
-                        offset: Offset(0, 20 * (1 - animation.value)),
-                        child: Transform.scale(
-                          scale: 0.8 + (0.2 * animation.value),
-                          child: child,
+                  return AnimatedBuilder(
+                    animation: animation,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: animation.value,
+                        child: Transform.translate(
+                          offset: Offset(0, 20 * (1 - animation.value)),
+                          child: Transform.scale(
+                            scale: 0.8 + (0.2 * animation.value),
+                            child: child,
+                          ),
                         ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: Builder(
+                        builder: (context) {
+                          final selectedValue = option.value?.get(context) ?? option.label.get(context);
+                          return _buildOptionButton(
+                            context,
+                            option,
+                            isSelected,
+                            index,
+                            () => widget.onOptionSelected(selectedValue),
+                          );
+                        },
                       ),
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: Builder(
-                      builder: (context) {
-                        final selectedValue = option.value?.get(context) ?? option.label.get(context);
-                        return _buildOptionButton(
-                          context,
-                          option,
-                          isSelected,
-                          index,
-                          () => widget.onOptionSelected(selectedValue),
-                        );
-                      },
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -326,13 +331,31 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
                 const SizedBox(width: 12),
               ],
               Expanded(
-                child: Text(
-                  option.label.get(context),
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: textColor,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                  textAlign: TextAlign.left,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: iconData != null ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      option.label.get(context),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: textColor,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 18.0,
+                      ),
+                      textAlign: iconData != null ? TextAlign.left : TextAlign.center,
+                    ),
+                    if (option.metadata?.subtext != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        option.metadata!.subtext.get(context),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: textColor.withOpacity(0.7),
+                          fontSize: 14.0,
+                        ),
+                        textAlign: iconData != null ? TextAlign.left : TextAlign.center,
+                      ),
+                    ],
+                  ],
                 ),
               ),
               // Magic stars icon to the right when selected
@@ -342,10 +365,17 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
                 width: 32,
                 height: 32,
                 child: isSelected && _waterfallControllers.containsKey(index)
-                    ? _buildMagicStarAnimation(
-                        index,
-                        _waterfallControllers[index]!,
-                        option, // Pass the option to access its metadata
+                    ? Builder(
+                        builder: (context) {
+                          final path = _getAnimationPath(option);
+                          if (path == null) return const SizedBox.shrink();
+                          return _buildMagicStarAnimation(
+                            index,
+                            _waterfallControllers[index]!,
+                            option,
+                            path,
+                          );
+                        },
                       )
                     : const SizedBox.shrink(), // Empty space when not selected
               ),
@@ -363,9 +393,8 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     int index,
     AnimationController waterfallController,
     OnboardingOption option,
+    String animationPath,
   ) {
-    // Get animation path from option metadata or use default
-    final animationPath = _getAnimationPath(option);
     final normalizedPath = _assetPathHelper.normalizeAssetPath(animationPath);
     
     // Animation color: option metadata animation_color, else option color, else screen highlight color (was "highlight color", avoid default blue)
@@ -400,13 +429,13 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     );
   }
 
-  /// Get animation path from option metadata or default to star_anim.json
-  String _getAnimationPath(OnboardingOption option) {
+  /// Get animation path from option metadata
+  String? _getAnimationPath(OnboardingOption option) {
     final animation = option.metadata?.animation;
     if (animation != null && animation.isNotEmpty) {
       return animation;
     }
-    return 'assets/lottie/star_anim.json'; // Default path
+    return null; // Return null if not specified - no default
   }
 
 
@@ -730,6 +759,10 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
       'amazon': {'icon': FontAwesomeIcons.amazon, 'isFontAwesome': true},
       'olx': {'icon': FontAwesomeIcons.store, 'isFontAwesome': true}, // Store icon for OLX
       'craigslist': {'icon': FontAwesomeIcons.peace, 'isFontAwesome': true}, // Peace icon
+      'male': {'icon': Icons.male, 'isFontAwesome': false},
+      'female': {'icon': Icons.female, 'isFontAwesome': false},
+      'thumb_up': {'icon': FontAwesomeIcons.solidThumbsUp, 'isFontAwesome': true},
+      'thumb_down': {'icon': FontAwesomeIcons.solidThumbsDown, 'isFontAwesome': true},
       'other': {'icon': Icons.auto_awesome, 'isFontAwesome': false}, // Magical sparkles icon
     };
 

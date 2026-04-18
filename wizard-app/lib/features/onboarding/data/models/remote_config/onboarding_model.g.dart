@@ -41,6 +41,7 @@ OnboardingMetadata _$OnboardingMetadataFromJson(Map<String, dynamic> json) =>
       glowIntensity: (json['glow_intensity'] as num?)?.toDouble(),
       buttonText: OnboardingMetadata._multilocaleFromJson(json['button_text']),
       buttonStyle: json['button_style'] as String?,
+      subtext: OnboardingMetadata._multilocaleFromJson(json['subtext']),
       raw: json['raw'] as Map<String, dynamic>?,
     );
 
@@ -75,6 +76,7 @@ Map<String, dynamic> _$OnboardingMetadataToJson(OnboardingMetadata instance) =>
       'glow_intensity': instance.glowIntensity,
       'button_text': instance.buttonText,
       'button_style': instance.buttonStyle,
+      'subtext': instance.subtext,
     };
 
 AnswerStructure _$AnswerStructureFromJson(Map<String, dynamic> json) =>
@@ -453,3 +455,37 @@ Map<String, dynamic> _$WarmupScreenModelToJson(WarmupScreenModel instance) =>
       'answer_structure': ?instance.answerStructure?.toJson(),
       'show_top_bar': instance.showTopBar,
     };
+
+SliderLottieScreenModel _$SliderLottieScreenModelFromJson(
+  Map<String, dynamic> json,
+) => SliderLottieScreenModel(
+  title: SliderLottieScreenModel._multilocaleFromJson(json['title']),
+  description: SliderLottieScreenModel._multilocaleFromJson(
+    json['description'],
+  ),
+  visual: json['visual'] as String?,
+  metadata: json['metadata'] == null
+      ? null
+      : OnboardingMetadata.fromJson(json['metadata'] as Map<String, dynamic>),
+  nextButtonText: SliderLottieScreenModel._multilocaleFromJson(
+    json['next_button_text'],
+  ),
+  answerStructure: json['answer_structure'] == null
+      ? null
+      : AnswerStructure.fromJson(
+          json['answer_structure'] as Map<String, dynamic>,
+        ),
+  showTopBar: json['show_top_bar'] as bool? ?? true,
+);
+
+Map<String, dynamic> _$SliderLottieScreenModelToJson(
+  SliderLottieScreenModel instance,
+) => <String, dynamic>{
+  'title': ?instance.title,
+  'description': ?instance.description,
+  'visual': ?instance.visual,
+  'metadata': ?instance.metadata?.toJson(),
+  'next_button_text': ?instance.nextButtonText,
+  'answer_structure': ?instance.answerStructure?.toJson(),
+  'show_top_bar': instance.showTopBar,
+};

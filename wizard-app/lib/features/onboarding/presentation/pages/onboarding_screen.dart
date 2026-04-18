@@ -31,6 +31,7 @@ import 'widgets/paywall_screen_widget.dart';
 import 'widgets/warmup_screen_widget.dart';
 import 'widgets/data_upload_screen_widget.dart';
 import 'widgets/create_account_screen_widget.dart';
+import 'widgets/slider_lottie_screen_widget.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_bloc.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/features/onboarding/domain/entities/onboarding_data_entity.dart';
@@ -372,6 +373,10 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
         // Validation failed - just return false without snackbar
         return false;
       }
+    } else if (currentScreen is SliderLottieScreenModel) {
+      if (state.answers[_currentScreenIndex] == null) {
+        return false;
+      }
     }
     return true;
   }
@@ -397,6 +402,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       warmup: (m) => _getStandardButtonText(context, m, state),
       dataUpload: (m) => '', // Button hidden for data upload screen
       createAccount: (m) => _getStandardButtonText(context, m, state),
+      sliderLottie: (m) => _getStandardButtonText(context, m, state),
     );
   }
 
@@ -600,6 +606,22 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       createAccount: (model) => CreateAccountScreenWidget(
         model: model,
         onContinue: () => _handleNext(state, _onboardingBloc),
+      ),
+      sliderLottie: (model) => SliderLottieScreenWidget(
+        model: model,
+        selectedValue: state.answers[index],
+        textColor: textColor,
+        onValueChanged: (value) {
+          bloc.add(
+            OnboardingAnswerChanged(
+              screenIndex: index,
+              screenTitle: model.title.get(context),
+              screenType: model.type,
+              answerKey: model.answerStructure?.answerKeyName,
+              answer: value,
+            ),
+          );
+        },
       ),
       orElse: () => Center(
         child: Text(

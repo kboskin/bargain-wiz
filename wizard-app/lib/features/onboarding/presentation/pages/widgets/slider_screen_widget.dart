@@ -197,11 +197,10 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
             ),
             child: Text(
               currentOption.label.get(context),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppColors.backgroundDark,
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: AppColors.backgroundDark,
+                    fontWeight: FontWeight.bold,
+                  ),
               textAlign: TextAlign.center,
             ),
           ),
@@ -314,13 +313,13 @@ class _SliderScreenWidgetState extends State<SliderScreenWidget>
                         child: AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: isSelected
-                                ? AppColors.backgroundDark
-                                : AppColors.backgroundDark.withValues(alpha: 0.3),
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                            fontSize: 14,
-                          ) ?? const TextStyle(),
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: isSelected
+                                    ? AppColors.backgroundDark
+                                    : AppColors.backgroundDark.withValues(alpha: 0.3),
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              ) ??
+                              const TextStyle(),
                           child: Text(
                             opt.label.get(context),
                             textAlign: TextAlign.center,

@@ -62,6 +62,7 @@ class OnboardingMetadata {
     this.glowIntensity,
     this.buttonText,
     this.buttonStyle,
+    this.subtext,
     this.raw,
   });
 
@@ -118,6 +119,8 @@ class OnboardingMetadata {
   final dynamic buttonText;
   @JsonKey(name: 'button_style')
   final String? buttonStyle;
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic subtext;
   @JsonKey(includeFromJson: true, includeToJson: false)
   final Map<String, dynamic>? raw;
 
@@ -205,6 +208,8 @@ abstract class OnboardingModel extends ValidatableEntity {
         return DataUploadScreenModel.fromJson(json);
       case OnboardingScreenType.createAccount:
         return CreateAccountScreenModel.fromJson(json);
+      case OnboardingScreenType.sliderLottie:
+        return SliderLottieScreenModel.fromJson(json);
     }
   }
 
@@ -1015,6 +1020,7 @@ extension OnboardingModelWhen<T> on OnboardingModel {
     required T Function(WarmupScreenModel) warmup,
     required T Function(DataUploadScreenModel) dataUpload,
     required T Function(CreateAccountScreenModel) createAccount,
+    required T Function(SliderLottieScreenModel) sliderLottie,
     T Function()? orElse,
   }) {
     if (this is EngagementScreenModel) {
@@ -1037,6 +1043,8 @@ extension OnboardingModelWhen<T> on OnboardingModel {
       return warmup(this as WarmupScreenModel);
     } else if (this is DataUploadScreenModel) {
       return dataUpload(this as DataUploadScreenModel);
+    } else if (this is SliderLottieScreenModel) {
+      return sliderLottie(this as SliderLottieScreenModel);
     } else {
       return orElse?.call() ?? 
         (throw FormatException('Unknown screen type: ${runtimeType}')) as T;
@@ -1095,4 +1103,60 @@ class WarmupScreenModel extends OnboardingModel {
   @override
   Map<String, dynamic> toJson() =>
       _fixOnboardingModelJsonKeys(_$WarmupScreenModelToJson(this), type);
+}
+
+/// Model for slider_lottie-type onboarding screens.
+/// User can select a percentage (0-100) by interacting with a Lottie animation.
+@JsonSerializable(
+  explicitToJson: true,
+  includeIfNull: false,
+)
+class SliderLottieScreenModel extends OnboardingModel {
+  SliderLottieScreenModel({
+    required this.title,
+    this.description,
+    this.visual,
+    this.metadata,
+    required this.nextButtonText,
+    required this.answerStructure,
+    this.showTopBar = true,
+  }) : super(title: title);
+
+  factory SliderLottieScreenModel.fromJson(Map<String, dynamic> json) =>
+      _$SliderLottieScreenModelFromJson(json);
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  @override
+  final dynamic description;
+
+  /// Lottie asset path (e.g. assets/lottie/lottie_tube.json).
+  final String? visual;
+
+  final OnboardingMetadata? metadata;
+
+  @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
+  @override
+  final dynamic nextButtonText;
+
+  @JsonKey(name: 'answer_structure')
+  @override
+  final AnswerStructure? answerStructure;
+
+  @JsonKey(name: 'show_top_bar', defaultValue: true)
+  @override
+  final bool showTopBar;
+
+  @override
+  OnboardingScreenType get type => OnboardingScreenType.sliderLottie;
+
+  static dynamic _multilocaleFromJson(dynamic json) =>
+      json != null ? MultilocaleText.fromJson(json) : null;
+
+  @override
+  Map<String, dynamic> toJson() =>
+      _fixOnboardingModelJsonKeys(_$SliderLottieScreenModelToJson(this), type);
 }
