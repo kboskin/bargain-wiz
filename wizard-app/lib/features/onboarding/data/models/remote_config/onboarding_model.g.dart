@@ -121,7 +121,7 @@ OnboardingOption _$OnboardingOptionFromJson(Map<String, dynamic> json) =>
     OnboardingOption(
       label: OnboardingOption._multilocaleFromJson(json['label']),
       value: OnboardingOption._multilocaleFromJson(json['value']),
-      icon: json['icon'] as String?,
+      icon: IconConfig.fromJson(json['icon']),
       tintColor: json['tint_color'] as String?,
       metadata: json['metadata'] == null
           ? null
@@ -134,7 +134,7 @@ Map<String, dynamic> _$OnboardingOptionToJson(OnboardingOption instance) =>
     <String, dynamic>{
       'label': instance.label,
       'value': instance.value,
-      'icon': instance.icon,
+      'icon': instance.icon?.toJson(),
       'tint_color': instance.tintColor,
       'metadata': instance.metadata,
     };

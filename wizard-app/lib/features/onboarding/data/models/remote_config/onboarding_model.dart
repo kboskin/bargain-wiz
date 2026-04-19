@@ -3,6 +3,7 @@ import 'package:appwizard/features/onboarding/data/models/remote_config/highligh
 import 'package:appwizard/features/shared/data/models/json_helpers.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/upload_progress_screen_config.dart';
+import 'package:appwizard/features/shared/data/models/icon_config.dart';
 import 'package:appwizard/features/shared/data/models/validatable_entity.dart';
 import 'package:json_annotation/json_annotation.dart';
 
@@ -345,7 +346,8 @@ class OnboardingOption extends ValidatableEntity {
   final dynamic label; // Can be Map<String, String> (multilocale) or String (backward compatibility)
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic value; // Can be Map<String, String> (multilocale) or String (backward compatibility), optional
-  final String? icon; // Material icon name (e.g., "tiktok", "youtube", "search", "store")
+  @JsonKey(fromJson: IconConfig.fromJson)
+  final IconConfig? icon; // Serializable icon config
   @JsonKey(name: 'tint_color')
   final String? tintColor; // Optional hex color string for brand/tint color (e.g., "#FF6600")
   final OnboardingMetadata? metadata;

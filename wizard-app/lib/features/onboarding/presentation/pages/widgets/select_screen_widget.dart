@@ -13,6 +13,7 @@ import 'package:appwizard/core/widgets/glass_container.dart'; // Added for glass
 import 'package:appwizard/core/widgets/styled_description_widget.dart';
 import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
 import 'package:appwizard/core/widgets/styled_title_widget.dart';
+import 'package:appwizard/features/shared/data/models/icon_config.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 
 /// Widget for select-type onboarding screens
@@ -216,8 +217,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
 
                   return AnimatedBuilder(
                     animation: animation,
-                    builder: (context, child) {
-                      return Opacity(
+                    builder: (context, child) => Opacity(
                         opacity: animation.value,
                         child: Transform.translate(
                           offset: Offset(0, 20 * (1 - animation.value)),
@@ -226,8 +226,7 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
                             child: child,
                           ),
                         ),
-                      );
-                    },
+                      ),
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 12.0),
                       child: Builder(
@@ -260,14 +259,9 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     int index,
     VoidCallback onTap,
   ) {
-    // Get icon from Font Awesome by name
-    IconData? iconData;
-    bool isFontAwesome = false;
-    if (option.icon != null) {
-      final iconResult = _getIconData(option.icon!);
-      iconData = iconResult['icon'] as IconData;
-      isFontAwesome = iconResult['isFontAwesome'] as bool;
-    }
+    // Use IconConfig for resolving icon data
+    final iconData = option.icon?.iconData;
+    final isFontAwesome = option.icon?.isFontAwesome ?? false;
 
     // Get brand color for this option (check tint_color first, then fallback to hardcoded)
     final brandColor = _getBrandColor(option, context);
@@ -741,33 +735,6 @@ class _SelectScreenWidgetState extends State<SelectScreenWidget>
     return null;
   }
 
-  /// Get IconData from icon name (Font Awesome or Material Icons)
-  /// Maps common icon names to Font Awesome icons where available
-  Map<String, dynamic> _getIconData(String iconName) {
-    // Map icon names to Font Awesome icons (preferred) or Material Icons (fallback)
-    final iconMap = <String, Map<String, dynamic>>{
-      'tiktok': {'icon': FontAwesomeIcons.tiktok, 'isFontAwesome': true},
-      'youtube': {'icon': FontAwesomeIcons.youtube, 'isFontAwesome': true},
-      'google': {'icon': FontAwesomeIcons.google, 'isFontAwesome': true},
-      'playstore': {'icon': FontAwesomeIcons.googlePlay, 'isFontAwesome': true},
-      'facebook': {'icon': FontAwesomeIcons.facebook, 'isFontAwesome': true},
-      'friends_or_family': {'icon': FontAwesomeIcons.users, 'isFontAwesome': true},
-      'instagram': {'icon': FontAwesomeIcons.instagram, 'isFontAwesome': true},
-      'x': {'icon': FontAwesomeIcons.xTwitter, 'isFontAwesome': true},
-      'store': {'icon': FontAwesomeIcons.store, 'isFontAwesome': true},
-      'ebay': {'icon': FontAwesomeIcons.ebay, 'isFontAwesome': true},
-      'amazon': {'icon': FontAwesomeIcons.amazon, 'isFontAwesome': true},
-      'olx': {'icon': FontAwesomeIcons.store, 'isFontAwesome': true}, // Store icon for OLX
-      'craigslist': {'icon': FontAwesomeIcons.peace, 'isFontAwesome': true}, // Peace icon
-      'male': {'icon': Icons.male, 'isFontAwesome': false},
-      'female': {'icon': Icons.female, 'isFontAwesome': false},
-      'thumb_up': {'icon': FontAwesomeIcons.solidThumbsUp, 'isFontAwesome': true},
-      'thumb_down': {'icon': FontAwesomeIcons.solidThumbsDown, 'isFontAwesome': true},
-      'other': {'icon': Icons.auto_awesome, 'isFontAwesome': false}, // Magical sparkles icon
-    };
-
-    return iconMap[iconName.toLowerCase()] ?? {'icon': Icons.help_outline, 'isFontAwesome': false};
-  }
 
   /// Get highlight color from metadata
   Color? _getHighlightColor() {
