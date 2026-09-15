@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
 
-/// Full-screen gradient background that accepts colors and stops.
+/// Full-screen gradient background that accepts colors, stops and a CSS-style angle.
 /// Reused by onboarding, paywall, and any screen that needs a remote-configurable gradient.
 class ConfigurableGradientBackground extends StatelessWidget {
   const ConfigurableGradientBackground({
@@ -8,15 +9,14 @@ class ConfigurableGradientBackground extends StatelessWidget {
     required this.colors,
     this.stops,
     required this.child,
-    this.begin = Alignment.topCenter,
-    this.end = Alignment.bottomCenter,
+    this.angleDeg = WizColors.appGradientAngleDeg,
   });
 
   final List<Color> colors;
   final List<double>? stops;
   final Widget child;
-  final Alignment begin;
-  final Alignment end;
+  /// CSS-style angle in degrees (0 = bottom→top, 90 = left→right, 165 = design default).
+  final double angleDeg;
 
   @override
   Widget build(BuildContext context) {
@@ -25,16 +25,9 @@ class ConfigurableGradientBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Container(
+        DecoratedBox(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: begin,
-              end: end,
-              colors: colors,
-              stops: (stops != null && stops!.length == colors.length)
-                  ? stops
-                  : null,
-            ),
+            gradient: WizColors.angledGradient(colors, stops, angleDeg),
           ),
         ),
         child,

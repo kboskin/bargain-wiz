@@ -13,6 +13,10 @@ ProDealCloserMessageModel _$ProDealCloserMessageModelFromJson(
   attachmentPaths: (json['attachmentPaths'] as List<dynamic>?)
       ?.map((e) => e as String)
       .toList(),
+  isWizard: json['isWizard'] as bool? ?? false,
+  options: (json['options'] as List<dynamic>?)
+      ?.map((e) => e as Map<String, dynamic>)
+      .toList(),
 );
 
 Map<String, dynamic> _$ProDealCloserMessageModelToJson(
@@ -20,4 +24,6 @@ Map<String, dynamic> _$ProDealCloserMessageModelToJson(
 ) => <String, dynamic>{
   'text': instance.text,
   'attachmentPaths': instance.attachmentPaths,
+  'isWizard': instance.isWizard,
+  'options': instance.options,
 };

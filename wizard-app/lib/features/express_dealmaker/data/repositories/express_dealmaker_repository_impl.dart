@@ -1,4 +1,5 @@
 import 'package:dartz/dartz.dart';
+
 import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/express_dealmaker/data/datasources/express_dealmaker_remote_datasource.dart';
@@ -21,11 +22,11 @@ class ExpressDealmakerRepositoryImpl implements ExpressDealmakerRepository {
   final AppLogger _logger;
 
   @override
-  Future<Either<Failure, UploadScreenshotResult>> uploadScreenshot(String filePath) async {
+  Future<Either<Failure, UploadScreenshotResult>> uploadScreenshot(final String filePath) async {
     try {
       final dto = await _remote.uploadScreenshot(filePath);
       return Right(_uploadResultMapper.toEntity(dto));
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       _logger.e('Express Dealmaker upload failed', e, stackTrace);
       return Left(ServerFailure(e.toString()));
     }
@@ -33,18 +34,20 @@ class ExpressDealmakerRepositoryImpl implements ExpressDealmakerRepository {
 
   @override
   Future<Either<Failure, DealReply>> getDealReply({
-    required List<String> uploadedIds,
-    String? keyword,
-    required String locale,
+    required final List<String> uploadedIds,
+    required final String locale,
+    final String? keyword,
+    final String? vibe,
   }) async {
     try {
       final dto = await _remote.getDealReply(
         uploadedIds: uploadedIds,
         keyword: keyword,
         locale: locale,
+        vibe: vibe,
       );
       return Right(_dealReplyMapper.toEntity(dto));
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       _logger.e('Express Dealmaker getDealReply failed', e, stackTrace);
       return Left(ServerFailure(e.toString()));
     }

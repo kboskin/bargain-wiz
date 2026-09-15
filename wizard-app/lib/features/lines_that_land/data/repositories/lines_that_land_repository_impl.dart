@@ -2,35 +2,78 @@ import 'package:dartz/dartz.dart';
 
 import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
-import 'package:appwizard/features/lines_that_land/data/datasources/lines_that_land_remote_datasource.dart';
+import 'package:appwizard/features/lines_that_land/data/datasources/lines_that_land_api_datasource.dart';
+import 'package:appwizard/features/lines_that_land/data/datasources/lines_that_land_local_cache.dart';
 import 'package:appwizard/features/lines_that_land/data/mappers/lines_that_land_mapper.dart';
+import 'package:appwizard/features/lines_that_land/data/models/lines_that_land_response.dart';
 import 'package:appwizard/features/lines_that_land/domain/entities/lines_that_land_category.dart';
+import 'package:appwizard/features/lines_that_land/domain/entities/lines_that_land_feed.dart';
 import 'package:appwizard/features/lines_that_land/domain/repositories/lines_that_land_repository.dart';
 
+/// Function-backed "Lines that land" with an on-device cache (see LINES_THAT_LAND.md):
+///
+/// 1. cache younger than the function's `refresh_interval_hours` → serve it, no request;
+/// 2. otherwise call the `lines_that_land` Cloud Function and cache the response;
+/// 3. function unreachable → stale cache if any, else [NetworkFailure] with [offlineMessage].
+///
+/// No Remote Config key is read; the function owns the content and its fallback.
 class LinesThatLandRepositoryImpl implements LinesThatLandRepository {
-  LinesThatLandRepositoryImpl(this._dataSource, this._mapper, this._logger);
+  LinesThatLandRepositoryImpl({
+    required LinesThatLandApiDataSource api,
+    required LinesThatLandLocalCache cache,
+    required LinesThatLandMapper mapper,
+    required AppLogger logger,
+    DateTime Function()? now,
+  })  : _api = api,
+        _cache = cache,
+        _mapper = mapper,
+        _logger = logger,
+        _now = now ?? DateTime.now;
 
-  final LinesThatLandRemoteDataSource _dataSource;
+  /// User-facing message when there is neither network nor a cached copy.
+  static const String offlineMessage = "Couldn't load lines. Check your connection and try again.";
+
+  final LinesThatLandApiDataSource _api;
+  final LinesThatLandLocalCache _cache;
   final LinesThatLandMapper _mapper;
   final AppLogger _logger;
+  final DateTime Function() _now;
 
+  /// Day index origin for the rotating `dailyTip`.
   static final DateTime _epoch = DateTime.utc(2025, 1, 1);
 
   @override
-  Future<Either<Failure, List<LinesThatLandCategory>>> getDailyCategories() async {
+  Future<Either<Failure, LinesThatLandFeed>> getFeed() async {
+    final now = _now().toUtc();
+    final cached = _cache.read();
+    if (cached != null && cached.isFresh(now)) {
+      return Right(_toFeed(cached.response, now, LinesFeedSource.cache));
+    }
+
     try {
-      final raw = await _dataSource.getCategories();
-      final models = _mapper.toCategoryModels(raw);
-      if (models.isEmpty) {
-        return const Right([]);
-      }
-      final today = DateTime.now().toUtc();
-      final dayIndex = today.difference(_epoch).inDays;
-      final entities = _mapper.toCategoryEntities(models, dayIndex);
-      return Right(entities);
+      final fresh = await _api.fetchFeed();
+      await _cache.write(fresh, now);
+      return Right(_toFeed(fresh, now, LinesFeedSource.network));
     } on Object catch (e, stackTrace) {
-      _logger.e('LinesThatLandRepository.getDailyCategories failed', e, stackTrace);
-      return Left(CacheFailure(e.toString()));
+      if (cached != null) {
+        _logger.w('Lines that land function unavailable ($e); serving stale cache');
+        return Right(_toFeed(cached.response, now, LinesFeedSource.cache));
+      }
+      _logger.e('Lines that land function unavailable and nothing cached', e, stackTrace);
+      return const Left(NetworkFailure(offlineMessage));
     }
   }
+
+  @override
+  Future<Either<Failure, List<LinesThatLandCategory>>> getDailyCategories() async =>
+      (await getFeed()).map((feed) => feed.categories);
+
+  LinesThatLandFeed _toFeed(LinesThatLandResponse response, DateTime now, LinesFeedSource source) =>
+      LinesThatLandFeed(
+        categories: _mapper.toCategoryEntities(response.categories, now.difference(_epoch).inDays),
+        locales: response.locales,
+        updatedAt: response.updatedAt,
+        refreshInterval: response.refreshInterval,
+        source: source,
+      );
 }

@@ -33,6 +33,9 @@ WelcomeScreenConfig _$WelcomeScreenConfigFromJson(Map<String, dynamic> json) =>
             ),
       highlightColor: json['highlight_color'] as String?,
       textColor: json['text_color'] as String?,
+      video: json['video'] == null
+          ? null
+          : WelcomeVideoConfig.fromJson(json['video'] as Map<String, dynamic>),
     );
 
 Map<String, dynamic> _$WelcomeScreenConfigToJson(
@@ -47,6 +50,7 @@ Map<String, dynamic> _$WelcomeScreenConfigToJson(
   'secondary_action': instance.secondaryAction,
   'highlight_color': instance.highlightColor,
   'text_color': instance.textColor,
+  'video': instance.video,
 };
 
 GlassContainerConfig _$GlassContainerConfigFromJson(
@@ -88,3 +92,17 @@ Map<String, dynamic> _$SecondaryActionConfigToJson(
   'text': instance.text,
   'prefix_text': instance.prefixText,
 };
+
+WelcomeVideoConfig _$WelcomeVideoConfigFromJson(Map<String, dynamic> json) =>
+    WelcomeVideoConfig(
+      url: json['url'] as String? ?? '',
+      loop: json['loop'] as bool? ?? true,
+      muted: json['muted'] as bool? ?? true,
+    );
+
+Map<String, dynamic> _$WelcomeVideoConfigToJson(WelcomeVideoConfig instance) =>
+    <String, dynamic>{
+      'url': instance.url,
+      'loop': instance.loop,
+      'muted': instance.muted,
+    };

@@ -1,286 +1,240 @@
+import 'dart:math' as math;
+
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/asset_path_helper.dart';
+import 'package:appwizard/core/utils/template_text.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/features/onboarding/presentation/pages/widgets/onboarding_text.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'package:appwizard/core/di/injection_container.dart' as di;
-import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/utils/asset_path_helper.dart';
-import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/text_highlight_helper.dart';
-import 'package:appwizard/core/widgets/styled_description_widget.dart';
-import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
-import 'package:appwizard/core/widgets/styled_title_widget.dart';
-import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 
-/// Widget for slider_lottie-type onboarding screens
-/// User selects a percentage (0-100) by interacting with a Lottie animation
+/// `slider_lottie` template ("How hard do you push?"): a Lottie tube filled to
+/// the chosen stop + a column of stop pills. Answer: stop value (20…100).
 class SliderLottieScreenWidget extends StatefulWidget {
-  final SliderLottieScreenModel model;
-  final dynamic selectedValue;
-  final Color? textColor;
-  final Function(dynamic) onValueChanged;
-
   const SliderLottieScreenWidget({
-    super.key,
     required this.model,
-    this.selectedValue,
-    this.textColor,
     required this.onValueChanged,
+    super.key,
+    this.selectedValue,
+    this.textColor = WizColors.ink,
   });
+
+  final SliderLottieScreenModel model;
+  final num? selectedValue;
+  final Color textColor;
+  final ValueChanged<int> onValueChanged;
 
   @override
   State<SliderLottieScreenWidget> createState() => _SliderLottieScreenWidgetState();
 }
 
 class _SliderLottieScreenWidgetState extends State<SliderLottieScreenWidget>
-    with TickerProviderStateMixin {
-  late final AssetPathHelper _assetPathHelper;
-  late final TextHighlightHelper _textHighlightHelper;
-  late final ColorHelper _colorHelper;
-  late AnimationController _lottieController;
-  late AnimationController _breathingController;
-  late double _currentPercentage;
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _lottie = AnimationController(vsync: this, duration: WizMotion.fill);
+  late final AssetPathHelper _paths = di.sl<AssetPathHelper>();
+
+  List<PushStopOption> get _stops => widget.model.stops;
+
+  int get _index => widget.model.stopIndexFor(widget.selectedValue);
 
   @override
   void initState() {
     super.initState();
-    _assetPathHelper = di.sl<AssetPathHelper>();
-    _colorHelper = di.sl<ColorHelper>();
-    _textHighlightHelper = TextHighlightHelper(_colorHelper);
-    
-    // Default to 50% if no value is selected
-    _currentPercentage = (widget.selectedValue as num?)?.toDouble() ?? 50.0;
-    
-    _lottieController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    );
-    
-    _breathingController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-    
-    // Set initial frame based on percentage (0-100 map to 0.0-1.0)
-    _lottieController.value = _currentPercentage / 100.0;
-
-    // Report default value if not set
-    if (widget.selectedValue == null) {
+    _lottie.value = _progressFor(_index);
+    if (widget.selectedValue == null && _stops.isNotEmpty) {
+      // Pre-fill the default so the CTA is enabled straight away.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        widget.onValueChanged(_currentPercentage);
+        if (mounted) widget.onValueChanged(_stops[_index].value);
       });
     }
   }
 
   @override
+  void didUpdateWidget(SliderLottieScreenWidget old) {
+    super.didUpdateWidget(old);
+    if (old.selectedValue != widget.selectedValue) {
+      _lottie.animateTo(_progressFor(_index), duration: WizMotion.fill, curve: WizMotion.spring);
+    }
+  }
+
+  double _progressFor(int index) {
+    if (_stops.isEmpty) return 0;
+    // Stops are percentages (20…100) → Lottie progress 0…1.
+    return (_stops[index].value / 100).clamp(0.0, 1.0);
+  }
+
+  @override
   void dispose() {
-    _lottieController.dispose();
-    _breathingController.dispose();
+    _lottie.dispose();
     super.dispose();
-  }
-
-  void _updateValue(double delta, double totalSize) {
-    setState(() {
-      // Sensitivity: move 100% over the totalSize of the container
-      double change = (delta / totalSize) * 100;
-      _currentPercentage = (_currentPercentage - change).clamp(0.0, 100.0);
-      _lottieController.value = _currentPercentage / 100.0;
-    });
-    widget.onValueChanged(_currentPercentage.roundToDouble());
-  }
-
-  /// Returns the matching option data from config based on percentage
-  Map<String, dynamic>? _getOptionForPercentage(double percentage) {
-    final options = widget.model.metadata?.options;
-    if (options != null && options.isNotEmpty) {
-      for (final option in options) {
-        if (percentage <= (option['value'] as num).toDouble()) {
-          return option as Map<String, dynamic>;
-        }
-      }
-      return options.last as Map<String, dynamic>;
-    }
-    return null;
-  }
-
-  String _getWordWithEmoji(double percentage) {
-    final option = _getOptionForPercentage(percentage);
-    if (option == null) return '';
-    
-    final label = (option['label'] as String?) ?? '';
-    final emoji = (option['emoji'] as String?) ?? '';
-    
-    if (emoji.isNotEmpty) {
-      return '$emoji $label'.trim();
-    }
-    return label;
-  }
-
-  Color _getTextColor(double percentage) {
-    final options = widget.model.metadata?.options;
-    if (options == null || options.isEmpty) return AppColors.backgroundDark;
-
-    Map<String, dynamic>? lowerOption;
-    Map<String, dynamic>? upperOption;
-
-    for (final dynamic opt in options) {
-      final optMap = opt as Map<String, dynamic>;
-      final optValue = (optMap['value'] as num).toDouble();
-      if (optValue <= percentage) {
-        lowerOption = optMap;
-      } else {
-        upperOption = optMap;
-        break;
-      }
-    }
-
-    if (lowerOption == null && upperOption != null) {
-      final cStr = upperOption['color'] as String?;
-      return cStr != null ? _colorHelper.getColor(cStr) ?? AppColors.backgroundDark : AppColors.backgroundDark;
-    }
-    
-    if (upperOption == null && lowerOption != null) {
-      final cStr = lowerOption['color'] as String?;
-      return cStr != null ? _colorHelper.getColor(cStr) ?? AppColors.backgroundDark : AppColors.backgroundDark;
-    }
-
-    if (lowerOption != null && upperOption != null) {
-      final lowerVal = (lowerOption['value'] as num).toDouble();
-      final upperVal = (upperOption['value'] as num).toDouble();
-      
-      final lowerColorStr = lowerOption['color'] as String?;
-      final upperColorStr = upperOption['color'] as String?;
-      
-      final c1 = lowerColorStr != null ? _colorHelper.getColor(lowerColorStr) ?? AppColors.backgroundDark : AppColors.backgroundDark;
-      final c2 = upperColorStr != null ? _colorHelper.getColor(upperColorStr) ?? AppColors.backgroundDark : AppColors.backgroundDark;
-      
-      final range = upperVal - lowerVal;
-      if (range <= 0) return c1;
-      
-      final t = (percentage - lowerVal) / range;
-      return Color.lerp(c1, c2, t) ?? c1;
-    }
-
-    return AppColors.backgroundDark;
   }
 
   @override
   Widget build(BuildContext context) {
-    final normalizedPath = _assetPathHelper.normalizeAssetPath(
-      widget.model.visual ?? 'assets/lottie/lottie_tube.json',
-    );
+    final stops = _stops;
+    if (stops.isEmpty) return OnboardingScreenHeader(model: widget.model, textColor: widget.textColor);
+    final index = _index;
+    final current = stops[index];
+    final color = wizHexColor(current.colorHex) ?? WizColors.push[math.min(index, WizColors.push.length - 1)];
+    final fill = (index + 1) / stops.length;
+    final path = _paths.normalizeAssetPath(widget.model.visual ?? 'assets/lottie/lottie_tube.json');
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: StyledTitleWidget(
-            title: widget.model.title.get(context),
-            baseColor: widget.textColor ?? AppColors.backgroundDark,
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (widget.model.description != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: StyledDescriptionWidget(
-              description: widget.model.description!.get(context),
-              highlightWordsData: widget.model.metadata?.highlightWords?.description,
-              highlightColor: _getHighlightColor(),
-              textHighlightHelper: _textHighlightHelper,
-              onRichTextDescription: (ctx, desc, data) => StyledRichTextDescriptionWidget(
-                description: desc,
-                highlightWordsData: data,
-                baseColor: widget.textColor ?? AppColors.backgroundDark,
-                highlightColor: _getHighlightColor(),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        const Spacer(flex: 1),
-          
-          // Interactive Lottie Area - Scalable and more compact
-          Expanded(
-            flex: 10,
-            child: GestureDetector(
-              onVerticalDragUpdate: (details) {
-                // Use the context size for better sensitivity mapping
-                final RenderBox? box = context.findRenderObject() as RenderBox?;
-                final double height = box?.size.height ?? 500;
-                _updateValue(details.primaryDelta ?? 0, height * 0.8);
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(32),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+        OnboardingScreenHeader(model: widget.model, textColor: widget.textColor, bottomGap: 0),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final tube = math.min(200.0, math.max(120.0, constraints.maxWidth - 26 - 150));
+              return Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Center Tube - Responsive width
-                    SizedBox(
-                      width: 204, // 20% larger than previous 170
-                      child: AnimatedBuilder(
-                        animation: _breathingController,
-                        builder: (context, child) {
-                          // Apply +- 2% breathing effect to the selected percentage
-                          final double baseValue = _currentPercentage / 100.0;
-                          final double breathingOffset = (_breathingController.value - 0.5) * 0.04;
-                          final double animatedValue = (baseValue + breathingOffset).clamp(0.0, 1.0);
-                          
-                          return Lottie.asset(
-                            normalizedPath,
-                            controller: _lottieController..value = animatedValue,
-                            fit: BoxFit.contain,
-                            repeat: false,
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // Text Below Tube
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          _getWordWithEmoji(_currentPercentage),
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: _getTextColor(_currentPercentage),
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
+                    _Tube(path: path, size: tube, controller: _lottie, color: color, fill: fill),
+                    const SizedBox(width: 26),
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < stops.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 6),
+                            _StopPill(
+                              stop: stops[i],
+                              selected: i == index,
+                              onTap: () => widget.onValueChanged(stops[i].value),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
                 ),
+              );
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            children: [
+              AnimatedContainer(
+                duration: WizMotion.fill,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(WizRadii.chip)),
+                child: Text(
+                  '${current.emoji} ${TemplateText.textOf(context, current.label)}'.trim(),
+                  style: WizType.bodySmBold.copyWith(color: Colors.white, height: 1.2),
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              Text(
+                TemplateText.textOf(context, current.subtext),
+                style: WizType.caption,
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          
-          const Spacer(flex: 1),
-          
-          // Helper hint
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Text(
-              'Swipe the tube to adjust',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.backgroundDark.withValues(alpha: 0.5),
-                    fontStyle: FontStyle.italic,
-                  ),
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
+        ),
+      ],
     );
   }
+}
 
-  /// Get highlight color from metadata
-  Color? _getHighlightColor() {
-    final colorString = widget.model.metadata?.highlightColor;
-    if (colorString != null && colorString.isNotEmpty) {
-      return _colorHelper.getColor(colorString);
-    }
-    return null; // No color if not found
+class _Tube extends StatelessWidget {
+  const _Tube({
+    required this.path,
+    required this.size,
+    required this.controller,
+    required this.color,
+    required this.fill,
+  });
+
+  final String path;
+  final double size;
+  final AnimationController controller;
+  final Color color;
+  final double fill;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: size,
+        height: size,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(40),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Lottie.asset(
+                path,
+                controller: controller,
+                fit: BoxFit.contain,
+                repeat: false,
+                frameRate: const FrameRate(60),
+              ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: AnimatedFractionallySizedBox(
+                  duration: WizMotion.fill,
+                  curve: WizMotion.spring,
+                  heightFactor: fill.clamp(0.0, 1.0),
+                  widthFactor: 1,
+                  child: AnimatedContainer(
+                    duration: WizMotion.fill,
+                    color: color.withValues(alpha: 0.18),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _StopPill extends StatelessWidget {
+  const _StopPill({required this.stop, required this.selected, required this.onTap});
+
+  final PushStopOption stop;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = wizHexColor(stop.colorHex) ?? WizColors.ink;
+    return WizPressable(
+      onTap: onTap,
+      scale: 0.97,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 200),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : const Color(0x99FFFFFF),
+            borderRadius: BorderRadius.circular(WizRadii.chip),
+            border: Border.all(color: selected ? color : WizColors.frostedBorder, width: 1.5),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(stop.emoji, style: const TextStyle(fontSize: 16, height: 1.2)),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  TemplateText.textOf(context, stop.label),
+                  maxLines: 2,
+                  softWrap: true,
+                  overflow: TextOverflow.ellipsis,
+                  style: WizType.bodySmBold.copyWith(height: 1.2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

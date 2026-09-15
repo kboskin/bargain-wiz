@@ -29,10 +29,10 @@ class MultilocaleText {
   /// Falls back to 'en' if the current language is not available.
   String get(BuildContext context) {
     if (_data == null) return '';
-    if (_data is String) return _data as String;
+    if (_data is String) return _data;
     
     if (_data is Map) {
-      final map = _data as Map;
+      final map = _data;
       final locale = Localizations.localeOf(context).languageCode;
       
       // Try current locale

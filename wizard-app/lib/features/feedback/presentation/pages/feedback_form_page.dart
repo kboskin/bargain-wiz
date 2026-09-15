@@ -3,17 +3,24 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:appwizard/core/di/injection_container.dart' as di;
-import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/theme/app_text_styles.dart';
-import 'package:appwizard/core/widgets/glass_container.dart';
-import 'package:appwizard/core/widgets/styled_title_widget.dart';
+import 'package:appwizard/core/routing/app_routes.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/widgets/pastel_gradient_background.dart';
+import 'package:appwizard/core/widgets/wiz/fade_up.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_header.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_mascot.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_text_field.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
 import 'package:appwizard/features/feedback/domain/entities/feedback_form_config.dart';
 import 'package:appwizard/features/feedback/domain/entities/feedback_form_field.dart';
 import 'package:appwizard/features/feedback/presentation/bloc/feedback_bloc.dart';
 import 'package:appwizard/features/feedback/presentation/bloc/feedback_event.dart';
 import 'package:appwizard/features/feedback/presentation/bloc/feedback_state.dart';
+import 'package:appwizard/l10n/app_localizations.dart';
 
+/// Feedback form (`/feedback`): back chevron, remote-configured title / fields,
+/// primary "Send" CTA, then a mascot success state with "Back to deals".
 class FeedbackFormPage extends StatefulWidget {
   const FeedbackFormPage({super.key});
 
@@ -23,7 +30,14 @@ class FeedbackFormPage extends StatefulWidget {
 
 class _FeedbackFormPageState extends State<FeedbackFormPage> {
   final Map<String, TextEditingController> _controllers = {};
-  final Map<String, String> _values = {};
+  bool _showValidation = false;
+
+  static const EdgeInsets _ctaPadding = EdgeInsets.fromLTRB(
+    WizSpacing.gutter,
+    8,
+    WizSpacing.gutter,
+    12,
+  );
 
   @override
   void dispose() {
@@ -33,206 +47,253 @@ class _FeedbackFormPageState extends State<FeedbackFormPage> {
     super.dispose();
   }
 
-  void _initControllers(List<FeedbackFormField> fields) {
-    for (final f in fields) {
-      if (!_controllers.containsKey(f.id)) {
-        _controllers[f.id] = TextEditingController(text: _values[f.id] ?? '');
-      }
+  TextEditingController _controllerFor(FeedbackFormField field) =>
+      _controllers.putIfAbsent(field.id, TextEditingController.new);
+
+  String _valueOf(FeedbackFormField field) => _controllers[field.id]?.text.trim() ?? '';
+
+  bool _isInvalid(FeedbackFormField field) => field.required && _valueOf(field).isEmpty;
+
+  void _back(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.main);
     }
+  }
+
+  void _submit(BuildContext context, FeedbackFormConfig config) {
+    FocusScope.of(context).unfocus();
+    if (config.fields.any(_isInvalid)) {
+      setState(() => _showValidation = true);
+      return;
+    }
+    final values = <String, String>{
+      for (final field in config.fields)
+        if (_valueOf(field).isNotEmpty) field.id: _valueOf(field),
+    };
+    context.read<FeedbackBloc>().add(FeedbackSubmitted(values));
   }
 
   @override
-  Widget build(BuildContext context) {
-    return BlocProvider<FeedbackBloc>(
-      create: (_) => di.sl<FeedbackBloc>()..add(const LoadFeedbackFormRequested()),
-      child: BlocConsumer<FeedbackBloc, FeedbackState>(
-        listener: (context, state) {
-          if (state is FeedbackSubmitSuccess) {
-            context.pop();
-          }
-        },
-        builder: (context, state) {
-          return PastelGradientBackground(
+  Widget build(BuildContext context) => BlocProvider<FeedbackBloc>(
+        create: (_) => di.sl<FeedbackBloc>()..add(const LoadFeedbackFormRequested()),
+        child: BlocConsumer<FeedbackBloc, FeedbackState>(
+          listener: (context, state) {
+            if (state is FeedbackSubmitFailure) {
+              final l10n = AppLocalizations.of(context);
+              final message = state.message.trim();
+              WizToast.show(context, message.isEmpty ? (l10n?.error ?? 'Error') : message);
+            }
+          },
+          builder: (context, state) => PastelGradientBackground(
             child: Scaffold(
               backgroundColor: Colors.transparent,
-              appBar: AppBar(
-                title: state is FeedbackLoaded
-                    ? StyledTitleWidget(
-                        title: state.config.title,
-                        baseColor: AppColors.textPrimary,
-                        highlightWordsData: state.config.titleHighlightWords,
-                        highlightColor: state.config.titleHighlightColor,
-                        fontSize: 20.0,
-                        fontSizeHighlight: 24.0,
-                        fontWeight: FontWeight.w600,
-                      )
-                    : Text(
-                        'Feedback',
-                        style: AppTextStyles.titleMedium.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                leading: IconButton(
-                  icon: Icon(Icons.close_rounded, color: AppColors.textPrimary),
-                  onPressed: () => context.pop(),
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    WizHeader(
+                      title: '',
+                      horizontalPadding: 16,
+                      onBack: () => _back(context),
+                    ),
+                    Expanded(child: _buildBody(context, state)),
+                  ],
                 ),
               ),
-              body: _buildBody(context, state),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildBody(BuildContext context, FeedbackState state) {
-    if (state is FeedbackInitial || state is FeedbackLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (state is FeedbackError) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: GlassContainer(
-            blurSigma: 16,
-            color: Colors.white,
-            opacity: 0.25,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  state.message,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: () =>
-                      context.read<FeedbackBloc>().add(const LoadFeedbackFormRequested()),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: const Text('Retry'),
-                ),
-              ],
             ),
           ),
         ),
       );
+
+  Widget _buildBody(BuildContext context, FeedbackState state) {
+    if (state is FeedbackError) return _LoadError(message: state.message);
+    if (state is FeedbackSubmitSuccess) {
+      return _SuccessView(
+        config: state.config,
+        onDone: () => context.go(AppRoutes.main),
+      );
     }
-    if (state is FeedbackSubmitting) {
-      return const Center(child: CircularProgressIndicator());
+    if (state is FeedbackFormReady) {
+      return _buildForm(context, state.config, submitting: state is FeedbackSubmitting);
     }
-    if (state is FeedbackLoaded) {
-      _initControllers(state.config.fields);
-      return _buildForm(context, state.config);
-    }
-    return const SizedBox.shrink();
+    return const Center(
+      child: SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(strokeWidth: 2, color: WizColors.ink),
+      ),
+    );
   }
 
-  Widget _buildForm(BuildContext context, FeedbackFormConfig config) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-      child: GlassContainer(
-        blurSigma: 20,
-        color: Colors.white,
-        opacity: 0.25,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (config.description.isNotEmpty) ...[
-              Text(
-                config.description,
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.textPrimary,
-                  height: 1.4,
-                ),
+  Widget _buildForm(
+    BuildContext context,
+    FeedbackFormConfig config, {
+    required bool submitting,
+  }) {
+    final description = config.descriptionOf(context);
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(WizSpacing.gutter, 8, WizSpacing.gutter, 12),
+            child: FadeUp(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(config.titleOf(context), style: WizType.title),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(description, style: WizType.bodyMd),
+                  ],
+                  const SizedBox(height: 20),
+                  for (final field in config.fields) ...[
+                    _buildField(context, config, field, enabled: !submitting),
+                    const SizedBox(height: WizSpacing.stackLg),
+                  ],
+                ],
               ),
-              const SizedBox(height: 24),
-            ],
-            ...config.fields.map((field) => _buildField(context, field)),
-            const SizedBox(height: 28),
-            FilledButton(
-              onPressed: () => _submit(context, config),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-              child: Text(
-                config.submitButtonText,
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Padding(
+          padding: _ctaPadding,
+          child: WizPrimaryButton(
+            label: config.submitButtonTextOf(context),
+            loading: submitting,
+            onPressed: submitting ? null : () => _submit(context, config),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildField(
+    BuildContext context,
+    FeedbackFormConfig config,
+    FeedbackFormField field, {
+    required bool enabled,
+  }) {
+    final controller = _controllerFor(field);
+    final isTextarea = field.type == FeedbackFormFieldType.textarea;
+    final invalid = _showValidation && _isInvalid(field);
+    final label = field.labelOf(context);
+    final isEmail = field.id.toLowerCase().contains('email');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label.isNotEmpty) ...[
+          Text(label, style: WizType.caption.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+        ],
+        IgnorePointer(
+          ignoring: !enabled,
+          child: WizTextField(
+            controller: controller,
+            hintText: field.placeholderOf(context),
+            height: isTextarea ? null : 52,
+            minLines: isTextarea ? 5 : null,
+            maxLines: isTextarea ? 8 : 1,
+            error: invalid,
+            keyboardType: isTextarea
+                ? TextInputType.multiline
+                : (isEmail ? TextInputType.emailAddress : TextInputType.text),
+            textInputAction: isTextarea ? TextInputAction.newline : TextInputAction.next,
+            textCapitalization:
+                isTextarea ? TextCapitalization.sentences : TextCapitalization.none,
+            contentPadding: isTextarea
+                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
+                : null,
+            onChanged: _showValidation ? (_) => setState(() {}) : null,
+          ),
+        ),
+        if (invalid) ...[
+          const SizedBox(height: 6),
+          Text(
+            config.validationMessageOf(context),
+            style: WizType.caption.copyWith(
+              color: WizColors.error,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SuccessView extends StatelessWidget {
+  const _SuccessView({required this.config, required this.onDone});
+
+  final FeedbackFormConfig config;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: WizSpacing.gutter),
+                child: FadeUp(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const WizMascot(width: 150),
+                      const SizedBox(height: 8),
+                      Text(
+                        config.successTitleOf(context),
+                        textAlign: TextAlign.center,
+                        style: WizType.title,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        config.successBodyOf(context),
+                        textAlign: TextAlign.center,
+                        style: WizType.bodyMd,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
+          ),
+          Padding(
+            padding: _FeedbackFormPageState._ctaPadding,
+            child: WizPrimaryButton(label: config.successCtaOf(context), onPressed: onDone),
+          ),
+        ],
+      );
+}
 
-  Widget _buildField(BuildContext context, FeedbackFormField field) {
-    final controller = _controllers[field.id];
-    if (controller == null) return const SizedBox.shrink();
+class _LoadError extends StatelessWidget {
+  const _LoadError({required this.message});
 
-    final isMultiline = field.type == FeedbackFormFieldType.textarea;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextFormField(
-        controller: controller,
-        style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-        decoration: InputDecoration(
-          labelText: field.label + (field.required ? ' *' : ''),
-          hintText: field.placeholder,
-          labelStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-          hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textTertiary),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
+      padding: const EdgeInsets.all(WizSpacing.gutter),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            message.isEmpty ? (l10n?.error ?? 'Error') : message,
+            textAlign: TextAlign.center,
+            style: WizType.bodyMd,
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+          const SizedBox(height: 20),
+          WizSecondaryButton(
+            label: l10n?.retry ?? 'Retry',
+            onPressed: () =>
+                context.read<FeedbackBloc>().add(const LoadFeedbackFormRequested()),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-          ),
-          filled: true,
-          fillColor: Colors.white.withValues(alpha: 0.2),
-        ),
-        maxLines: isMultiline ? 4 : 1,
-        onChanged: (value) => _values[field.id] = value,
+        ],
       ),
     );
-  }
-
-  void _submit(BuildContext context, FeedbackFormConfig config) {
-    final values = <String, String>{};
-    for (final field in config.fields) {
-      final controller = _controllers[field.id];
-      final value = (controller?.text ?? _values[field.id] ?? '').trim();
-      if (field.required && value.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${field.label} is required')),
-        );
-        return;
-      }
-      if (value.isNotEmpty) {
-        values[field.id] = value;
-      }
-    }
-    context.read<FeedbackBloc>().add(FeedbackSubmitted(values));
   }
 }

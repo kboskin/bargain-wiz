@@ -17,12 +17,20 @@ enum OnboardingScreenType {
   warmup,
   dataUpload,
   createAccount,
-  sliderLottie;
+  sliderLottie,
+  multiSelect,
+  selectGroup;
 
   static OnboardingScreenType fromString(String value) {
     switch (value.toLowerCase()) {
       case 'select':
         return OnboardingScreenType.select;
+      case 'multiselect':
+      case 'multi_select':
+        return OnboardingScreenType.multiSelect;
+      case 'selectgroup':
+      case 'select_group':
+        return OnboardingScreenType.selectGroup;
       case 'slider':
         return OnboardingScreenType.slider;
       case 'engagement':

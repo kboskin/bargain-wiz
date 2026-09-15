@@ -43,25 +43,25 @@ void main() {
 
       test('should return default color for invalid hex format (too short)', () {
         const defaultColor = Color(0xFF000000);
-        final color = colorHelper.parseHexColor('#FFC10', defaultColor: defaultColor);
+        final color = colorHelper.parseHexColor('#FFC10') ?? defaultColor;
         expect(color, equals(defaultColor));
       });
 
       test('should return default color for invalid hex format (too long)', () {
         const defaultColor = Color(0xFF000000);
-        final color = colorHelper.parseHexColor('#FFC107000', defaultColor: defaultColor);
+        final color = colorHelper.parseHexColor('#FFC107000') ?? defaultColor;
         expect(color, equals(defaultColor));
       });
 
       test('should return default color for invalid hex format (non-hex characters)', () {
         const defaultColor = Color(0xFF000000);
-        final color = colorHelper.parseHexColor('#GGGGGG', defaultColor: defaultColor);
+        final color = colorHelper.parseHexColor('#GGGGGG') ?? defaultColor;
         expect(color, equals(defaultColor));
       });
 
       test('should return default color for empty string', () {
         const defaultColor = Color(0xFF000000);
-        final color = colorHelper.parseHexColor('', defaultColor: defaultColor);
+        final color = colorHelper.parseHexColor('') ?? defaultColor;
         expect(color, equals(defaultColor));
       });
 
@@ -72,7 +72,7 @@ void main() {
 
       test('should use custom default color', () {
         const customDefault = Color(0xFF123456);
-        final color = colorHelper.parseHexColor('invalid', defaultColor: customDefault);
+        final color = colorHelper.parseHexColor('invalid') ?? customDefault;
         expect(color, equals(customDefault));
       });
     });
@@ -85,19 +85,19 @@ void main() {
 
       test('should return default color for null input', () {
         const defaultColor = Color(0xFF000000);
-        final color = colorHelper.getColor(null, defaultColor: defaultColor);
+        final color = colorHelper.getColor(null) ?? defaultColor;
         expect(color, equals(defaultColor));
       });
 
       test('should return default color for empty string', () {
         const defaultColor = Color(0xFF000000);
-        final color = colorHelper.getColor('', defaultColor: defaultColor);
+        final color = colorHelper.getColor('') ?? defaultColor;
         expect(color, equals(defaultColor));
       });
 
       test('should use custom default color', () {
         const customDefault = Color(0xFF123456);
-        final color = colorHelper.getColor(null, defaultColor: customDefault);
+        final color = colorHelper.getColor(null) ?? customDefault;
         expect(color, equals(customDefault));
       });
 

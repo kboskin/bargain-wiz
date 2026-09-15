@@ -1,9 +1,9 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:appwizard/features/feedback/domain/repositories/feedback_repository.dart';
-import 'package:appwizard/features/shared/presentation/bloc/base_bloc.dart';
 import 'package:appwizard/features/feedback/presentation/bloc/feedback_event.dart';
 import 'package:appwizard/features/feedback/presentation/bloc/feedback_state.dart';
+import 'package:appwizard/features/shared/presentation/bloc/base_bloc.dart';
 
 /// BLoC for feedback form: load config from RC, submit to backend.
 class FeedbackBloc extends BaseBloc<FeedbackEvent, FeedbackState> {
@@ -18,8 +18,7 @@ class FeedbackBloc extends BaseBloc<FeedbackEvent, FeedbackState> {
     LoadFeedbackFormRequested event,
     Emitter<FeedbackState> emit,
   ) async {
-    if (state is FeedbackLoaded) return;
-    if (state is FeedbackLoading) return;
+    if (state is FeedbackFormReady || state is FeedbackLoading) return;
 
     emit(const FeedbackLoading());
     final result = await _repository.getFeedbackFormConfig();
@@ -34,16 +33,15 @@ class FeedbackBloc extends BaseBloc<FeedbackEvent, FeedbackState> {
     Emitter<FeedbackState> emit,
   ) async {
     final current = state;
-    if (current is! FeedbackLoaded) return;
+    if (current is! FeedbackFormReady) return;
+    if (current is FeedbackSubmitting || current is FeedbackSubmitSuccess) return;
 
-    emit(const FeedbackSubmitting());
-    final result = await _repository.submitFeedback(
-      event.values,
-      current.config.submitUrl,
-    );
+    final config = current.config;
+    emit(FeedbackSubmitting(config));
+    final result = await _repository.submitFeedback(event.values, config.submitUrl);
     result.fold(
-      (failure) => emit(FeedbackError(failure.message)),
-      (_) => emit(const FeedbackSubmitSuccess()),
+      (failure) => emit(FeedbackSubmitFailure(config, failure.message)),
+      (_) => emit(FeedbackSubmitSuccess(config)),
     );
   }
 }

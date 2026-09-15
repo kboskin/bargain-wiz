@@ -14,28 +14,32 @@ class ConversationMapper {
 
   Conversation toEntity(ConversationModel model) {
     try {
-      final messages = model.messages
-          .map((m) => m.toEntity())
-          .toList();
+      final messages = model.messages.map((m) => m.toEntity()).toList();
       return Conversation(
         id: model.id,
         type: _typeMapper.toEntity(model.type),
         screenshotPaths: List<String>.from(model.screenshotPaths),
         replyOptions: List<String>.from(model.replyOptions),
+        replyLines: model.replyLines.map(DealLine.fromJson).toList(),
         keyword: model.keyword,
         messages: messages,
         createdAt: DateTime.fromMillisecondsSinceEpoch(model.createdAtMillis),
+        title: model.title,
+        marketplace: model.marketplace,
+        status: ConversationStatus.fromString(model.status),
+        priceBefore: model.priceBefore,
+        priceAfter: model.priceAfter,
+        seeing: model.seeing,
+        vibe: model.vibe,
       );
     } on Object catch (e, stackTrace) {
       _logger.e('ConversationMapper.toEntity failed', e, stackTrace);
       return Conversation(
         id: model.id,
         type: _typeMapper.toEntity(model.type),
-        screenshotPaths: const [],
-        replyOptions: const [],
         keyword: model.keyword,
-        messages: const [],
         createdAt: DateTime.fromMillisecondsSinceEpoch(model.createdAtMillis),
+        title: model.title,
       );
     }
   }
@@ -50,20 +54,26 @@ class ConversationMapper {
         type: _typeMapper.toModel(entity.type),
         screenshotPaths: List<String>.from(entity.screenshotPaths),
         replyOptions: List<String>.from(entity.replyOptions),
+        replyLines: entity.replyLines.map((l) => l.toJson()).toList(),
         keyword: entity.keyword,
         messages: messages,
         createdAtMillis: entity.createdAt.millisecondsSinceEpoch,
+        title: entity.title,
+        marketplace: entity.marketplace,
+        status: entity.status.name,
+        priceBefore: entity.priceBefore,
+        priceAfter: entity.priceAfter,
+        seeing: entity.seeing,
+        vibe: entity.vibe,
       );
     } on Object catch (e, stackTrace) {
       _logger.e('ConversationMapper.toModel failed', e, stackTrace);
       return ConversationModel(
         id: entity.id,
         type: _typeMapper.toModel(entity.type),
-        screenshotPaths: const [],
-        replyOptions: const [],
         keyword: entity.keyword,
-        messages: const [],
         createdAtMillis: entity.createdAt.millisecondsSinceEpoch,
+        title: entity.title,
       );
     }
   }

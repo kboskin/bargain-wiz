@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'package:appwizard/core/di/injection_container.dart' as di;
-import 'package:appwizard/core/theme/app_colors.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/core/utils/text_highlight_helper.dart';
 

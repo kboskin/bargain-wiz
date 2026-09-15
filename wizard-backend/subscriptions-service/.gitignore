@@ -179,3 +179,7 @@ local/
 tmp/
 temp/
 *.tmp
+
+# local tooling
+*.pyc
+.ruff_cache/

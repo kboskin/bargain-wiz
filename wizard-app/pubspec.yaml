@@ -71,14 +71,13 @@ dependencies:
   # Authentication
   google_sign_in: ^6.2.1
   sign_in_with_apple: ^6.1.3
-  sign_in_button: ^3.2.0
   
   # Routing
   go_router: ^14.6.1
   
   # Lottie animations
   lottie: ^3.3.2
-  font_awesome_flutter: ^10.7.0
+  font_awesome_flutter: ^11.0.0
   
   # JSON serialization
   json_annotation: ^4.9.0
@@ -105,7 +104,7 @@ dependencies:
 
   # Native store review (Rate Us)
   in_app_review: ^2.0.9
-
+  video_player: ^2.14.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -142,6 +141,24 @@ flutter:
     - assets/config/
     - assets/lottie/
     - assets/images/
+
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit-500.ttf
+          weight: 500
+        - asset: assets/fonts/Outfit-600.ttf
+          weight: 600
+        - asset: assets/fonts/Outfit-700.ttf
+          weight: 700
+    - family: Figtree
+      fonts:
+        - asset: assets/fonts/Figtree-400.ttf
+          weight: 400
+        - asset: assets/fonts/Figtree-500.ttf
+          weight: 500
+        - asset: assets/fonts/Figtree-600.ttf
+          weight: 600
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

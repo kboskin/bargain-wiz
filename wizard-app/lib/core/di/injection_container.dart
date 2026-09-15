@@ -40,7 +40,8 @@ import 'package:appwizard/features/feedback/data/repositories/feedback_repositor
 import 'package:appwizard/features/lines_that_land/data/repositories/lines_that_land_repository_impl.dart';
 import 'package:appwizard/features/feedback/data/datasources/feedback_remote_datasource.dart';
 import 'package:appwizard/features/feedback/data/datasources/feedback_remote_datasource_impl.dart';
-import 'package:appwizard/features/lines_that_land/data/datasources/lines_that_land_remote_datasource.dart';
+import 'package:appwizard/features/lines_that_land/data/datasources/lines_that_land_api_datasource.dart';
+import 'package:appwizard/features/lines_that_land/data/datasources/lines_that_land_local_cache.dart';
 import 'package:appwizard/features/feedback/data/mappers/feedback_form_mapper.dart';
 import 'package:appwizard/features/lines_that_land/data/mappers/lines_that_land_mapper.dart';
 import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
@@ -51,7 +52,17 @@ import 'package:appwizard/features/lines_that_land/domain/repositories/lines_tha
 import 'package:appwizard/features/feedback/presentation/bloc/feedback_bloc.dart';
 import 'package:appwizard/features/lines_that_land/presentation/bloc/lines_that_land_bloc.dart';
 
+import 'package:appwizard/core/network/cloud_functions_client.dart';
 import 'package:appwizard/core/network/network_info.dart';
+import 'package:appwizard/core/services/feature_gate_service.dart';
+import 'package:appwizard/core/services/user_profile_service.dart';
+import 'package:appwizard/features/express_dealmaker/di.dart';
+import 'package:appwizard/features/history/di.dart';
+import 'package:appwizard/features/main_shell/di.dart';
+import 'package:appwizard/features/onboarding/di.dart';
+import 'package:appwizard/features/paywall/di.dart';
+import 'package:appwizard/features/pro_deal_closer/di.dart';
+import 'package:appwizard/features/profile/di.dart';
 
 final sl = GetIt.instance;
 
@@ -97,6 +108,10 @@ Future<void> init() async {
     ..registerLazySingleton<RemoteConfigService>(
       () => RemoteConfigService(sl<AppLogger>()),
     )
+    // Typed GET access to our HTTPS Cloud Functions (base URL from Remote Config)
+    ..registerLazySingleton<CloudFunctionsApi>(
+      () => CloudFunctionsClient(sl<Dio>(), sl<RemoteConfigService>()),
+    )
     ..registerLazySingleton<AnalyticsService>(
       () => AnalyticsService(logger: sl<AppLogger>()),
     )
@@ -122,8 +137,11 @@ Future<void> init() async {
     ..registerLazySingleton<ExpressDealmakerRemoteDataSource>(
       () => MockExpressDealmakerRemoteDataSource(sl<AppLogger>()),
     )
-    ..registerLazySingleton<LinesThatLandRemoteDataSource>(
-      () => LinesThatLandRemoteDataSourceImpl(sl<RemoteConfigService>()),
+    ..registerLazySingleton<LinesThatLandApiDataSource>(
+      () => LinesThatLandApiDataSourceImpl(sl<CloudFunctionsApi>()),
+    )
+    ..registerLazySingleton<LinesThatLandLocalCache>(
+      () => LinesThatLandLocalCacheImpl(sl<SharedPreferences>()),
     )
     ..registerLazySingleton<FeedbackRemoteDataSource>(
       () => FeedbackRemoteDataSourceImpl(
@@ -170,9 +188,10 @@ Future<void> init() async {
     )
     ..registerLazySingleton<LinesThatLandRepository>(
       () => LinesThatLandRepositoryImpl(
-        sl<LinesThatLandRemoteDataSource>(),
-        sl<LinesThatLandMapper>(),
-        sl<AppLogger>(),
+        api: sl<LinesThatLandApiDataSource>(),
+        cache: sl<LinesThatLandLocalCache>(),
+        mapper: sl<LinesThatLandMapper>(),
+        logger: sl<AppLogger>(),
       ),
     )
     ..registerLazySingleton<FeedbackRepository>(
@@ -249,6 +268,25 @@ Future<void> init() async {
     ),
   );
 
+  // 7. Feature gating (free / basic / premium rules + debug tier override)
+  sl.registerLazySingleton<FeatureGateService>(
+    () => FeatureGateService(
+      sl<SubscriptionCheckerService>(),
+      sl<RemoteConfigService>(),
+      sl<SharedPreferences>(),
+      sl<AppLogger>(),
+    ),
+  );
+
+  // User profile (onboarding answers: vibe, push, marketplace…)
+  sl.registerLazySingleton<UserProfileService>(
+    () => UserProfileService(
+      sl<OnboardingRepository>(),
+      sl<RemoteConfigService>(),
+      sl<AppLogger>(),
+    ),
+  );
+
   // Auth BLoC
   sl.registerFactory<AuthBloc>(
     () => AuthBloc(
@@ -256,5 +294,14 @@ Future<void> init() async {
       logger: sl<AppLogger>(),
     ),
   );
+
+  // Feature-local registrations (each feature owns its di.dart)
+  registerOnboardingDependencies(sl);
+  registerExpressDealmakerDependencies(sl);
+  registerProDealCloserDependencies(sl);
+  registerPaywallDependencies(sl);
+  registerProfileDependencies(sl);
+  registerHistoryDependencies(sl);
+  registerMainShellDependencies(sl);
 }
 

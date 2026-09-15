@@ -1,6 +1,6 @@
+// ignore_for_file: non_const_argument_for_const_parameter
 import 'package:appwizard/core/utils/icon_resolver.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 part 'icon_config.g.dart';
@@ -34,6 +34,7 @@ class IconConfig {
 
   static IconData? _iconDataFromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
+    // Remote-configured icons cannot be const; release builds use --no-tree-shake-icons.
     return IconData(
       json['codePoint'] as int,
       fontFamily: json['fontFamily'] as String?,

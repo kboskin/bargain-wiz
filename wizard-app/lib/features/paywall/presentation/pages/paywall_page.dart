@@ -1,199 +1,315 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import 'package:appwizard/core/di/injection_container.dart' as di;
-import 'package:appwizard/core/services/analytics_service.dart';
-import 'package:appwizard/core/services/remote_config_service.dart';
-import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/theme/app_text_styles.dart';
-import 'package:appwizard/core/utils/app_logger.dart';
-import 'package:appwizard/core/widgets/configurable_gradient_background.dart';
-import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
-import 'package:appwizard/core/widgets/styled_title_widget.dart';
-import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/core/routing/app_routes.dart';
+import 'package:appwizard/core/services/analytics_service.dart';
+import 'package:appwizard/core/services/feature_gate_service.dart';
+import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/core/utils/template_text.dart';
+import 'package:appwizard/core/widgets/configurable_gradient_background.dart';
+import 'package:appwizard/core/widgets/wiz/fade_up.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
-import 'package:appwizard/features/paywall/data/models/paywall_layout.dart';
+import 'package:appwizard/features/paywall/domain/paywall_args.dart';
+import 'package:appwizard/features/paywall/domain/paywall_copy.dart';
+import 'package:appwizard/features/paywall/presentation/widgets/paywall_plan_layouts.dart';
+import 'package:appwizard/features/paywall/presentation/widgets/paywall_step_view.dart';
+import 'package:appwizard/features/paywall/presentation/widgets/paywall_timeline.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_product.dart';
-import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
-import 'package:appwizard/l10n/app_localizations.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_bloc.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_event.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_state.dart';
+import 'package:appwizard/l10n/app_localizations.dart';
 
+/// Full-screen paywall modal (design handoff §7): explainer steps (intro → reminder) then the
+/// plans step (cards / list / compact) with the trial timeline.
+///
+/// Pops with `true` when access is granted (purchase, restore or debug override) and
+/// `false` when closed. Open it through [PaywallLauncher]; requires a [SubscriptionBloc]
+/// above it (provided by the router).
 class PaywallPage extends StatefulWidget {
-  final String paywallKey;
-
   const PaywallPage({
     super.key,
     this.paywallKey = 'paywall_config',
+    this.args = const PaywallArgs(),
   });
+
+  final String paywallKey;
+  /// Entry context (hint + preselected plan).
+  final PaywallArgs args;
 
   @override
   State<PaywallPage> createState() => _PaywallPageState();
 }
 
-class _PaywallPageState extends State<PaywallPage> with TickerProviderStateMixin {
-  late AnimationController _timelineAnimationController;
-  final List<Animation<double>> _timelineItemAnimations = [];
-  PaywallConfig? _paywallConfig;
-  String? _selectedOptionId;
-  List<SubscriptionProduct> _products = [];
-  bool _isLoading = true;
-  bool _isPurchasing = false;
-  int _currentStepIndex = 0; // For multi-step paywall flows
-  bool _stepTransitionForward = true; // true = next, false = back (for animation direction)
+class _PaywallPageState extends State<PaywallPage> {
   final AppLogger _logger = di.sl<AppLogger>();
   final AnalyticsService _analytics = di.sl<AnalyticsService>();
-  final RemoteConfigService _remoteConfigService = di.sl<RemoteConfigService>();
+  final RemoteConfigService _remoteConfig = di.sl<RemoteConfigService>();
+  final FeatureGateService _gate = di.sl<FeatureGateService>();
+
+  PaywallConfig? _config;
+  bool _loading = true;
+
+  int _stepIndex = 0;
+  bool _forward = true;
+  bool _advancing = false;
+
+  String? _selectedId;
+  List<SubscriptionProduct> _products = const [];
+
+  bool _purchasing = false;
+  bool _restoring = false;
+  bool _purchaseFailed = false;
+
+  bool _closeVisible = false;
+  Timer? _closeTimer;
+  /// Resets the CTA if the store never answers (no billing on emulators / sideloads).
+  Timer? _purchaseWatchdog;
+  static const Duration _purchaseTimeout = Duration(seconds: 45);
 
   @override
   void initState() {
     super.initState();
-    _loadPaywallConfig();
-    _loadProducts();
-    _timelineAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    );
+    _loadConfig();
+    context.read<SubscriptionBloc>().add(const LoadProductsRequested());
   }
 
   @override
   void dispose() {
-    _timelineAnimationController.dispose();
+    _closeTimer?.cancel();
+    _purchaseWatchdog?.cancel();
     super.dispose();
   }
 
-  void _setupTimelineAnimations(int count) {
-    if (_timelineItemAnimations.isNotEmpty) return;
-    for (int i = 0; i < count; i++) {
-      // More spread out intervals for a slower feel
-      final start = (i * 0.25).clamp(0.0, 1.0);
-      final end = (start + 0.5).clamp(0.0, 1.0);
-      _timelineItemAnimations.add(
-        CurvedAnimation(
-          parent: _timelineAnimationController,
-          curve: Interval(start, end, curve: Curves.easeOutCubic),
-        ),
-      );
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _timelineAnimationController.forward();
-      }
+  void _armPurchaseWatchdog() {
+    _purchaseWatchdog?.cancel();
+    _purchaseWatchdog = Timer(_purchaseTimeout, () {
+      if (!mounted || !_purchasing) return;
+      setState(() {
+        _purchasing = false;
+        _purchaseFailed = true;
+      });
+      WizToast.show(context, 'The store did not respond. Please try again.');
     });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_paywallConfig != null && !_isLoading) {
-      _analytics.logPaywallImpression(
-        paywallType: _paywallConfig!.type,
-      );
-    }
-  }
+  // ── setup ────────────────────────────────────────────────────────────────
 
-  Future<void> _loadPaywallConfig() async {
+  void _loadConfig() {
     try {
-      final config = _remoteConfigService.getPaywallConfig(
-        configKey: widget.paywallKey,
-      );
-      if (config != null) {
-        setState(() {
-          _paywallConfig = config;
-          _selectedOptionId = config.metadata.defaultSelectedOptionId;
-        });
+      final config = _remoteConfig.getPaywallConfig(configKey: widget.paywallKey);
+      if (config == null) {
+        _logger.w('PaywallPage: no config for ${widget.paywallKey}');
       } else {
-        _logger.w('Failed to load paywall config');
+        _config = config;
+        _selectedId = _initialSelection(config);
+        _scheduleClose(config);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _analytics.logPaywallImpression(paywallType: config.type);
+        });
       }
-    } catch (e, stackTrace) {
-      _logger.e('Error loading paywall config', e, stackTrace);
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+    } catch (e, st) {
+      _logger.e('PaywallPage: error loading config', e, st);
     }
+    _loading = false;
   }
 
-  Future<void> _loadProducts() async {
-    final bloc = context.read<SubscriptionBloc>();
-    bloc.add(const LoadProductsRequested());
-  }
-
-  String? _getProductIdForTier(SubscriptionTier tier) {
-    if (_products.isEmpty) return null;
-    try {
-      final product = _products.firstWhere(
-        (p) => p.tier == tier,
-        orElse: () => _products.first,
-      );
-      return product.productId;
-    } catch (e) {
-      _logger.w('Product not found for tier $tier: $e');
-      return null;
+  String? _initialSelection(PaywallConfig config) {
+    final ids = config.options.map((o) => o.id).toSet();
+    final wanted = widget.args.preselectOptionId;
+    if (wanted != null && ids.contains(wanted)) return wanted;
+    if (ids.contains(config.metadata.defaultSelectedOptionId)) {
+      return config.metadata.defaultSelectedOptionId;
     }
+    return config.options.isEmpty ? null : config.options.first.id;
   }
 
-  SubscriptionProduct? _getProductForOption(PaywallOption option) {
-    if (_products.isEmpty) return null;
-    try {
-      final tier = option.tierEnum;
-      // Using a loop for safer lookup
-      for (final p in _products) {
-        if (p.tier == tier) return p;
-      }
-      return null;
-    } catch (e) {
-      _logger.w('Error looking up product for tier ${option.tier}: $e');
-      return null;
-    }
-  }
-
-  Future<void> _handlePurchase() async {
-    if (_paywallConfig == null || _selectedOptionId == null) return;
-
-    final selectedOption = _paywallConfig!.options.firstWhere(
-      (opt) => opt.id == _selectedOptionId,
-    );
-
-    final product = _getProductForOption(selectedOption);
-    if (product == null) {
-      _logger.w('Product not available for tier: ${selectedOption.tier}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.productNotAvailable),
-        ),
-      );
+  void _scheduleClose(PaywallConfig config) {
+    if (!config.showClose) return;
+    final seconds = config.closeButtonDelaySeconds;
+    if (seconds <= 0) {
+      _closeVisible = true;
       return;
     }
-
-    setState(() {
-      _isPurchasing = true;
+    _closeTimer = Timer(Duration(milliseconds: (seconds * 1000).round()), () {
+      if (mounted) setState(() => _closeVisible = true);
     });
-
-    _analytics.logPaywallCtaTap(
-      paywallType: _paywallConfig!.type,
-      tier: selectedOption.tier,
-    );
-
-    final bloc = context.read<SubscriptionBloc>();
-    bloc.add(PurchaseSubscriptionRequested(product.productId));
   }
 
-  void _onClose() {
+  // ── derived ──────────────────────────────────────────────────────────────
+
+  PaywallOption? get _selectedOption {
+    final c = _config;
+    if (c == null || c.options.isEmpty) return null;
+    return c.options.where((o) => o.id == _selectedId).firstOrNull ?? c.options.first;
+  }
+
+  bool get _onPlansStep => _config != null && _stepIndex >= _config!.steps.length;
+
+  /// Store price → `price_label` → null (hidden).
+  String? priceFor(PaywallOption option) =>
+      PaywallPricing.priceFor(option, _products, resolve: (v) => TemplateText.textOf(context, v));
+
+  /// QA shortcut: available in debug/dev builds when the store cannot serve the purchase.
+  bool get _debugShortcutAvailable {
+    // Debug / dev builds only. Always offered there so QA can walk every gate on
+    // emulators and sideloads where the store never answers.
+    if (!_gate.canOverride) return false;
+    return _selectedOption != null;
+  }
+
+  AppLocalizations? get _l10n => AppLocalizations.of(context);
+
+  // ── actions ──────────────────────────────────────────────────────────────
+
+  void _close() {
     if (context.canPop()) {
-      context.pop();
+      context.pop(false);
     } else {
-      if (kDebugMode) {
-        context.go(AppRoutes.main);
+      context.go(AppRoutes.home);
+    }
+  }
+
+  void _grantAccess(String toast) {
+    WizToast.show(context, toast);
+    _gate.invalidate();
+    if (context.canPop()) {
+      context.pop(true);
+    } else {
+      context.go(AppRoutes.home);
+    }
+  }
+
+  Future<void> _continueStep(PaywallStepConfig step) async {
+    if (_advancing) return;
+    setState(() => _advancing = true);
+    if (step.id == 'reminder') {
+      // Notification permission is requested from the reminder step (handoff decision).
+      try {
+        await Permission.notification.request();
+      } catch (e) {
+        _logger.w('PaywallPage: notification permission request failed: $e');
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _advancing = false;
+      _forward = true;
+      _stepIndex++;
+    });
+  }
+
+  void _select(PaywallOption option) {
+    if (option.id == _selectedId) return;
+    setState(() => _selectedId = option.id);
+    final c = _config;
+    if (c != null) {
+      _analytics.logPaywallOptionSelected(
+        paywallType: c.type,
+        optionId: option.id,
+        tier: option.tier,
+      );
+    }
+  }
+
+  void _purchase() {
+    final c = _config;
+    final option = _selectedOption;
+    if (c == null || option == null || _purchasing) return;
+    final productId = PaywallPricing.productIdFor(option, _products);
+    if (productId == null) {
+      setState(() => _purchaseFailed = true);
+      WizToast.show(context, _l10n?.productNotAvailable ?? 'Product not available');
+      return;
+    }
+    _analytics.logPaywallCtaTap(paywallType: c.type, tier: option.tier);
+    setState(() => _purchasing = true);
+    _armPurchaseWatchdog();
+    context.read<SubscriptionBloc>().add(PurchaseSubscriptionRequested(productId));
+  }
+
+  void _debugActivate() {
+    final option = _selectedOption;
+    if (option == null || !_debugShortcutAvailable) return;
+    _gate.setDebugOverride(option.tierEnum);
+    _grantAccess('Debug: ${option.tier} tier enabled');
+  }
+
+  void _restore() {
+    if (_restoring || _purchasing) return;
+    setState(() => _restoring = true);
+    context.read<SubscriptionBloc>().add(const RestorePurchasesRequested());
+  }
+
+  Future<void> _openUrl(String url) async {
+    if (url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      _logger.w('PaywallPage: could not open $url: $e');
+    }
+  }
+
+  // ── bloc ─────────────────────────────────────────────────────────────────
+
+  void _onSubscriptionState(BuildContext context, SubscriptionState state) {
+    final c = _config;
+    final option = _selectedOption;
+    if (state is ProductsLoaded) {
+      setState(() => _products = state.products);
+    } else if (state is PurchaseInProgress) {
+      if (!_purchasing) setState(() => _purchasing = true);
+    } else if (state is PurchaseSuccess) {
+      _purchaseWatchdog?.cancel();
+      setState(() => _purchasing = false);
+      if (c != null && option != null) {
+        _analytics.logEvent(
+          name: 'purchase_success',
+          parameters: {'paywall_type': c.type, 'tier': option.tier},
+        );
+      }
+      _grantAccess(_l10n?.subscriptionActivated ?? 'Subscription activated!');
+    } else if (state is PurchaseError) {
+      _purchaseWatchdog?.cancel();
+      final wasRestoring = _restoring;
+      setState(() {
+        _purchasing = false;
+        _restoring = false;
+        if (!wasRestoring) _purchaseFailed = true;
+      });
+      if (c != null && option != null && !wasRestoring) {
+        _analytics.logEvent(
+          name: 'purchase_fail',
+          parameters: {'paywall_type': c.type, 'tier': option.tier, 'error': state.message},
+        );
+      }
+      WizToast.show(context, state.message);
+    } else if (state is StatusChecked && _restoring) {
+      setState(() => _restoring = false);
+      final SubscriptionStatus? status = state.status;
+      if (status != null && status.isActive && !status.isExpired()) {
+        _grantAccess('Purchases restored');
       } else {
-        context.go(AppRoutes.home);
+        WizToast.show(context, 'No active subscription found');
       }
     }
   }
+
+  // ── build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -205,913 +321,328 @@ class _PaywallPageState extends State<PaywallPage> with TickerProviderStateMixin
       systemNavigationBarIconBrightness: Brightness.dark,
     );
 
-    if (_isLoading || _paywallConfig == null) {
+    final config = _config;
+    if (_loading || config == null) {
       return AnnotatedRegion<SystemUiOverlayStyle>(
         value: overlayStyle,
-        child: const Scaffold(
+        child: Scaffold(
+          backgroundColor: Colors.white,
           body: Center(
-            child: CircularProgressIndicator(),
+            child: _loading
+                ? const CircularProgressIndicator(color: WizColors.ink)
+                : _ConfigMissing(onClose: _close),
           ),
         ),
       );
     }
 
-    final config = _paywallConfig!;
-    final hasSteps = config.steps.isNotEmpty;
-    final isOnStep = hasSteps && _currentStepIndex < config.steps.length;
-    final showBack = hasSteps && _currentStepIndex > 0;
+    final bg = config.background;
+    final bgColors = bg?.colorObjects ?? const <Color>[];
 
-    final bgConfig = config.background;
-    final hasGradient = bgConfig != null &&
-        bgConfig.colorObjects.isNotEmpty;
+    Widget body = SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(WizSpacing.gutter, 0, WizSpacing.gutter, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 36,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: _closeVisible ? FadeUp(child: _CloseButton(onPressed: _close)) : null,
+              ),
+            ),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final incoming = child.key == ValueKey<int>(_stepIndex);
+                  final dx = (_forward ? 1 : -1) * (incoming ? 1.0 : -1.0) * 0.06;
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(begin: Offset(dx, 0), end: Offset.zero)
+                          .animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                layoutBuilder: (current, previous) => Stack(
+                  fit: StackFit.expand,
+                  children: [...previous, if (current != null) current],
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey<int>(_stepIndex),
+                  child: _onPlansStep ? _buildPlans(config) : _buildStep(config),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (bgColors.length >= 2) {
+      body = ConfigurableGradientBackground(
+        colors: bgColors,
+        stops: bg!.stops.length == bgColors.length ? bg.stops : null,
+        child: body,
+      );
+    }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlayStyle,
       child: Scaffold(
-      backgroundColor: hasGradient ? Colors.transparent : Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        automaticallyImplyLeading: false,
-        leading: showBack
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.backgroundDark, size: 22),
-                onPressed: () {
-                  setState(() {
-                    _stepTransitionForward = false;
-                    _currentStepIndex--;
-                  });
-                },
-              )
-            : null,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.close, color: AppColors.backgroundDark),
-            onPressed: _onClose,
-          ),
-        ],
-      ),
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (hasGradient)
-            Positioned.fill(
-              child: ConfigurableGradientBackground(
-                colors: bgConfig!.colorObjects,
-                stops: bgConfig.stops.length == bgConfig.colorObjects.length
-                    ? bgConfig.stops
-                    : null,
-                child: const SizedBox.shrink(),
-              ),
-            )
-          else
-            const ColoredBox(color: Colors.white),
-          BlocListener<SubscriptionBloc, SubscriptionState>(
-        listener: (context, state) {
-          if (state is PurchaseSuccess) {
-            setState(() {
-              _isPurchasing = false;
-            });
-
-            if (_paywallConfig != null) {
-              final selectedOption = _paywallConfig!.options.firstWhere(
-                (opt) => opt.id == _selectedOptionId,
-                orElse: () => _paywallConfig!.options.first,
-              );
-              _analytics.logEvent(
-                name: 'purchase_success',
-                parameters: {
-                  'paywall_type': _paywallConfig!.type,
-                  'tier': selectedOption.tier,
-                },
-              );
-            }
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(AppLocalizations.of(context)!.subscriptionActivated),
-                backgroundColor: Colors.green,
-              ),
-            );
-
-            context.go(AppRoutes.home);
-
-          } else if (state is PurchaseError) {
-            setState(() {
-              _isPurchasing = false;
-            });
-
-            if (_paywallConfig != null) {
-              final selectedOption = _paywallConfig!.options.firstWhere(
-                (opt) => opt.id == _selectedOptionId,
-                orElse: () => _paywallConfig!.options.first,
-              );
-              _analytics.logEvent(
-                name: 'purchase_fail',
-                parameters: {
-                  'paywall_type': _paywallConfig!.type,
-                  'tier': selectedOption.tier,
-                  'error': state.message,
-                },
-              );
-            }
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
-              ),
-            );
-          } else if (state is ProductsLoaded) {
-            setState(() {
-              _products = state.products;
-              if (_paywallConfig != null && _selectedOptionId != null) {
-                final currentOption = _paywallConfig!.options.firstWhere(
-                  (opt) => opt.id == _selectedOptionId,
-                  orElse: () => _paywallConfig!.options.first,
-                );
-                final currentProduct = _getProductForOption(currentOption);
-                if (currentProduct == null && _products.isNotEmpty) {
-                  for (final option in _paywallConfig!.options) {
-                    final product = _getProductForOption(option);
-                    if (product != null) {
-                      _selectedOptionId = option.id;
-                      break;
-                    }
-                  }
-                }
-              }
-            });
-          }
-        },
-        child: _buildPaywallContent(context),
-      ),
-        ],
-      ),
-    ),
-    );
-  }
-
-  Widget _buildPaywallContent(BuildContext context) {
-    final config = _paywallConfig!;
-    final hasSteps = config.steps.isNotEmpty;
-
-    // When steps are configured, show them before the main pricing/options
-    // screen. Steps are simple explainer screens; the final "step" is the
-    // existing paywall UI.
-    if (hasSteps && _currentStepIndex < config.steps.length) {
-      final step = config.steps[_currentStepIndex];
-      return _buildStepLayout(context, config, step);
-    }
-
-    final selectedOption = config.options.firstWhere(
-      (opt) => opt.id == _selectedOptionId,
-      orElse: () => config.options.first,
-    );
-
-    switch (config.metadata.layout) {
-      case PaywallLayout.cards:
-        return _buildCardsLayout(context, config, selectedOption);
-      case PaywallLayout.list:
-        return _buildListLayout(context, config, selectedOption);
-      case PaywallLayout.compact:
-        return _buildCompactLayout(context, config, selectedOption);
-    }
-  }
-
-  /// Single step layout (intro / reminder-style screen). Title + visual + description +
-  /// "No payment due now" row + CTA that advances to next step or pricing screen.
-  Widget _buildStepLayout(
-    BuildContext context,
-    PaywallConfig config,
-    PaywallStepConfig step,
-  ) {
-    final titleText = _getMultilocaleText(step.title, context);
-    final descriptionText = _getMultilocaleText(step.description, context);
-    final noteText = _getMultilocaleText(step.noteText, context);
-    final stepButtonText = _getMultilocaleText(step.buttonText, context);
-    final buttonLabel = (stepButtonText != null && stepButtonText.isNotEmpty)
-        ? stepButtonText
-        : (_getMultilocaleText(config.nextButtonText, context) ?? AppLocalizations.of(context)!.next);
-
-    final topPadding = MediaQuery.paddingOf(context).top + kToolbarHeight + 24;
-    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24;
-    final availableHeight = MediaQuery.sizeOf(context).height - topPadding - bottomPadding;
-
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding, left: 24, right: 24, bottom: bottomPadding),
-      child: SizedBox(
-        height: availableHeight,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (titleText != null && titleText.isNotEmpty)
-                  StyledTitleWidget(
-                    title: titleText,
-                    highlightWordsData: step.titleHighlightWords?.description,
-                    highlightColor: step.highlightColor,
-                    baseColor: AppColors.backgroundDark,
-                    fontSize: 26,
-                    fontSizeHighlight: 28,
-                  ),
-                if (titleText != null && titleText.isNotEmpty) const SizedBox(height: 20),
-                if (step.visual != null && step.visual!.isNotEmpty) ...[
-                  VisualAssetWidget(
-                    visualPath: step.visual!,
-                    width: 260,
-                    height: 260,
-                  ),
-                  const SizedBox(height: 20),
-                ],
-                if (descriptionText != null && descriptionText.isNotEmpty)
-                  Text(
-                    descriptionText,
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: AppColors.backgroundDark.withValues(alpha: 0.85),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-              ],
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildNoPaymentDueNow(context, config),
-                const SizedBox(height: 4),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _stepTransitionForward = true;
-                        _currentStepIndex++;
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.backgroundDark,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(buttonLabel, style: AppTextStyles.buttonText),
-                  ),
-                ),
-                if (noteText != null && noteText.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    noteText,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.backgroundDark.withValues(alpha: 0.6),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ],
-            ),
-          ],
+        backgroundColor: bgColors.length == 1 ? bgColors.first : Colors.white,
+        body: BlocListener<SubscriptionBloc, SubscriptionState>(
+          listener: _onSubscriptionState,
+          child: body,
         ),
       ),
     );
   }
 
-  String? _getMultilocaleText(dynamic ml, BuildContext context) {
-    if (ml == null) return null;
-    if (ml is String) return ml.isEmpty ? null : ml;
-    try {
-      final s = (ml as dynamic).get(context) as String?;
-      return s?.isEmpty == true ? null : s;
-    } catch (_) {
-      return ml.toString();
-    }
+  Widget _buildStep(PaywallConfig config) {
+    final step = config.steps[_stepIndex];
+    final label = TemplateText.textOf(
+      context,
+      step.buttonText,
+      fallback: TemplateText.textOf(context, config.nextButtonText, fallback: 'Continue'),
+    );
+    return PaywallStepView(
+      step: step,
+      buttonLabel: label,
+      busy: _advancing,
+      onContinue: () => _continueStep(step),
+    );
   }
 
-  /// "No payment due now" row with checkmark, shown above the main CTA on all screens.
-  /// Uses [StyledRichTextDescriptionWidget] so the line can support highlight words via config later.
-  Widget _buildNoPaymentDueNow(BuildContext context, PaywallConfig config) {
-    final text = _getMultilocaleText(config.noPaymentDueText, context) ?? 'No payment due now';
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
+  Widget _buildPlans(PaywallConfig config) {
+    final option = _selectedOption;
+    final title = TemplateText.textOf(context, config.title, fallback: 'Unlock Bargain Wiz');
+    final description = TemplateText.textOf(context, config.description);
+    final hint = PaywallHints.hintFor(config.contextHints, widget.args.entry);
+    final hintText = hint == null ? '' : hint.get(context);
+    final planTitle = option == null ? '' : TemplateText.textOf(context, option.title);
+    final price = option == null ? null : priceFor(option);
+    final locale = Localizations.maybeLocaleOf(context)?.toLanguageTag();
+    final rows = PaywallTimelineBuilder.build(
+      config: config,
+      now: DateTime.now(),
+      plan: planTitle,
+      price: price,
+      resolve: (v) => TemplateText.textOf(context, v),
+      locale: locale,
+    );
+    final ctaLabel = TemplateText.textOf(context, config.nextButtonText, fallback: 'Try for free');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(Icons.check_circle, size: 20, color: AppColors.backgroundDark),
-        const SizedBox(width: 8),
-        StyledRichTextDescriptionWidget(
-          description: text,
-          highlightWordsData: config.noPaymentHighlightWords?.description ?? const {},
-          baseColor: AppColors.backgroundDark,
-          bodyFontSize: 16,
-          baseColorOpacity: 1.0,
-          textAlign: TextAlign.center,
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(top: 4),
+            child: FadeUp(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(title, textAlign: TextAlign.center, style: WizType.title),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(description, textAlign: TextAlign.center, style: WizType.bodyMd),
+                  ],
+                  const SizedBox(height: 16),
+                  if (hintText.isNotEmpty) ...[
+                    _ContextHint(text: hintText),
+                    const SizedBox(height: 12),
+                  ],
+                  PaywallPlanPicker(
+                    config: config,
+                    selectedId: _selectedId,
+                    priceFor: priceFor,
+                    onSelect: _select,
+                  ),
+                  if (rows.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 18, 4, 6),
+                      child: PaywallTimeline(
+                        // Re-run the entrance only when the row set changes, not on reselection.
+                        key: ValueKey<int>(rows.length),
+                        rows: rows,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        _NoteText(
+          template: TemplateText.textOf(
+            context,
+            config.noteText,
+            fallback: 'Free trial, then {price}. Cancel anytime.',
+          ),
+          price: price,
+        ),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onLongPress: _debugShortcutAvailable ? _debugActivate : null,
+          child: WizPrimaryButton(
+            label: ctaLabel,
+            loading: _purchasing || _restoring,
+            onPressed: option == null ? null : _purchase,
+          ),
+        ),
+        if (_debugShortcutAvailable) ...[
+          const SizedBox(height: 6),
+          Text(
+            _purchaseFailed
+                ? 'store unavailable · long-press to activate ${option?.tier ?? ''} for QA'
+                : 'debug · long-press to activate ${option?.tier ?? ''} without the store',
+            textAlign: TextAlign.center,
+            style: WizType.footnote.copyWith(fontSize: 11),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _FooterLinks(
+          showRestore: config.showRestore,
+          restoreLabel: _l10n?.restorePurchases ?? 'Restore Purchases',
+          termsLabel: _l10n?.terms ?? 'Terms',
+          privacyLabel: _l10n?.privacy ?? 'Privacy',
+          onRestore: _restore,
+          onTerms: () => _openUrl(_remoteConfig.getTermsOfUseUrl()),
+          onPrivacy: () => _openUrl(_remoteConfig.getPrivacyPolicyUrl()),
         ),
       ],
     );
   }
+}
 
-  /// Vertical timeline for trial: Today (unlock), In N days (reminder), In trialDays (billing starts).
+// ── pieces ─────────────────────────────────────────────────────────────────
 
-  Widget _buildTrialTimeline(BuildContext context, PaywallConfig config) {
-    final days = config.trialDays.clamp(1, 365);
-    final now = DateTime.now();
-    final billingDate = now.add(Duration(days: days));
-    final billingStr = '${billingDate.day} ${_monthName(billingDate.month)} ${billingDate.year}';
-    final colorTrial = const Color(0xFFFF9800);
-    final colorBilling = AppColors.backgroundDark;
+/// 34px ✕ in a segment-track circle, top-right.
+class _CloseButton extends StatelessWidget {
+  const _CloseButton({required this.onPressed});
 
-    _setupTimelineAnimations(3);
+  final VoidCallback onPressed;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildAnimatedTimelineRow(
-            0,
-            icon: Icons.lock_open,
-            iconColor: colorTrial,
-            title: _getMultilocaleText(config.timelineTodayText, context) ?? 'Today',
-            subtitle: _getMultilocaleText(config.timelineTodaySubtitle, context) ?? "Unlock all the app's features.",
-            nextColor: colorTrial,
-          ),
-          _buildAnimatedTimelineRow(
-            1,
-            icon: Icons.notifications_active,
-            iconColor: colorTrial,
-            title: _getMultilocaleText(config.timelineReminderText, context) ?? (days > 1 ? 'In ${days - 1} day${days == 2 ? '' : 's'} – Reminder' : 'Reminder'),
-            subtitle: _getMultilocaleText(config.timelineReminderSubtitle, context) ?? "We'll send you a reminder that your trial is ending soon.",
-            nextColor: colorBilling,
-          ),
-          _buildAnimatedTimelineRow(
-            2,
-            icon: Icons.workspace_premium,
-            iconColor: colorBilling,
-            title: _getMultilocaleText(config.timelineBillingText, context) ?? 'In $days days – Billing starts',
-            subtitle: _getMultilocaleText(config.timelineBillingSubtitle, context) ?? "You'll be charged on $billingStr unless you cancel before.",
-            isLast: true,
-          ),
-        ],
-      ),
-    );
+  @override
+  Widget build(BuildContext context) => WizRoundIconButton(
+        icon: Icons.close_rounded,
+        size: 34,
+        iconSize: 18,
+        color: WizColors.segmentTrack,
+        iconColor: WizColors.textSecondary,
+        onPressed: onPressed,
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+      );
+}
+
+class _ContextHint extends StatelessWidget {
+  const _ContextHint({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: WizColors.amberSoft,
+          borderRadius: BorderRadius.circular(WizRadii.thumbLg),
+        ),
+        child: Text(
+          text,
+          style: WizType.captionMedium.copyWith(color: WizColors.amberInk, height: 1.35),
+        ),
+      );
+}
+
+/// "Free trial, then **$7.99/wk**. Cancel anytime." — `{price}` rendered bold.
+class _NoteText extends StatelessWidget {
+  const _NoteText({required this.template, required this.price});
+
+  final String template;
+  final String? price;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = WizType.captionMedium.copyWith(color: WizColors.textSecondary, fontSize: 12.5);
+    final bold = base.copyWith(color: WizColors.ink, fontWeight: FontWeight.w700);
+    const token = '{price}';
+    final idx = template.indexOf(token);
+    final spans = <InlineSpan>[];
+    if (idx < 0 || price == null || price!.isEmpty) {
+      spans.add(TextSpan(text: TemplateText.fill(template, {'price': price ?? ''}).trim()));
+    } else {
+      spans.add(TextSpan(text: template.substring(0, idx)));
+      spans.add(TextSpan(text: price, style: bold));
+      spans.add(TextSpan(text: template.substring(idx + token.length)));
+    }
+    return Text.rich(TextSpan(style: base, children: spans), textAlign: TextAlign.center);
   }
+}
 
-  Widget _buildAnimatedTimelineRow(
-    int index, {
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    Color? nextColor,
-    bool isLast = false,
-  }) {
-    final animation = _timelineItemAnimations[index];
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        return Opacity(
-          opacity: animation.value,
-          child: Transform.translate(
-            offset: Offset(0, 20 * (1 - animation.value)),
-            child: child,
-          ),
-        );
-      },
-      child: _timelineRow(
-        context,
-        icon: icon,
-        iconColor: iconColor,
-        title: title,
-        subtitle: subtitle,
-        nextColor: nextColor,
-        isLast: isLast,
-      ),
-    );
-  }
+class _FooterLinks extends StatelessWidget {
+  const _FooterLinks({
+    required this.showRestore,
+    required this.restoreLabel,
+    required this.termsLabel,
+    required this.privacyLabel,
+    required this.onRestore,
+    required this.onTerms,
+    required this.onPrivacy,
+  });
 
-  String _monthName(int month) {
-    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return names[(month - 1).clamp(0, 11)];
-  }
+  final bool showRestore;
+  final String restoreLabel;
+  final String termsLabel;
+  final String privacyLabel;
+  final VoidCallback onRestore;
+  final VoidCallback onTerms;
+  final VoidCallback onPrivacy;
 
-  Widget _timelineRow(
-    BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    Color? nextColor,
-    bool isLast = false,
-    int index = 0,
-  }) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: 36,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Connecting lines
-                Column(
-                  children: [
-                    // Line coming from above (except for first item)
-                    Expanded(
-                      child: Container(
-                        width: 6,
-                        color: index == 0 ? Colors.transparent : iconColor,
-                      ),
-                    ),
-                    // Space where the circle sits
-                    const SizedBox(height: 36),
-                    // Line going below (except for last item)
-                    Expanded(
-                      child: Container(
-                        width: 6,
-                        decoration: BoxDecoration(
-                          gradient: isLast
-                              ? null
-                              : LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    iconColor,
-                                    iconColor,
-                                    nextColor ?? iconColor,
-                                    nextColor ?? iconColor,
-                                  ],
-                                  stops: const [0.0, 0.4, 0.6, 1.0],
-                                ),
-                          color: isLast ? Colors.transparent : null,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // The actual icon circle, centered to the IntrinsicHeight of the row
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white, // Background to cover the line
-                    border: Border.all(color: iconColor, width: 2),
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 30, // Inner circle
-                      height: 30,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: iconColor.withValues(alpha: 0.15),
-                      ),
-                      child: Icon(icon, size: 18, color: iconColor),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+  @override
+  Widget build(BuildContext context) {
+    final style = WizType.footnote.copyWith(fontWeight: FontWeight.w500);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (showRestore) ...[
+          WizTextLink(
+            label: restoreLabel,
+            onPressed: onRestore,
+            color: WizColors.textTertiary,
+            underline: true,
+            style: style,
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center, // Center text block vertically
-                children: [
-                  Text(
-                    title,
-                    style: AppTextStyles.heading3.copyWith(
-                      color: AppColors.backgroundDark,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.backgroundDark.withValues(alpha: 0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
-      ),
+        WizTextLink(label: termsLabel, onPressed: onTerms, color: WizColors.textTertiary, style: style),
+        const SizedBox(width: 12),
+        WizTextLink(label: privacyLabel, onPressed: onPrivacy, color: WizColors.textTertiary, style: style),
+      ],
     );
   }
+}
 
-  // Layout methods (reusing the same logic roughly)
+class _ConfigMissing extends StatelessWidget {
+  const _ConfigMissing({required this.onClose});
 
-  Widget _buildCardsLayout(
-    BuildContext context,
-    PaywallConfig config,
-    PaywallOption selectedOption,
-  ) {
-    final topPadding = MediaQuery.paddingOf(context).top + kToolbarHeight;
-    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24;
-    final availableHeight = MediaQuery.sizeOf(context).height - topPadding - bottomPadding;
+  final VoidCallback onClose;
 
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding, left: 24, right: 24, bottom: bottomPadding),
-      child: SizedBox(
-        height: availableHeight,
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.all(WizSpacing.gutter),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                StyledTitleWidget(
-                  title: _getMultilocaleText(config.title, context) ?? '',
-                  highlightWordsData: config.titleHighlightWords?.description ?? const {},
-                  highlightColor: config.metadata.highlightColor,
-                  baseColor: AppColors.backgroundDark,
-                  fontSize: 34,
-                  fontSizeHighlight: 38,
-                ),
-                const SizedBox(height: 16),
-                StyledRichTextDescriptionWidget(
-                  description: _getMultilocaleText(config.description, context) ?? '',
-                  highlightWordsData: config.descriptionHighlightWords?.description ?? const {},
-                  baseColor: AppColors.backgroundDark,
-                  baseColorOpacity: 0.7,
-                  bodyFontSize: 16,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                if (config.trialDays >= 1) _buildTrialTimeline(context, config),
-                ...config.options.map((option) => _buildOptionCard(
-                      context,
-                      option,
-                      config,
-                      isSelected: option.id == _selectedOptionId,
-                    )),
-              ],
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildNoPaymentDueNow(context, config),
-                const SizedBox(height: 4),
-                _buildCtaButton(context, config, selectedOption),
-                const SizedBox(height: 12),
-                Text(
-                  _getMultilocaleText(config.noteText, context) ?? '',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.backgroundDark.withValues(alpha: 0.6),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+            const Text('Plans are unavailable right now.', style: WizType.bodySecondary),
+            const SizedBox(height: 16),
+            WizSecondaryButton(label: 'Close', onPressed: onClose, expand: false),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildListLayout(
-    BuildContext context,
-    PaywallConfig config,
-    PaywallOption selectedOption,
-  ) {
-    final topPadding = MediaQuery.paddingOf(context).top + kToolbarHeight;
-    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24;
-    final availableHeight = MediaQuery.sizeOf(context).height - topPadding - bottomPadding;
-
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding, left: 24, right: 24, bottom: bottomPadding),
-      child: SizedBox(
-        height: availableHeight,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                StyledTitleWidget(
-                  title: _getMultilocaleText(config.title, context) ?? '',
-                  highlightWordsData: config.titleHighlightWords?.description ?? const {},
-                  highlightColor: config.metadata.highlightColor,
-                  baseColor: AppColors.backgroundDark,
-                  fontSize: 34,
-                  fontSizeHighlight: 38,
-                ),
-                const SizedBox(height: 16),
-                StyledRichTextDescriptionWidget(
-                  description: _getMultilocaleText(config.description, context) ?? '',
-                  highlightWordsData: config.descriptionHighlightWords?.description ?? const {},
-                  baseColor: AppColors.backgroundDark,
-                  baseColorOpacity: 0.7,
-                  bodyFontSize: 16,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                if (config.trialDays >= 1) _buildTrialTimeline(context, config),
-                SizedBox(
-                  height: 140,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: config.options.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) {
-                      final option = config.options[index];
-                      return SizedBox(
-                        width: 200,
-                        child: _buildOptionCard(
-                          context,
-                          option,
-                          config,
-                          isSelected: option.id == _selectedOptionId,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildNoPaymentDueNow(context, config),
-                const SizedBox(height: 4),
-                _buildCtaButton(context, config, selectedOption),
-                const SizedBox(height: 12),
-                Text(
-                  _getMultilocaleText(config.noteText, context) ?? '',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.backgroundDark.withValues(alpha: 0.6),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompactLayout(
-    BuildContext context,
-    PaywallConfig config,
-    PaywallOption selectedOption,
-  ) {
-    final topPadding = MediaQuery.paddingOf(context).top + kToolbarHeight;
-    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24;
-    final availableHeight = MediaQuery.sizeOf(context).height - topPadding - bottomPadding;
-
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding, left: 24, right: 24, bottom: bottomPadding),
-      child: SizedBox(
-        height: availableHeight,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                StyledTitleWidget(
-                  title: _getMultilocaleText(config.title, context) ?? '',
-                  highlightWordsData: config.titleHighlightWords?.description ?? const {},
-                  highlightColor: config.metadata.highlightColor,
-                  baseColor: AppColors.backgroundDark,
-                  fontSize: 28,
-                  fontSizeHighlight: 32,
-                ),
-                const SizedBox(height: 8),
-                StyledRichTextDescriptionWidget(
-                  description: _getMultilocaleText(config.description, context) ?? '',
-                  highlightWordsData: config.descriptionHighlightWords?.description ?? const {},
-                  baseColor: AppColors.backgroundDark,
-                  baseColorOpacity: 0.7,
-                  bodyFontSize: 14,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                if (config.trialDays >= 1) _buildTrialTimeline(context, config),
-                ...config.options.map((option) => _buildOptionCard(
-                      context,
-                      option,
-                      config,
-                      isSelected: option.id == _selectedOptionId,
-                      compact: true,
-                    )),
-              ],
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildNoPaymentDueNow(context, config),
-                const SizedBox(height: 4),
-                _buildCtaButton(context, config, selectedOption),
-                const SizedBox(height: 12),
-                Text(
-                  _getMultilocaleText(config.noteText, context) ?? '',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.backgroundDark.withValues(alpha: 0.6),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCtaButton(
-    BuildContext context,
-    PaywallConfig config,
-    PaywallOption selectedOption,
-  ) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: (_isPurchasing || _getProductForOption(selectedOption) == null)
-            ? null
-            : _handlePurchase,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.backgroundDark,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          disabledBackgroundColor: AppColors.backgroundDark.withValues(alpha: 0.5),
-        ),
-        child: _isPurchasing
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : Text(
-                _getMultilocaleText(config.nextButtonText, context) ?? '',
-                style: AppTextStyles.buttonText,
-              ),
-      ),
-    );
-  }
-
-  Widget _buildVisual(String optionId, PaywallMetadata metadata) {
-    final visualPath = metadata.optionVisuals[optionId];
-    if (visualPath == null || visualPath.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Opacity(
-      opacity: metadata.visualOpacity ?? 0.95,
-      child: VisualAssetWidget(
-        visualPath: visualPath,
-        width: metadata.visualWidth ?? 170.0,
-        height: metadata.visualHeight ?? 170.0,
-        repeat: metadata.isAnimationLooped,
-      ),
-    );
-  }
-
-  Widget _buildOptionCard(
-    BuildContext context,
-    PaywallOption option,
-    PaywallConfig config, {
-    required bool isSelected,
-    bool compact = false,
-  }) {
-    final product = _getProductForOption(option);
-    final hasProduct = product != null;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: compact ? 8.0 : 12.0),
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _selectedOptionId = option.id;
-          });
-          _analytics.logPaywallOptionSelected(
-            paywallType: config.type,
-            optionId: option.id,
-            tier: option.tier,
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: EdgeInsets.all(compact ? 12.0 : 16.0),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isSelected
-                  ? AppColors.backgroundDark
-                  : AppColors.backgroundDark.withValues(alpha: 0.3),
-              width: isSelected ? 2 : 1,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            color: isSelected
-                ? AppColors.backgroundDark.withValues(alpha: 0.1)
-                : Colors.transparent,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.backgroundDark
-                        : AppColors.backgroundDark.withValues(alpha: 0.3),
-                    width: 2,
-                  ),
-                  color: isSelected
-                      ? AppColors.backgroundDark
-                      : Colors.transparent,
-                ),
-                child: isSelected
-                    ? const Icon(
-                        Icons.check,
-                        size: 16,
-                        color: Colors.white,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                              _getMultilocaleText(option.title, context) ?? '',
-                            style: AppTextStyles.heading3.copyWith(
-                              color: AppColors.backgroundDark,
-                            ),
-                          ),
-                        ),
-                        if (option.badge != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.backgroundDark,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _getMultilocaleText(option.badge, context) ?? '',
-                              style: AppTextStyles.caption.copyWith(
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _getMultilocaleText(option.description, context) ?? '',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.backgroundDark.withValues(alpha: 0.7),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (hasProduct && product.price != null)
-                Text(
-                  product.price!,
-                  style: AppTextStyles.heading3.copyWith(
-                    color: AppColors.backgroundDark,
-                  ),
-                )
-              else if (!hasProduct)
-                Text(
-                  'N/A',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.backgroundDark.withValues(alpha: 0.5),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
+      );
 }

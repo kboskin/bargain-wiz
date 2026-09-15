@@ -1,34 +1,52 @@
-import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
-import 'package:appwizard/core/utils/app_logger.dart';
-import 'remote_config_service.dart';
+import 'dart:convert';
 
-/// Service for managing onboarding configuration
-/// Onboarding screens are always fetched fresh from Remote Config (not cached)
+import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
+
+/// Service for managing onboarding configuration.
+/// Onboarding screens are always fetched fresh from Remote Config (not cached);
+/// when Remote Config is unavailable the bundled `onboarding_screens` defaults are parsed.
 class OnboardingService {
+  OnboardingService(this._remoteConfigService, this._logger);
+
   final RemoteConfigService _remoteConfigService;
   final AppLogger _logger;
 
-  OnboardingService(this._remoteConfigService, this._logger);
-
-  /// Get onboarding screen models directly from Remote Config (not cached)
-  /// Always fetches fresh data from Remote Config to ensure latest configuration
-  /// Returns list of OnboardingModel instances (polymorphic)
+  /// Returns the polymorphic list of [OnboardingModel]s (empty when nothing is configured).
   Future<List<OnboardingModel>> getOnboardingConfig() async {
     try {
-      // Get directly from Remote Config (not from cache) - returns list of models
       final screens = await _remoteConfigService.getOnboardingScreensFresh();
       if (screens.isNotEmpty) {
-        _logger.i('Loaded ${screens.length} onboarding screens directly from Remote Config');
+        _logger.i('Loaded ${screens.length} onboarding screens from Remote Config');
         return screens;
       }
-
-      // Return empty list if not found - no hardcoded defaults
-      _logger.w('No onboarding config found in Remote Config, returning empty list');
+      final fallback = _parseFallback();
+      if (fallback.isNotEmpty) {
+        _logger.w('Remote onboarding_screens unavailable; using ${fallback.length} default screens');
+        return fallback;
+      }
+      _logger.w('No onboarding config found, returning empty list');
       return [];
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       _logger.e('Error loading onboarding config', e, stackTrace);
       return [];
     }
   }
-}
 
+  List<OnboardingModel> _parseFallback() {
+    try {
+      final raw = _remoteConfigService.getString('onboarding_screens');
+      if (raw.isEmpty) return const [];
+      final json = jsonDecode(raw);
+      if (json is! List) return const [];
+      return json
+          .whereType<Map>()
+          .map((m) => OnboardingModel.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
+    } on Object catch (e, st) {
+      _logger.e('Error parsing default onboarding_screens', e, st);
+      return const [];
+    }
+  }
+}

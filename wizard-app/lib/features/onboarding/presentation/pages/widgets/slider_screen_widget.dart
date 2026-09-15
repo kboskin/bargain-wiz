@@ -1,415 +1,294 @@
-import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:appwizard/core/di/injection_container.dart' as di;
-import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/utils/asset_path_helper.dart';
-import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/text_highlight_helper.dart';
-import 'package:appwizard/core/widgets/styled_description_widget.dart';
-import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
-import 'package:appwizard/core/widgets/styled_title_widget.dart';
+import 'dart:math' as math;
+
+import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/features/onboarding/presentation/pages/widgets/onboarding_text.dart';
+import 'package:flutter/material.dart';
 
-/// Widget for slider-type onboarding screens
-/// Supports discrete labeled options with optional animations
+/// `slider` template ("What's a typical deal for you?"): discrete stops with a
+/// scaled Lottie, big value, subtext, savings pill and a 3-knob track.
+/// Answer: option value as int (50 / 550 / 5000). A continuous fallback is kept
+/// for legacy configs without `metadata.options`.
 class SliderScreenWidget extends StatefulWidget {
-  final SliderScreenModel model;
-  final dynamic selectedValue;
-  final Color? textColor;
-  final Function(dynamic) onValueChanged;
-
   const SliderScreenWidget({
-    super.key,
     required this.model,
-    this.selectedValue,
-    this.textColor,
     required this.onValueChanged,
+    super.key,
+    this.selectedValue,
+    this.textColor = WizColors.ink,
   });
+
+  final SliderScreenModel model;
+  final num? selectedValue;
+  final Color textColor;
+  final ValueChanged<num> onValueChanged;
 
   @override
   State<SliderScreenWidget> createState() => _SliderScreenWidgetState();
 }
 
-class _SliderScreenWidgetState extends State<SliderScreenWidget>
-    with SingleTickerProviderStateMixin {
-  late final ColorHelper _colorHelper;
-  late final AssetPathHelper _assetPathHelper;
-  late final TextHighlightHelper _textHighlightHelper;
-  AnimationController? _staticFrameController;
+class _SliderScreenWidgetState extends State<SliderScreenWidget> {
+  List<SliderOption> get _options => widget.model.sortedOptions;
+
+  int get _index {
+    final opts = _options;
+    if (opts.isEmpty) return 0;
+    final v = widget.selectedValue;
+    if (v == null) return widget.model.defaultIndex;
+    var best = 0;
+    for (var i = 1; i < opts.length; i++) {
+      if ((opts[i].value - v).abs() < (opts[best].value - v).abs()) best = i;
+    }
+    return best;
+  }
 
   @override
   void initState() {
     super.initState();
-    _colorHelper = di.sl<ColorHelper>();
-    _assetPathHelper = di.sl<AssetPathHelper>();
-    _textHighlightHelper = TextHighlightHelper(_colorHelper);
-
-    // Create a controller for static frames (paused at 0)
-    _staticFrameController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    );
-    _staticFrameController!.value = 0.0; // Set to first frame
-    _staticFrameController!.stop(); // Stop animation
-    
-    // Set default value to first option if no value is selected
-    if (widget.selectedValue == null && widget.model.options.isNotEmpty) {
-      // Use WidgetsBinding to schedule the callback after the current frame
+    if (widget.selectedValue == null && _options.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final firstOption = widget.model.options.first;
-        widget.onValueChanged(firstOption.value);
+        if (mounted) widget.onValueChanged(_options[widget.model.defaultIndex].intValue);
       });
     }
   }
 
   @override
-  void dispose() {
-    _staticFrameController?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // Check if this is a discrete slider with options
-    if (widget.model.options.isNotEmpty) {
-      return _buildDiscreteSlider(context);
-    }
-    
-    // Legacy continuous slider (not used in current implementation)
-    return const SizedBox.shrink();
-  }
+    final opts = _options;
+    if (opts.isEmpty) return _ContinuousSlider(widget: widget);
+    final index = _index;
+    final current = opts[index];
+    final pillTemplate = TemplateText.textOf(context, widget.model.savingsPill);
+    final savings = current.savingsRange;
+    final pill = savings == null || pillTemplate.isEmpty ? '' : TemplateText.fill(pillTemplate, {'savings': savings});
 
-  Widget _buildDiscreteSlider(BuildContext context) {
-    // Use the parsed options from the model (already sorted)
-    final sliderOptions = List<SliderOption>.from(widget.model.options)
-      ..sort((a, b) => a.value.compareTo(b.value));
-
-    // Use normalized slider range (0.0 to 1.0) for smooth sliding
-    const double sliderMin = 0.0;
-    const double sliderMax = 1.0;
-
-    // Get current selected value
-    int currentOptionIndex = 0;
-
-    if (widget.selectedValue != null) {
-      final answerValue = (widget.selectedValue as num).toDouble();
-      // Find which option index matches the stored value
-      for (int i = 0; i < sliderOptions.length; i++) {
-        if (sliderOptions[i].value == answerValue) {
-          currentOptionIndex = i;
-          break;
-        }
-      }
-    }
-
-    // Calculate current slider position (normalized 0.0 to 1.0)
-    double currentSliderValue = sliderOptions.length > 1
-        ? currentOptionIndex / (sliderOptions.length - 1)
-        : 0.0;
-
-    // Find current selected option
-    final currentOption = sliderOptions[currentOptionIndex];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          // Title at the top
-          StyledTitleWidget(
-            title: widget.model.title.get(context),
-            baseColor: widget.textColor ?? AppColors.backgroundDark,
-            highlightWordsData: widget.model.metadata?.highlightWords?.title,
-            highlightColor: widget.model.metadata?.highlightColor,
-          ),
-          const SizedBox(height: 16),
-
-          // Description (optional)
-          if (widget.model.description != null) ...[
-            Builder(
-              builder: (context) {
-                final descriptionText = widget.model.description!.get(context);
-                if (descriptionText.isNotEmpty) {
-                  return Column(
-                    children: [
-                      StyledDescriptionWidget(
-                        description: descriptionText,
-                        highlightWordsData: widget.model.metadata?.highlightWords?.description,
-                        highlightColor: _getHighlightColor(),
-                        textHighlightHelper: _textHighlightHelper,
-                        onRichTextDescription: (ctx, desc, data) => StyledRichTextDescriptionWidget(
-                          description: desc,
-                          highlightWordsData: data,
-                          baseColor: widget.textColor ?? AppColors.backgroundDark,
-                          highlightColor: _getHighlightColor(),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                    ],
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-          ],
-
-          // Spacer to push content to center
-          const Spacer(),
-
-          // Big middle animation
-          Center(
-            child: currentOption.animation != null
-                ? AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 400),
-                    switchInCurve: Curves.easeInOut,
-                    switchOutCurve: Curves.easeInOut,
-                    transitionBuilder: (Widget child, Animation<double> animation) {
-                      // Simple smooth cross-fade
-                      return FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      );
-                    },
-                    child: _buildVisual(
-                      currentOption.animation!,
-                      width: currentOption.animationWidth ?? 250,
-                      height: currentOption.animationHeight ?? 250,
-                      fit: BoxFit.cover,
-                      key: ValueKey<String>('${currentOption.animation}_$currentOptionIndex'),
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
-
-          // Spacer to push slider to bottom
-          const Spacer(),
-
-          // Text pinned to top of slider
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
-            decoration: BoxDecoration(
-              color: AppColors.backgroundDark.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              currentOption.label.get(context),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: AppColors.backgroundDark,
-                    fontWeight: FontWeight.bold,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Static indicators above slider (no animations, greyed out if not selected)
-          if (sliderOptions.any((opt) => opt.animation != null)) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: sliderOptions.asMap().entries.map((entry) {
-                  final opt = entry.value;
-                  final optIndex = entry.key;
-                  final isSelected = optIndex == currentOptionIndex;
-
-                  return Expanded(
-                    child: Center(
-                      child: opt.animation != null
-                          ? Opacity(
-                              opacity: isSelected ? 1.0 : 0.3,
-                              child: ColorFiltered(
-                                colorFilter: isSelected
-                                    ? const ColorFilter.mode(
-                                        Colors.transparent,
-                                        BlendMode.dst,
-                                      )
-                                    : const ColorFilter.matrix([
-                                        0.2126, 0.7152, 0.0722, 0, 0, // Red channel
-                                        0.2126, 0.7152, 0.0722, 0, 0, // Green channel
-                                        0.2126, 0.7152, 0.0722, 0, 0, // Blue channel
-                                        0, 0, 0, 1, 0, // Alpha channel
-                                      ]),
-                                child: _buildStaticVisual(
-                                  opt.animation!,
-                                  width: 60,
-                                  height: 60,
-                                ),
-                              ),
-                            )
-                          : Container(
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppColors.backgroundDark.withValues(alpha: 0.2)
-                                    : AppColors.backgroundDark.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.circle,
-                                size: 30,
-                                color: isSelected
-                                    ? AppColors.backgroundDark
-                                    : AppColors.backgroundDark.withValues(alpha: 0.3),
-                              ),
-                            ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // Slider with labels
-          Column(
+    return OnboardingScrollFill(
+      children: [
+        OnboardingScreenHeader(model: widget.model, textColor: widget.textColor, bottomGap: 0),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Slider(
-                value: currentSliderValue,
-                min: sliderMin,
-                max: sliderMax,
-                onChanged: (value) {
-                  // Calculate which option based on position percentage
-                  final optionIndex = sliderOptions.length > 1
-                      ? (value * (sliderOptions.length - 1))
-                          .round()
-                          .clamp(0, sliderOptions.length - 1)
-                      : 0;
-                  final selectedOption = sliderOptions[optionIndex];
-
-                  widget.onValueChanged(selectedOption.value);
-                },
-                onChangeEnd: (value) {
-                  // Final snap to nearest option when user releases
-                  final optionIndex = sliderOptions.length > 1
-                      ? (value * (sliderOptions.length - 1))
-                          .round()
-                          .clamp(0, sliderOptions.length - 1)
-                      : 0;
-                  final selectedOption = sliderOptions[optionIndex];
-
-                  // Update to the exact option value for visual consistency
-                  widget.onValueChanged(selectedOption.value);
-                },
-                activeColor: AppColors.backgroundDark,
-                inactiveColor: AppColors.backgroundDark.withValues(alpha: 0.3),
-              ),
-              // Labels below slider with smooth color/weight transitions (bigger text)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: sliderOptions.asMap().entries.map((entry) {
-                    final opt = entry.value;
-                    final optIndex = entry.key;
-                    final isSelected = optIndex == currentOptionIndex;
-                    return Expanded(
-                      child: Center(
-                        child: AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: isSelected
-                                    ? AppColors.backgroundDark
-                                    : AppColors.backgroundDark.withValues(alpha: 0.3),
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                              ) ??
-                              const TextStyle(),
-                          child: Text(
-                            opt.label.get(context),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+              // No LayoutBuilder here: this column lives inside an IntrinsicHeight
+              // (OnboardingScrollFill) and LayoutBuilder cannot report intrinsic sizes.
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 240, maxHeight: 240, minHeight: 120),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: AnimatedScale(
+                      scale: current.scale ?? 1,
+                      duration: WizMotion.fill,
+                      curve: WizMotion.spring,
+                      child: AnimatedSwitcher(
+                        duration: WizMotion.fill,
+                        child: current.animation == null
+                            ? const SizedBox.shrink()
+                            : VisualAssetWidget(
+                                key: ValueKey(current.animation),
+                                visualPath: current.animation!,
+                                width: 240,
+                                height: 240,
+                              ),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ),
                 ),
               ),
+              const SizedBox(height: 10),
+              Text(
+                TemplateText.textOf(context, current.label),
+                style: WizType.bigValue.copyWith(color: widget.textColor, letterSpacing: -0.88),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                TemplateText.textOf(context, current.subtext),
+                style: WizType.bodySmStrong.copyWith(color: WizColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              if (pill.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: WizColors.tealSoft,
+                    borderRadius: BorderRadius.circular(WizRadii.chip),
+                  ),
+                  child: Text(
+                    pill,
+                    textAlign: TextAlign.center,
+                    style: WizType.captionStrong.copyWith(color: WizColors.tealInk),
+                  ),
+                ),
+              ],
             ],
           ),
-        ],
-      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 12, 6, 18),
+          child: _StopTrack(
+            labels: [for (final o in opts) TemplateText.textOf(context, o.label)],
+            index: index,
+            onChanged: (i) => widget.onValueChanged(opts[i].intValue),
+          ),
+        ),
+      ],
     );
-  }
-
-  Widget _buildVisual(String visualPath, {double width = 200, double height = 200, BoxFit fit = BoxFit.contain, Key? key}) {
-    return VisualAssetWidget(
-      key: key,
-      visualPath: visualPath,
-      width: width,
-      height: height,
-      fit: fit,
-    );
-  }
-
-  /// Build static visual (no animation) for unselected options
-  Widget _buildStaticVisual(String visualPath, {double width = 60, double height = 60}) {
-    final lowerPath = visualPath.toLowerCase();
-    final isLottie = lowerPath.endsWith('.json');
-    final isSvg = lowerPath.endsWith('.svg');
-    final normalizedPath = _assetPathHelper.normalizeAssetPath(visualPath);
-    final isNetworkUrl = _assetPathHelper.isNetworkUrl(visualPath);
-
-    Widget visualWidget;
-
-    if (isNetworkUrl) {
-      if (isLottie) {
-        // Static Lottie - show first frame only, no animation
-        // Use controller paused at 0 to show static first frame
-        visualWidget = Lottie.network(
-          visualPath,
-          controller: _staticFrameController,
-          fit: BoxFit.contain,
-          repeat: false,
-          frameRate: FrameRate(60),
-          options: LottieOptions(enableMergePaths: true),
-        );
-      } else if (isSvg) {
-        visualWidget = SvgPicture.network(visualPath, fit: BoxFit.contain);
-      } else {
-        visualWidget = Image.network(visualPath, fit: BoxFit.contain);
-      }
-    } else {
-      // Local asset
-      if (isLottie) {
-        // Static Lottie - show first frame only, no animation
-        // Use controller paused at 0 to show static first frame
-        visualWidget = Lottie.asset(
-          normalizedPath,
-          controller: _staticFrameController,
-          fit: BoxFit.contain,
-          repeat: false,
-          frameRate: FrameRate(60),
-          options: LottieOptions(enableMergePaths: true),
-        );
-      } else if (isSvg) {
-        visualWidget = SvgPicture.asset(normalizedPath, fit: BoxFit.contain);
-      } else {
-        visualWidget = Image.asset(normalizedPath, fit: BoxFit.contain);
-      }
-    }
-
-    return SizedBox(
-      width: width,
-      height: height,
-      child: visualWidget,
-    );
-  }
-
-  /// Get highlight color from metadata
-  Color? _getHighlightColor() {
-    final colorString = widget.model.metadata?.highlightColor;
-    if (colorString != null && colorString.isNotEmpty) {
-      return _colorHelper.getColor(colorString);
-    }
-    return null; // No color if not found
   }
 }
 
+/// 8px ink track with N knobs (28px, 3px white border; ink when ≤ current) and labels below.
+class _StopTrack extends StatelessWidget {
+  const _StopTrack({required this.labels, required this.index, required this.onChanged});
+
+  final List<String> labels;
+  final int index;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = labels.length;
+    final fraction = n > 1 ? index / (n - 1) : 0.0;
+    return Builder(
+      builder: (trackContext) {
+        void pickFromDx(double dx) {
+          if (n <= 1) return;
+          final box = trackContext.findRenderObject() as RenderBox?;
+          final width = box?.size.width ?? 0;
+          if (width <= 0) return;
+          final t = (dx / width).clamp(0.0, 1.0);
+          final i = (t * (n - 1)).round().clamp(0, n - 1);
+          if (i != index) onChanged(i);
+        }
+
+        return Column(
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (d) => pickFromDx(d.localPosition.dx),
+              onHorizontalDragUpdate: (d) => pickFromDx(d.localPosition.dx),
+              child: SizedBox(
+                height: 28,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: WizColors.inkTrack,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: AnimatedFractionallySizedBox(
+                        duration: WizMotion.progress,
+                        alignment: Alignment.centerLeft,
+                        widthFactor: fraction,
+                        heightFactor: 1,
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: WizColors.ink,
+                            borderRadius: BorderRadius.all(Radius.circular(4)),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        for (var i = 0; i < n; i++)
+                          GestureDetector(
+                            onTap: () => onChanged(i),
+                            child: AnimatedContainer(
+                              duration: WizMotion.progress,
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: i <= index ? WizColors.ink : Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 3),
+                                boxShadow: const [
+                                  BoxShadow(color: Color(0x2E463270), blurRadius: 8, offset: Offset(0, 2)),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                for (var i = 0; i < n; i++)
+                  Expanded(
+                    child: Text(
+                      labels[i],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: i == 0
+                          ? TextAlign.left
+                          : (i == n - 1 ? TextAlign.right : TextAlign.center),
+                      style: WizType.footnote.copyWith(fontWeight: FontWeight.w500),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Legacy continuous mode (no `metadata.options`): min / max / step from metadata.
+class _ContinuousSlider extends StatelessWidget {
+  const _ContinuousSlider({required this.widget});
+
+  final SliderScreenWidget widget;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = widget.model.metadata;
+    final min = meta?.rawDouble('min') ?? 0;
+    final max = math.max(min + 1, meta?.rawDouble('max') ?? 100);
+    final step = meta?.rawDouble('step');
+    final value = (widget.selectedValue ?? meta?.rawDouble('default') ?? min).toDouble().clamp(min, max);
+    final divisions = step != null && step > 0 ? ((max - min) / step).round() : null;
+    final suffix = meta?.raw?['suffix']?.toString() ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OnboardingScreenHeader(model: widget.model, textColor: widget.textColor),
+        Expanded(
+          child: Center(
+            child: Text(
+              '${value.round()}$suffix',
+              style: WizType.bigValue.copyWith(color: widget.textColor),
+            ),
+          ),
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: WizColors.ink,
+            inactiveTrackColor: WizColors.inkTrack,
+            thumbColor: WizColors.ink,
+            trackHeight: 8,
+          ),
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: (v) => widget.onValueChanged(step != null ? v.roundToDouble() : v),
+          ),
+        ),
+        const SizedBox(height: 18),
+      ],
+    );
+  }
+}

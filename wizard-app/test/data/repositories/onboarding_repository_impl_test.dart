@@ -6,6 +6,8 @@ import 'package:appwizard/features/onboarding/data/datasources/onboarding_local_
 import 'package:appwizard/features/onboarding/data/models/onboarding_data.dart';
 import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/features/onboarding/data/mappers/onboarding_data_mapper.dart';
+import 'package:appwizard/features/onboarding/data/mappers/onboarding_screen_type_mapper.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
@@ -21,7 +23,11 @@ void main() {
   setUp(() {
     mockDataSource = MockOnboardingLocalDataSource();
     mockLogger = MockAppLogger();
-    repository = OnboardingRepositoryImpl(mockDataSource, mockLogger);
+    repository = OnboardingRepositoryImpl(
+      mockDataSource,
+      OnboardingDataMapper(OnboardingScreenTypeMapper(), mockLogger),
+      mockLogger,
+    );
   });
 
   group('saveOnboardingData', () {

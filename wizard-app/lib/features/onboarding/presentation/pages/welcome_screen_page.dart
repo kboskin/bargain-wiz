@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
-import 'package:appwizard/core/theme/app_colors.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/welcome_screen_config.dart';
 import 'package:appwizard/features/onboarding/presentation/pages/welcome_screen_widget.dart';
+import 'package:flutter/material.dart';
 
-/// Page that loads and displays the welcome screen from remote config
+/// Loads `welcome_screen_config` from Remote Config and renders [WelcomeScreenWidget].
 class WelcomeScreenPage extends StatefulWidget {
   const WelcomeScreenPage({super.key});
 
@@ -14,80 +15,60 @@ class WelcomeScreenPage extends StatefulWidget {
 }
 
 class _WelcomeScreenPageState extends State<WelcomeScreenPage> {
-  bool _isLoading = true;
-  dynamic _config;
+  WelcomeScreenConfig? _config;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadWelcomeScreenConfig();
+    _load();
   }
 
-  Future<void> _loadWelcomeScreenConfig() async {
+  void _load() {
     try {
-      final remoteConfigService = di.sl<RemoteConfigService>();
-      final config = remoteConfigService.getWelcomeScreenConfig();
-
-      if (mounted) {
-        setState(() {
-          _config = config;
-          _isLoading = false;
-        });
-      }
-    } catch (e, stackTrace) {
-      di.sl<AppLogger>().e('Error loading welcome screen config', e, stackTrace);
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      _config = di.sl<RemoteConfigService>().getWelcomeScreenConfig();
+    } on Object catch (e, st) {
+      di.sl<AppLogger>().e('Error loading welcome screen config', e, st);
     }
+    _loading = false;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_loading) {
       return const Scaffold(
         backgroundColor: Colors.transparent,
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator(color: WizColors.ink)),
       );
     }
-
-    if (_config == null) {
-      // Fallback UI if config is not available
+    final config = _config;
+    if (config == null) {
       return Scaffold(
         backgroundColor: Colors.transparent,
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: AppColors.backgroundDark.withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Welcome screen configuration not available',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppColors.backgroundDark.withValues(alpha: 0.7),
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+        body: DecoratedBox(
+          decoration: BoxDecoration(gradient: WizColors.appBackground),
+          child: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 56, color: WizColors.textTertiary),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Welcome screen configuration not available',
+                      style: WizType.bodyMd,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       );
     }
-
-    return WelcomeScreenWidget(config: _config);
+    return WelcomeScreenWidget(config: config);
   }
 }
-

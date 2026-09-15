@@ -50,6 +50,9 @@ class IconResolver {
       }
       
       return (
+        // Icons come from Remote Config, so they cannot be const. Release builds must
+        // pass --no-tree-shake-icons (see README / build docs).
+        // ignore: non_const_argument_for_const_parameter
         icon: IconData(codePoint, fontFamily: fontFamily, fontPackage: fontPackage),
         isFontAwesome: isFontAwesome,
       );

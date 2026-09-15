@@ -81,6 +81,17 @@ class RemoteConfigService {
     }
   }
 
+  /// Base URL of the project's Cloud Functions (key: [functions_base_url]) without a
+  /// trailing slash, e.g. `https://us-central1-wizard-app-dev.cloudfunctions.net`.
+  /// Set per Firebase project (dev / prod). Empty when not configured.
+  String getFunctionsBaseUrl() {
+    final url = getString('functions_base_url').trim().replaceAll(RegExp(r'/+$'), '');
+    if (url.isEmpty) {
+      _logger.w('functions_base_url is not configured');
+    }
+    return url;
+  }
+
   /// Get onboarding screens from Remote Config (key: [onboarding_screens]).
   /// The upload progress screen config is inline: the data_upload entry in this
   /// list has [DataUploadScreenModel.visual] and metadata (texts, text_interval_seconds, progress_ramp_seconds).
@@ -339,52 +350,6 @@ class RemoteConfigService {
     } catch (e, stackTrace) {
       _logger.e('Error parsing share config', e, stackTrace);
       return null;
-    }
-  }
-
-  /// Daily \"Lines that land\" tips from Remote Config (key: [lines_that_land_tips]).
-  /// Expected format: JSON-encoded List<String>. Returns empty list on error.
-  List<String> getLinesThatLandTips() {
-    try {
-      final jsonString = getString('lines_that_land_tips');
-      if (jsonString.isEmpty) {
-        return const [];
-      }
-      final decoded = jsonDecode(jsonString);
-      if (decoded is! List) {
-        _logger.w('Invalid lines_that_land_tips format');
-        return const [];
-      }
-      return decoded.whereType<String>().toList();
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing lines_that_land_tips', e, stackTrace);
-      return const [];
-    }
-  }
-
-  /// \"Lines that land\" categories from Remote Config (key: [lines_that_land_categories]).
-  /// Expected format: JSON object with "categories" array; each item has id, name, tips (array of strings).
-  /// Returns empty list on error or missing key.
-  List<Map<String, dynamic>> getLinesThatLandCategories() {
-    try {
-      final jsonString = getString('lines_that_land_categories');
-      if (jsonString.isEmpty) {
-        return const [];
-      }
-      final decoded = jsonDecode(jsonString);
-      if (decoded is! Map<String, dynamic>) {
-        _logger.w('Invalid lines_that_land_categories format');
-        return const [];
-      }
-      final list = decoded['categories'];
-      if (list is! List) return const [];
-      return list
-          .whereType<Map<String, dynamic>>()
-          .where((m) => m['id'] != null && m['name'] != null)
-          .toList();
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing lines_that_land_categories', e, stackTrace);
-      return const [];
     }
   }
 

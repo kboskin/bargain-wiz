@@ -1,5 +1,4 @@
 import 'package:appwizard/features/shared/presentation/bloc/base_bloc.dart';
-import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
 
 /// Onboarding events
 abstract class OnboardingEvent extends BaseEvent {
@@ -11,38 +10,25 @@ class LoadOnboardingConfigRequested extends OnboardingEvent {
   const LoadOnboardingConfigRequested();
 }
 
-/// Answer changed for a screen
+/// Answer changed for a screen.
+///
+/// [answer] is the screen's value: a scalar / list for single-key screens, or a
+/// `Map<String, dynamic>` of `{answerKey: value}` for multi-key screens
+/// (`select_group`). `null` clears the answer.
 class OnboardingAnswerChanged extends OnboardingEvent {
-  final int screenIndex;
-  final String screenTitle;
-  final OnboardingScreenType screenType;
-  final String? answerKey; // Key from answerStructure in screen config
-  final dynamic answer;
-
   const OnboardingAnswerChanged({
     required this.screenIndex,
-    required this.screenTitle,
-    required this.screenType,
-    this.answerKey,
     required this.answer,
   });
 
+  final int screenIndex;
+  final dynamic answer;
+
   @override
-  List<Object?> get props => [screenIndex, screenTitle, screenType, answerKey, answer];
+  List<Object?> get props => [screenIndex, answer];
 }
 
-/// Submit onboarding answers
+/// Submit onboarding answers (called when the data_upload screen finishes).
 class SubmitOnboardingRequested extends OnboardingEvent {
   const SubmitOnboardingRequested();
 }
-
-/// Navigate to next screen
-class NavigateToNextScreen extends OnboardingEvent {
-  const NavigateToNextScreen();
-}
-
-/// Navigate to previous screen
-class NavigateToPreviousScreen extends OnboardingEvent {
-  const NavigateToPreviousScreen();
-}
-

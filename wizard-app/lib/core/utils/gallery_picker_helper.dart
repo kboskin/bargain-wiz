@@ -5,7 +5,10 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_sheet.dart';
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
 import 'package:appwizard/features/home/data/models/main_page_config.dart';
 
@@ -55,24 +58,61 @@ class GalleryPickerHelper {
       config?.cancelButtonText,
       MaterialLocalizations.of(context).cancelButtonLabel,
     );
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(cancelLabel),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              openAppSettings();
-            },
-            child: Text(openSettingsLabel),
-          ),
-        ],
+    // Photo access dialog (design handoff §10): 64px amber camera disc, Outfit 22 title,
+    // body from photo_permission_denied_message, Cancel (outlined) / Open Settings (ink) 50h.
+    WizDialog.show<void>(
+      context,
+      builder: (ctx) => WizDialog(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: WizColors.amberSoft,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.photo_camera_outlined,
+                  size: 26,
+                  color: WizColors.amber,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(title, textAlign: TextAlign.center, style: WizType.titleXs),
+            const SizedBox(height: 6),
+            Text(message, textAlign: TextAlign.center, style: WizType.bodySm),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: WizSecondaryButton(
+                    height: 50,
+                    label: cancelLabel,
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: WizPrimaryButton(
+                    height: 50,
+                    label: openSettingsLabel,
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      openAppSettings();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -127,7 +167,7 @@ class GalleryPickerHelper {
         final picker = ImagePicker();
         final images = await picker.pickMultiImage();
         if (!context.mounted) return [];
-        return images ?? [];
+        return images;
       } finally {
         _isPickerOpen = false;
         _lastPickerClosedAt = DateTime.now();

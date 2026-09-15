@@ -1,5 +1,4 @@
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
-import 'package:appwizard/core/utils/app_logger.dart';
 
 /// Stripe Payment Provider placeholder
 /// Ready for future Stripe integration

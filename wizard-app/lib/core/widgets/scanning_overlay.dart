@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
 
-/// Overlay shown on an image (or any content) while "uploading": a moving scan
-/// line + dim overlay. Use as the top layer of a [Stack] over the content.
-/// Same loading state as text-mode attachments.
+/// Overlay shown on an image (or any content) while "uploading": a 3px teal
+/// scan line with an 18px glow sweeping top→bottom (1.6s linear, infinite)
+/// over a light dim. Use as the top layer of a [Stack] over the content.
 class ScanningOverlay extends StatefulWidget {
   const ScanningOverlay({
     super.key,
     required this.width,
     required this.height,
     this.borderRadius = 8,
+    this.lineColor = WizColors.teal,
+    this.dimColor = const Color(0x2914121B),
   });
 
   final double width;
   final double height;
   final double borderRadius;
+  final Color lineColor;
+  final Color dimColor;
 
   @override
   State<ScanningOverlay> createState() => _ScanningOverlayState();
@@ -21,20 +26,10 @@ class ScanningOverlay extends StatefulWidget {
 
 class _ScanningOverlayState extends State<ScanningOverlay>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
-    _animation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: WizMotion.scan,
+  )..repeat();
 
   @override
   void dispose() {
@@ -51,27 +46,27 @@ class _ScanningOverlayState extends State<ScanningOverlay>
           Container(
             width: widget.width,
             height: widget.height,
-            color: Colors.black26,
+            color: widget.dimColor,
           ),
           AnimatedBuilder(
-            animation: _animation,
+            animation: _controller,
             builder: (context, child) {
+              final y = _controller.value * (widget.height + 24) - 12;
               return Positioned(
                 left: 0,
                 right: 0,
-                top: _animation.value * (widget.height + 12) - 6,
+                top: y,
                 child: Container(
-                  height: 12,
+                  height: 3,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.white.withValues(alpha: 0.7),
-                        Colors.transparent,
-                      ],
-                    ),
+                    color: widget.lineColor,
+                    boxShadow: [
+                      BoxShadow(
+                        color: widget.lineColor.withValues(alpha: 0.55),
+                        blurRadius: 18,
+                        spreadRadius: 6,
+                      ),
+                    ],
                   ),
                 ),
               );

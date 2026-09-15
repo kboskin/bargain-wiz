@@ -23,10 +23,10 @@ class LinesThatLandBloc extends BaseBloc<LinesThatLandEvent, LinesThatLandState>
     emit(const LinesThatLandLoading());
     // Simulate network latency so the loading animation is visible in the bottom sheet.
     await Future<void>.delayed(const Duration(milliseconds: 1500));
-    final result = await _repository.getDailyCategories();
+    final result = await _repository.getFeed();
     result.fold(
       (failure) => emit(LinesThatLandError(failure.message)),
-      (list) => emit(LinesThatLandLoaded(list)),
+      (feed) => emit(LinesThatLandLoaded.fromFeed(feed)),
     );
   }
 }

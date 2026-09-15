@@ -37,10 +37,6 @@ class Settings(BaseSettings):
     
     # Mock mode (for development/testing without real credentials)
     use_mock_verifiers: bool = False
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 settings = Settings()

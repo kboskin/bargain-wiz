@@ -5,11 +5,9 @@ import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:appwizard/core/config/app_config.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/firebase_service.dart';
-import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/routing/app_router.dart';
 import 'package:appwizard/core/theme/app_theme.dart';
-import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/widgets/pastel_gradient_background.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
 
@@ -54,7 +52,7 @@ class MyApp extends StatelessWidget {
           // Theme configuration
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
-          themeMode: ThemeMode.system, // Automatically switch based on system settings
+          themeMode: ThemeMode.light, // Design is light-only (dark palette not designed yet)
         ),
       ),
     );

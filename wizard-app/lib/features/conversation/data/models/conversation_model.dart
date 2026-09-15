@@ -14,11 +14,20 @@ class ConversationModel {
     this.type = 'express',
     List<String>? screenshotPaths,
     List<String>? replyOptions,
+    List<Map<String, dynamic>>? replyLines,
     this.keyword,
     List<ProDealCloserMessageModel>? messages,
     required this.createdAtMillis,
+    this.title,
+    this.marketplace,
+    this.status = 'open',
+    this.priceBefore,
+    this.priceAfter,
+    this.seeing,
+    this.vibe,
   })  : screenshotPaths = screenshotPaths ?? const [],
         replyOptions = replyOptions ?? const [],
+        replyLines = replyLines ?? const [],
         messages = messages ?? const [];
 
   final String id;
@@ -26,9 +35,19 @@ class ConversationModel {
   @JsonKey(name: 'screenshots')
   final List<String> screenshotPaths;
   final List<String> replyOptions;
+  /// Serialized [DealLine]s (`{text, intent, why}`).
+  final List<Map<String, dynamic>> replyLines;
   final String? keyword;
   final List<ProDealCloserMessageModel> messages;
   final int createdAtMillis;
+  final String? title;
+  final String? marketplace;
+  @JsonKey(defaultValue: 'open')
+  final String status;
+  final String? priceBefore;
+  final String? priceAfter;
+  final String? seeing;
+  final String? vibe;
 
   factory ConversationModel.fromJson(Map<String, dynamic> json) {
     final safe = Map<String, dynamic>.from(json)

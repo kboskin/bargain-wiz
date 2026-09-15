@@ -8,7 +8,6 @@ import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/subscription/data/datasources/subscription_in_memory_datasource.dart';
 import 'package:appwizard/features/subscription/data/models/subscription_model.dart';
-import 'package:appwizard/features/subscription/data/models/subscription_config.dart';
 import 'package:appwizard/features/subscription/domain/repositories/subscription_repository.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_product.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';

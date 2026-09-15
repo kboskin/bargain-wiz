@@ -15,7 +15,6 @@ import 'package:appwizard/features/onboarding/data/models/remote_config/onboardi
 import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_layout.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_product.dart';
-import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_bloc.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_event.dart';
@@ -116,14 +115,6 @@ class _PaywallScreenWidgetState extends State<PaywallScreenWidget> {
   Future<void> _loadProducts() async {
     final bloc = context.read<SubscriptionBloc>();
     bloc.add(const LoadProductsRequested());
-  }
-
-  String? _getProductIdForTier(SubscriptionTier tier) {
-    final product = _products.firstWhere(
-      (p) => p.tier == tier,
-      orElse: () => _products.first,
-    );
-    return product.productId;
   }
 
   SubscriptionProduct? _getProductForOption(PaywallOption option) {

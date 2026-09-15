@@ -28,6 +28,10 @@ class WelcomeScreenConfig extends ValidatableEntity {
   @JsonKey(name: 'text_color')
   final String? textColor;
 
+  /// Optional marketing video for the hero (`video`). Falls back to [visual] when
+  /// absent, when `url` is empty, or when playback fails.
+  final WelcomeVideoConfig? video;
+
   WelcomeScreenConfig({
     required this.title,
     required this.description,
@@ -38,6 +42,7 @@ class WelcomeScreenConfig extends ValidatableEntity {
     this.secondaryAction,
     this.highlightColor,
     this.textColor,
+    this.video,
   });
 
   factory WelcomeScreenConfig.fromJson(Map<String, dynamic> json) => _$WelcomeScreenConfigFromJson(json);
@@ -53,6 +58,7 @@ class WelcomeScreenConfig extends ValidatableEntity {
     glassContainer?.validate();
     highlightWords?.validate();
     secondaryAction?.validate();
+    video?.validate();
     if (highlightColor != null) {
       final hexCode = highlightColor!.replaceAll('#', '');
       if (!RegExp(r'^[0-9A-Fa-f]{6}$|^[0-9A-Fa-f]{8}$').hasMatch(hexCode)) {
@@ -155,6 +161,34 @@ class SecondaryActionConfig extends ValidatableEntity {
     super.validate();
     if (type.isEmpty) {
       throw FormatException('SecondaryActionConfig.type cannot be empty');
+    }
+  }
+}
+
+/// Marketing video for the welcome hero (`welcome_screen_config.video`).
+/// Autoplays, loops and starts muted by default; tap toggles sound.
+/// [url] is an https URL or a bundled asset path (`assets/...`); empty disables the video.
+@JsonSerializable()
+class WelcomeVideoConfig extends ValidatableEntity {
+  WelcomeVideoConfig({required this.url, this.loop = true, this.muted = true});
+
+  factory WelcomeVideoConfig.fromJson(Map<String, dynamic> json) => _$WelcomeVideoConfigFromJson(json);
+
+  @JsonKey(defaultValue: '')
+  final String url;
+  final bool loop;
+  final bool muted;
+
+  bool get isEnabled => url.trim().isNotEmpty;
+  bool get isNetwork => url.startsWith('https://') || url.startsWith('http://');
+
+  Map<String, dynamic> toJson() => _$WelcomeVideoConfigToJson(this);
+
+  @override
+  void validate() {
+    super.validate();
+    if (isEnabled && isNetwork && Uri.tryParse(url) == null) {
+      throw FormatException('WelcomeVideoConfig.url is not a valid URL: $url');
     }
   }
 }

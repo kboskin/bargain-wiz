@@ -1,15 +1,18 @@
+import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/template_text.dart';
+import 'package:appwizard/core/widgets/visual_asset_widget.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_mascot.dart';
+import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:appwizard/features/auth/presentation/bloc/auth_event.dart';
+import 'package:appwizard/features/auth/presentation/bloc/auth_state.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/features/onboarding/presentation/pages/widgets/onboarding_text.dart';
+import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/theme/app_text_styles.dart';
-import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
-import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
-import 'package:appwizard/l10n/app_localizations.dart';
-import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
-import 'package:appwizard/features/auth/presentation/bloc/auth_event.dart';
-import 'package:appwizard/features/auth/presentation/bloc/auth_state.dart';
 
 /// Current platform identifier for remote config (e.g. "android", "ios", "web").
 String get _currentPlatform {
@@ -26,130 +29,127 @@ String get _currentPlatform {
       return 'linux';
     case TargetPlatform.fuchsia:
       return 'fuchsia';
-    default:
-      return 'web';
   }
 }
 
-/// True if [platforms] is null/empty (show on all) or contains [_currentPlatform].
-bool _showOnPlatform(List<String>? platforms) {
-  if (platforms == null || platforms.isEmpty) return true;
+/// True if [platforms] is null/empty (use [fallback]) or contains the current platform.
+bool _showOnPlatform(List<String>? platforms, {required bool fallback}) {
+  if (platforms == null || platforms.isEmpty) return fallback;
   return platforms.map((e) => e.toLowerCase()).contains(_currentPlatform);
 }
 
-/// Resolve button label from config (multilocale or string) with fallback.
-String _getButtonLabel(BuildContext context, dynamic source, String fallback) {
-  if (source == null) return fallback;
-  if (source is MultilocaleText) return source.get(context);
-  if (source is String) return source.isNotEmpty ? source : fallback;
-  return fallback;
-}
-
-/// Create-account screen: Google/Apple sign-in buttons and Continue (skip).
-/// Labels and which platforms show each button come from remote config.
+/// `create_account` template ("Lock in your wizard"): mascot, title, description,
+/// Continue with Google / Apple. The shell renders the "Skip for now" CTA.
 class CreateAccountScreenWidget extends StatelessWidget {
   const CreateAccountScreenWidget({
-    super.key,
     required this.model,
     required this.onContinue,
+    super.key,
+    this.textColor = WizColors.ink,
   });
 
   final CreateAccountScreenModel model;
   final VoidCallback onContinue;
+  final Color textColor;
 
   @override
-  Widget build(BuildContext context) {
-    return BlocConsumer<AuthBloc, AuthState>(
-      listenWhen: (previous, current) {
-        if (current is AuthError) return true;
-        if (previous is AuthLoading && current is AuthAuthenticated) return true;
-        return false;
-      },
-      listener: (context, state) {
-        if (state is AuthError) {
-          _showSignInErrorDialog(context);
-        } else if (state is AuthAuthenticated) {
-          onContinue();
-        }
-      },
-      builder: (context, state) {
-        final isLoading = state is AuthLoading;
-        final titleText = model.title.get(context);
-        final descriptionText = model.description?.get(context) ?? '';
-        final googleLabel = _getButtonLabel(context, model.googleButtonLabel, 'Google');
-        final appleLabel = _getButtonLabel(context, model.appleButtonLabel, 'Apple');
-        final showGoogle = _showOnPlatform(model.googlePlatforms);
-        final showApple = _showOnPlatform(model.applePlatforms);
+  Widget build(BuildContext context) => BlocConsumer<AuthBloc, AuthState>(
+        listenWhen: (previous, current) =>
+            current is AuthError || (previous is AuthLoading && current is AuthAuthenticated),
+        listener: (context, state) {
+          if (state is AuthError) {
+            _showSignInErrorDialog(context);
+          } else if (state is AuthAuthenticated) {
+            onContinue();
+          }
+        },
+        builder: (context, state) {
+          final isLoading = state is AuthLoading;
+          final title = TemplateText.textOf(context, model.title);
+          final description = TemplateText.textOf(context, model.description);
+          final googleLabel = TemplateText.textOf(context, model.googleButtonLabel, fallback: 'Continue with Google');
+          final appleLabel = TemplateText.textOf(context, model.appleButtonLabel, fallback: 'Continue with Apple');
+          final showGoogle = _showOnPlatform(model.googlePlatforms, fallback: true);
+          final isApplePlatform =
+              defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS;
+          final showApple = _showOnPlatform(model.applePlatforms, fallback: isApplePlatform);
+          final highlightColor = wizHexColor(model.effectiveHighlightColor);
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          return OnboardingScrollFill(
             children: [
               Expanded(
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        titleText,
+                      Center(child: _visual()),
+                      const SizedBox(height: 20),
+                      HighlightedText(
+                        title,
+                        style: WizType.titleXl.copyWith(color: textColor),
+                        highlights: model.titleHighlights,
+                        defaultHighlightColor: highlightColor,
+                        boldColor: textColor,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                          color: AppColors.backgroundDark,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 32,
-                        ),
                       ),
-                      if (descriptionText.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          descriptionText,
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        HighlightedText(
+                          description,
+                          style: WizType.bodySecondary,
+                          highlights: model.descriptionHighlights,
+                          defaultHighlightColor: highlightColor,
+                          highlightWeight: FontWeight.w600,
+                          boldColor: textColor,
                           textAlign: TextAlign.center,
-                          style: AppTextStyles.bodyLarge.copyWith(
-                            color: AppColors.backgroundDark.withValues(alpha: 0.8),
-                          ),
                         ),
-                        const SizedBox(height: 24),
-                      ] else
-                        const SizedBox(height: 24),
-                      if (showGoogle) ...[
-                        _StyledSignInButton(
-                          icon: _GoogleGIcon(size: 24),
-                          label: googleLabel,
-                          isLoading: isLoading,
-                          onPressed: () {
-                            context.read<AuthBloc>().add(const SignInWithGoogleRequested());
-                          },
-                        ),
-                        if (showApple) const SizedBox(height: 16),
                       ],
+                      const SizedBox(height: 20),
+                      if (showGoogle)
+                        _AuthButton(
+                          label: googleLabel,
+                          leading: const _GoogleGIcon(size: 20),
+                          fill: Colors.white,
+                          borderColor: WizColors.border,
+                          textColor: WizColors.ink,
+                          loading: isLoading,
+                          onTap: () => context.read<AuthBloc>().add(const SignInWithGoogleRequested()),
+                        ),
+                      if (showGoogle && showApple) const SizedBox(height: 12),
                       if (showApple)
-                        _AppleSignInButton(
+                        _AuthButton(
                           label: appleLabel,
-                          isLoading: isLoading,
-                          onPressed: () {
-                            context.read<AuthBloc>().add(const SignInWithAppleRequested());
-                          },
+                          leading: const Icon(Icons.apple, size: 20, color: Colors.white),
+                          fill: WizColors.ink,
+                          textColor: Colors.white,
+                          loading: isLoading,
+                          onTap: () => context.read<AuthBloc>().add(const SignInWithAppleRequested()),
                         ),
                     ],
                   ),
                 ),
               ),
             ],
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
+
+  Widget _visual() {
+    final path = model.visual;
+    if (path == null || path.isEmpty || path.endsWith(WizMascot.asset.split('/').last)) {
+      return const WizMascot(width: 120);
+    }
+    return VisualAssetWidget(visualPath: path, width: 120, height: 120);
   }
 
   void _showSignInErrorDialog(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(l10n.error),
-        content: Text(l10n.signInError),
+        title: Text(l10n?.error ?? 'Error'),
+        content: Text(l10n?.signInError ?? 'Sign-in failed. Please try again.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -159,6 +159,70 @@ class CreateAccountScreenWidget extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 54h, radius 27 sign-in button (white + border for Google, ink for Apple), Figtree 16/600.
+class _AuthButton extends StatelessWidget {
+  const _AuthButton({
+    required this.label,
+    required this.leading,
+    required this.fill,
+    required this.textColor,
+    required this.onTap,
+    this.borderColor,
+    this.loading = false,
+  });
+
+  final String label;
+  final Widget leading;
+  final Color fill;
+  final Color? borderColor;
+  final Color textColor;
+  final VoidCallback onTap;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) => WizPressable(
+        onTap: loading ? null : onTap,
+        child: Opacity(
+          opacity: loading ? 0.7 : 1,
+          child: Container(
+            height: 54,
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(27),
+              border: borderColor == null ? null : Border.all(color: borderColor!, width: 1.5),
+            ),
+            alignment: Alignment.center,
+            child: loading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: textColor),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      leading,
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: WizType.bodyFont,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      );
 }
 
 /// Embedded Google "G" logo SVG – colored, no background.
@@ -177,133 +241,9 @@ class _GoogleGIcon extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: SvgPicture.string(
-        _kGoogleGSvg,
+  Widget build(BuildContext context) => SizedBox(
         width: size,
         height: size,
-        fit: BoxFit.contain,
-      ),
-    );
-  }
-}
-
-/// Outlined button with logo + text matching app style (rounded, border, dark text).
-class _StyledSignInButton extends StatelessWidget {
-  const _StyledSignInButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.isLoading = false,
-  });
-
-  final Widget icon;
-  final String label;
-  final VoidCallback onPressed;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: OutlinedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          side: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.4)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        ),
-        child: isLoading
-            ? SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.textPrimary,
-                ),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  icon,
-                  const SizedBox(width: 12),
-                  Text(
-                    label,
-                    style: AppTextStyles.buttonText.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-/// Sign in with Apple button – black background, white icon/text (Apple HIG style).
-class _AppleSignInButton extends StatelessWidget {
-  const _AppleSignInButton({
-    required this.label,
-    required this.onPressed,
-    this.isLoading = false,
-  });
-
-  final String label;
-  final VoidCallback onPressed;
-  final bool isLoading;
-
-  static const Color _appleBlack = Color(0xFF000000);
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _appleBlack,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        ),
-        child: isLoading
-            ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.apple, size: 24, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Text(
-                    label,
-                    style: AppTextStyles.buttonText.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
+        child: SvgPicture.string(_kGoogleGSvg, width: size, height: size, fit: BoxFit.contain),
+      );
 }

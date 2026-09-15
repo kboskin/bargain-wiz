@@ -4,7 +4,6 @@ import 'package:in_app_purchase/in_app_purchase.dart' hide PurchaseDetails;
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
-import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:in_app_purchase_platform_interface/in_app_purchase_platform_interface.dart' as iap_interface;
 
 /// IAP Payment Provider implementation using in_app_purchase package
@@ -87,8 +86,20 @@ class IAPPaymentProvider extends PaymentProvider {
     try {
       logger.i('Initiating purchase for product: $productId');
 
+      // Without a store (emulators, sideloads) the billing client can hang; bail out early.
+      final available = await _iap.isAvailable().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => false,
+      );
+      if (!available) {
+        return PurchaseResult.failure('Store is not available on this device');
+      }
+
       // Get product details first
-      final response = await _iap.queryProductDetails({productId});
+      final response = await _iap.queryProductDetails({productId}).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw TimeoutException('Store did not respond'),
+      );
       if (response.productDetails.isEmpty) {
         return PurchaseResult.failure('Product not found: $productId');
       }
@@ -190,13 +201,13 @@ class IAPPaymentProvider extends PaymentProvider {
 
     // Handle transactionDate which may be null or a String on some platforms
     DateTime transactionDate = DateTime.now();
-    if (iapDetails.transactionDate != null) {
-      final dateValue = iapDetails.transactionDate!;
-      if (dateValue is DateTime) {
-        transactionDate = dateValue as DateTime;
-      } else if (dateValue is String) {
-        transactionDate = DateTime.tryParse(dateValue) ?? DateTime.now();
-      }
+    final rawDate = iapDetails.transactionDate;
+    if (rawDate != null && rawDate.isNotEmpty) {
+      // Stores report milliseconds since epoch as a string; fall back to ISO parsing.
+      final millis = int.tryParse(rawDate);
+      transactionDate = millis != null
+          ? DateTime.fromMillisecondsSinceEpoch(millis)
+          : (DateTime.tryParse(rawDate) ?? DateTime.now());
     }
 
     return PurchaseDetails(

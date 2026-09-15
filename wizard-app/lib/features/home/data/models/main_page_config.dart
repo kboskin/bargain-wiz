@@ -1,4 +1,5 @@
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
+import 'package:appwizard/features/shared/data/models/plural_text.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/gradient_background_config.dart';
 import 'package:json_annotation/json_annotation.dart';
 
@@ -28,6 +29,29 @@ class MainPageConfig {
     this.stripeOpacity,
     this.background,
     this.showMic = true,
+    this.emptyHeadline,
+    this.emptyHeadlineHighlight,
+    this.firstRunNudge,
+    this.historySectionTitle,
+    this.historySeeAll,
+    this.tabs,
+    this.expressPickTitle,
+    this.expressPickDescription,
+    this.expressPickDropzone,
+    this.expressPickDropzoneSub,
+    this.expressPickCta,
+    this.expressUploadingStatus,
+    this.expressSeeingPrefix,
+    this.expressErrorTitle,
+    this.expressErrorBody,
+    this.replyWhyLabel,
+    this.replyHideLabel,
+    this.replyDislikeToast,
+    this.proReadingLabel,
+    this.proOptionsCta,
+    this.proRedoCta,
+    this.proAttachCta,
+    this.offlineBanner,
   });
 
   /// Text between the top view (app bar) and the center image. Part of main_page_config.
@@ -103,6 +127,84 @@ class MainPageConfig {
   @JsonKey(name: 'show_mic', defaultValue: true)
   final bool showMic;
 
+  // ── Redesign (design_handoff_bargain_wiz) ──
+
+  /// Home empty-state headline, e.g. "Your deal, upgraded." RC key: empty_headline.
+  @JsonKey(name: 'empty_headline', fromJson: _multilocaleFromJson)
+  final dynamic emptyHeadline;
+
+  /// Highlight map for [emptyHeadline], e.g. {"upgraded.": "#7B5EA7"}.
+  @JsonKey(name: 'empty_headline_highlight')
+  final Map<String, dynamic>? emptyHeadlineHighlight;
+
+  /// Bobbing hint shown until the first Express run. RC key: first_run_nudge.
+  @JsonKey(name: 'first_run_nudge', fromJson: _multilocaleFromJson)
+  final dynamic firstRunNudge;
+
+  @JsonKey(name: 'history_section_title', fromJson: _multilocaleFromJson)
+  final dynamic historySectionTitle;
+
+  @JsonKey(name: 'history_see_all', fromJson: _multilocaleFromJson)
+  final dynamic historySeeAll;
+
+  /// Bottom tab bar items: [{id: home|lines|history|profile, label: {...}}].
+  @JsonKey(name: 'tabs')
+  final List<MainPageTabConfig>? tabs;
+
+  @JsonKey(name: 'express_pick_title', fromJson: _multilocaleFromJson)
+  final dynamic expressPickTitle;
+
+  @JsonKey(name: 'express_pick_description', fromJson: _multilocaleFromJson)
+  final dynamic expressPickDescription;
+
+  @JsonKey(name: 'express_pick_dropzone', fromJson: _multilocaleFromJson)
+  final dynamic expressPickDropzone;
+
+  @JsonKey(name: 'express_pick_dropzone_sub', fromJson: _multilocaleFromJson)
+  final dynamic expressPickDropzoneSub;
+
+  /// Plural CTA: {"one": {...}, "other": {... "{n}" ...}}.
+  @JsonKey(name: 'express_pick_cta', fromJson: PluralText.fromJson, toJson: _pluralToJson)
+  final PluralText? expressPickCta;
+
+  @JsonKey(name: 'express_uploading_status', fromJson: _multilocaleFromJson)
+  final dynamic expressUploadingStatus;
+
+  @JsonKey(name: 'express_seeing_prefix', fromJson: _multilocaleFromJson)
+  final dynamic expressSeeingPrefix;
+
+  @JsonKey(name: 'express_error_title', fromJson: _multilocaleFromJson)
+  final dynamic expressErrorTitle;
+
+  @JsonKey(name: 'express_error_body', fromJson: _multilocaleFromJson)
+  final dynamic expressErrorBody;
+
+  @JsonKey(name: 'reply_why_label', fromJson: _multilocaleFromJson)
+  final dynamic replyWhyLabel;
+
+  @JsonKey(name: 'reply_hide_label', fromJson: _multilocaleFromJson)
+  final dynamic replyHideLabel;
+
+  @JsonKey(name: 'reply_dislike_toast', fromJson: _multilocaleFromJson)
+  final dynamic replyDislikeToast;
+
+  @JsonKey(name: 'pro_reading_label', fromJson: _multilocaleFromJson)
+  final dynamic proReadingLabel;
+
+  @JsonKey(name: 'pro_options_cta', fromJson: _multilocaleFromJson)
+  final dynamic proOptionsCta;
+
+  @JsonKey(name: 'pro_redo_cta', fromJson: _multilocaleFromJson)
+  final dynamic proRedoCta;
+
+  @JsonKey(name: 'pro_attach_cta', fromJson: PluralText.fromJson, toJson: _pluralToJson)
+  final PluralText? proAttachCta;
+
+  @JsonKey(name: 'offline_banner', fromJson: _multilocaleFromJson)
+  final dynamic offlineBanner;
+
+  static dynamic _pluralToJson(PluralText? value) => value?.toJson();
+
   static dynamic _multilocaleFromJson(dynamic json) =>
       json != null ? MultilocaleText.fromJson(json) : null;
 
@@ -112,6 +214,26 @@ class MainPageConfig {
   Map<String, dynamic> toJson() => _$MainPageConfigToJson(this);
 }
 
+/// One bottom tab. RC: main_page_config.tabs[].
+@JsonSerializable()
+class MainPageTabConfig {
+  MainPageTabConfig({required this.id, this.label});
+
+  /// "home" | "lines" | "history" | "profile"
+  final String id;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic label;
+
+  static dynamic _multilocaleFromJson(dynamic json) =>
+      json != null ? MultilocaleText.fromJson(json) : null;
+
+  factory MainPageTabConfig.fromJson(Map<String, dynamic> json) =>
+      _$MainPageTabConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$MainPageTabConfigToJson(this);
+}
+
 /// Center visual: path + optional width/height (same approach as onboarding).
 @JsonSerializable()
 class MainPageCenterVisual {
@@ -119,6 +241,7 @@ class MainPageCenterVisual {
     required this.visual,
     this.width,
     this.height,
+    this.historySize,
   });
 
   /// Asset path or URL (Lottie, SVG, or image) – rendered via VisualAssetWidget.
@@ -126,6 +249,11 @@ class MainPageCenterVisual {
 
   final double? width;
   final double? height;
+
+  /// Size of the compact copy shown above the history grid once the user has deals
+  /// (0 hides it). Defaults to [HomeTab.defaultHistoryVisualSize].
+  @JsonKey(name: 'history_size')
+  final double? historySize;
 
   factory MainPageCenterVisual.fromJson(Map<String, dynamic> json) =>
       _$MainPageCenterVisualFromJson(json);

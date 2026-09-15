@@ -1,257 +1,138 @@
-import 'package:flutter/material.dart';
+import 'package:appwizard/core/config/wiz_catalog.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
-import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/text_highlight_helper.dart';
+import 'package:appwizard/core/services/user_profile_service.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
-import 'package:appwizard/core/widgets/styled_description_widget.dart';
-import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
+import 'package:appwizard/core/widgets/wiz/fade_up.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/features/onboarding/domain/logic/onboarding_profile_snapshot.dart';
+import 'package:appwizard/features/onboarding/presentation/pages/widgets/onboarding_text.dart';
+import 'package:flutter/material.dart';
 
-class WarmupScreenWidget extends StatefulWidget {
-  final WarmupScreenModel model;
-  final Color? textColor;
-
+/// `warmup` template — the personalized mirror: monthly leak title, summary
+/// chips, body copy with placeholders and the falling-money Lottie. All values
+/// come from the answers collected *in this flow* ([answersByKey]).
+class WarmupScreenWidget extends StatelessWidget {
   const WarmupScreenWidget({
-    super.key,
     required this.model,
-    this.textColor,
+    super.key,
+    this.answersByKey = const {},
+    this.textColor = WizColors.ink,
+    this.catalog,
   });
 
-  @override
-  State<WarmupScreenWidget> createState() => _WarmupScreenWidgetState();
-}
+  final WarmupScreenModel model;
+  final Map<String, dynamic> answersByKey;
+  final Color textColor;
+  /// Catalog override (tests / previews); defaults to the DI [UserProfileService] catalog.
+  final WizCatalog? catalog;
 
-class _WarmupScreenWidgetState extends State<WarmupScreenWidget> {
-  late final ColorHelper _colorHelper;
-  late final TextHighlightHelper _textHighlightHelper;
-
-  @override
-  void initState() {
-    super.initState();
-    _colorHelper = di.sl<ColorHelper>();
-    _textHighlightHelper = TextHighlightHelper(_colorHelper);
+  WizCatalog _catalog() {
+    if (catalog != null) return catalog!;
+    if (di.sl.isRegistered<UserProfileService>()) return di.sl<UserProfileService>().catalog;
+    return const WizCatalog();
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.model.title.get(context);
-    final description = widget.model.description?.get(context) ?? '';
+    final lang = Localizations.localeOf(context).languageCode;
+    final snapshot = OnboardingProfileSnapshot(
+      answers: answersByKey,
+      catalog: _catalog(),
+      languageCode: lang,
+      dealsMultiplierOverride: model.dealsMultiplier,
+    );
+    final chips = snapshot.chips(model.summaryChipsFor(lang));
+    final metadata = model.metadata;
+    final sideText = TemplateText.textOf(context, metadata?.sideText);
+    final highlightColor = wizHexColor(model.effectiveHighlightColor) ?? WizColors.amber;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Title
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-              color: widget.textColor ?? AppColors.backgroundDark,
-              fontWeight: FontWeight.bold,
-              fontSize: 32,
-            ),
-            textAlign: TextAlign.center,
+    return OnboardingScrollFill(
+      children: [
+        OnboardingScreenHeader(
+          model: model,
+          textColor: textColor,
+          titleStyle: WizType.titleXl.copyWith(height: 1.1),
+          placeholders: snapshot.bodyPlaceholders,
+          descriptionStyle: WizType.bodySecondary,
+          descriptionGap: 0,
+          bottomGap: 0,
+        ),
+        if (chips.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < chips.length; i++)
+                FadeUp(
+                  delay: WizMotion.chipStagger * i,
+                  duration: WizMotion.replyEnter,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: chips[i].background,
+                      borderRadius: BorderRadius.circular(WizRadii.chip),
+                    ),
+                    child: Text(
+                      chips[i].label,
+                      style: WizType.captionStrong.copyWith(color: chips[i].foreground, height: 1.2),
+                    ),
+                  ),
+                ),
+            ],
           ),
-          
-          const SizedBox(height: 48),
-
-          // Visual area with optional side text
-          if (widget.model.visual != null)
-            _buildVisualArea(context)
-          else
-            _buildPlaceholderVisual(),
-          
-          const SizedBox(height: 16),
-
-          // Description
-          if (description.isNotEmpty)
-            StyledDescriptionWidget(
-              description: description,
-              highlightWordsData: widget.model.metadata?.highlightWords?.description,
-              highlightColor: _getHighlightColor(),
-              textHighlightHelper: _textHighlightHelper,
-              onRichTextDescription: (ctx, desc, data) => StyledRichTextDescriptionWidget(
-                description: desc,
-                highlightWordsData: data,
-                baseColor: widget.textColor ?? AppColors.backgroundDark,
-                highlightColor: _getHighlightColor(),
-                textAlign: TextAlign.center,
+          const SizedBox(height: 14),
+        ],
+        Expanded(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: metadata?.height ?? 200),
+            child: Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: _crossAxis(metadata?.sideTextAlignment),
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  if (sideText.isNotEmpty) ...[
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 130),
+                      child: Text(
+                        sideText,
+                        style: WizType.sectionTitle.copyWith(height: 1.3, color: textColor),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (model.visual != null)
+                    VisualAssetWidget(
+                      visualPath: model.visual!,
+                      width: metadata?.width ?? 200,
+                      height: metadata?.height ?? 200,
+                    )
+                  else
+                    Icon(Icons.savings_outlined, size: 120, color: highlightColor),
+                ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  /// Get highlight color from metadata
-  Color? _getHighlightColor() {
-    final colorString = widget.model.metadata?.highlightColor;
-    if (colorString != null && colorString.isNotEmpty) {
-      return _colorHelper.getColor(colorString);
-    }
-    return null;
-  }
-
-  Widget _buildVisualArea(BuildContext context) {
-    final metadata = widget.model.metadata;
-    final alignment = metadata?.sideTextAlignment ?? SideTextAlignment.top;
-    final hasSideText = metadata?.sideText != null;
-    final visual = VisualAssetWidget(
-      visualPath: widget.model.visual!,
-      width: metadata?.width ?? 200.0,
-      height: metadata?.height ?? 200.0,
-      fit: BoxFit.contain,
-    );
-
-    // Top/bottom: stack hint and visual in order (no overlap), same as permission screen
-    if (hasSideText && (alignment == SideTextAlignment.top || alignment == SideTextAlignment.bottom)) {
-      if (alignment == SideTextAlignment.top) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildSideHintBlock(context, metadata!),
-            const SizedBox(height: 12),
-            visual,
-          ],
-        );
-      }
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          visual,
-          const SizedBox(height: 12),
-          _buildSideHintBlock(context, metadata!),
-        ],
-      );
-    }
-
-    // Center/baseline: side-by-side row
-    if (!hasSideText) return visual;
-    CrossAxisAlignment rowAlignment;
-    switch (alignment) {
-      case SideTextAlignment.bottom:
-        rowAlignment = CrossAxisAlignment.end;
-        break;
-      case SideTextAlignment.center:
-        rowAlignment = CrossAxisAlignment.center;
-        break;
-      case SideTextAlignment.baseline:
-        rowAlignment = CrossAxisAlignment.baseline;
-        break;
-      case SideTextAlignment.top:
-      default:
-        rowAlignment = CrossAxisAlignment.start;
-        break;
-    }
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: rowAlignment,
-      textBaseline: alignment == SideTextAlignment.baseline ? TextBaseline.alphabetic : null,
-      children: [
-        _buildSideText(context, metadata!, alignment),
-        visual,
+          ),
+        ),
       ],
     );
   }
 
-  /// Hint block for stacking above/below visual (top/bottom alignment). Same arrow/order logic as permission screen.
-  Widget _buildSideHintBlock(BuildContext context, OnboardingMetadata metadata) {
-    final text = metadata.sideText?.get(context) ?? '';
-    if (text.isEmpty) return const SizedBox.shrink();
-    final alignment = metadata.sideTextAlignment ?? SideTextAlignment.top;
-    final arrowIcon = _arrowIconForAlignment(alignment);
-    final iconBelow = _iconBelowForAlignment(alignment);
-    final content = <Widget>[
-      if (!iconBelow)
-        Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
-      Text(
-        text,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: AppColors.backgroundDark,
-          fontWeight: FontWeight.bold,
-        ),
-        textAlign: TextAlign.center,
-      ),
-      if (iconBelow)
-        Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
-    ];
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: content,
-    );
-  }
-
-  /// Arrow icon: points toward the visual. Top = down (hint above visual), bottom = up (hint below visual).
-  IconData _arrowIconForAlignment(SideTextAlignment alignment) {
+  /// Existing side-text alignment semantics mapped onto the row's cross axis.
+  static CrossAxisAlignment _crossAxis(SideTextAlignment? alignment) {
     switch (alignment) {
-      case SideTextAlignment.top:
-        return Icons.keyboard_arrow_down;
       case SideTextAlignment.bottom:
-        return Icons.keyboard_arrow_up;
-      case SideTextAlignment.center:
-        return Icons.arrow_forward;
+        return CrossAxisAlignment.end;
       case SideTextAlignment.baseline:
-        return Icons.trending_flat;
-      default:
-        return Icons.keyboard_arrow_down;
+        return CrossAxisAlignment.baseline;
+      case SideTextAlignment.center:
+        return CrossAxisAlignment.center;
+      case SideTextAlignment.top:
+      case null:
+        return CrossAxisAlignment.start;
     }
   }
-
-  bool _iconBelowForAlignment(SideTextAlignment alignment) {
-    switch (alignment) {
-      case SideTextAlignment.bottom:
-        return false;
-      default:
-        return true;
-    }
-  }
-
-  Widget _buildSideText(BuildContext context, OnboardingMetadata metadata, SideTextAlignment alignment) {
-    final text = metadata.sideText?.get(context) ?? '';
-    if (text.isEmpty) return const SizedBox.shrink();
-    final arrowIcon = _arrowIconForAlignment(alignment);
-    final iconBelow = _iconBelowForAlignment(alignment);
-    final children = <Widget>[
-      if (!iconBelow)
-        Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
-      Text(
-        text,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: AppColors.backgroundDark,
-          fontWeight: FontWeight.bold,
-        ),
-        textAlign: TextAlign.right,
-      ),
-      if (iconBelow)
-        Icon(arrowIcon, color: AppColors.backgroundDark, size: 20),
-    ];
-    return Flexible(
-      child: Padding(
-        padding: const EdgeInsets.only(right: 12.0, top: 8.0, bottom: 8.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: children,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderVisual() {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        Icons.check_circle_outline,
-        color: AppColors.backgroundDark,
-        size: 60,
-      ),
-    );
-  }
-
 }

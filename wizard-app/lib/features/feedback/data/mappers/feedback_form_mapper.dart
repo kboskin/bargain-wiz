@@ -4,27 +4,27 @@ import 'package:appwizard/features/feedback/domain/entities/feedback_form_field.
 
 /// Maps feedback form config from data layer to domain entities.
 class FeedbackFormMapper {
-  FeedbackFormConfig toEntity(FeedbackFormConfigModel model) {
-    return FeedbackFormConfig(
-      title: model.title,
-      description: model.description,
-      submitButtonText: model.submitButtonText,
-      fields: model.fields.map(_fieldToEntity).toList(),
-      submitUrl: model.submitUrl,
-      titleHighlightWords: model.titleHighlightWords,
-      titleHighlightColor: model.titleHighlightColor,
-    );
-  }
+  FeedbackFormConfig toEntity(FeedbackFormConfigModel model) => FeedbackFormConfig(
+        title: model.title,
+        description: model.description,
+        submitButtonText: model.submitButtonText,
+        fields: model.fields.map(_fieldToEntity).toList(),
+        submitUrl: model.submitUrl,
+        titleHighlightWords: model.titleHighlightWords,
+        titleHighlightColor: model.titleHighlightColor,
+        successTitle: model.successTitle,
+        successBody: model.successBody,
+        successCta: model.successCta,
+        validationMessage: model.validationMessage,
+      );
 
-  FeedbackFormField _fieldToEntity(FeedbackFormFieldModel model) {
-    return FeedbackFormField(
-      id: model.id,
-      label: model.label,
-      type: model.type == 'textarea'
-          ? FeedbackFormFieldType.textarea
-          : FeedbackFormFieldType.text,
-      required: model.required,
-      placeholder: model.placeholder,
-    );
-  }
+  FeedbackFormField _fieldToEntity(FeedbackFormFieldModel model) => FeedbackFormField(
+        id: model.id,
+        label: model.label,
+        type: model.type == 'textarea'
+            ? FeedbackFormFieldType.textarea
+            : FeedbackFormFieldType.text,
+        required: model.required,
+        placeholder: model.placeholder,
+      );
 }

@@ -1,0 +1,10 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "lines-that-land",
+      "runtime": "python312",
+      "ignore": ["venv", ".venv", "__pycache__", "*.pyc", ".pytest_cache", ".ruff_cache", "tests", "pyproject.toml", "requirements-dev.txt"]
+    }
+  ]
+}

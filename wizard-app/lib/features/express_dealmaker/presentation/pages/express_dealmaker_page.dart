@@ -1,0 +1,243 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:appwizard/core/config/wiz_catalog.dart';
+import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/routing/app_routes.dart';
+import 'package:appwizard/core/services/feature_gate_service.dart';
+import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/services/user_profile_service.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/gallery_picker_helper.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_header.dart';
+import 'package:appwizard/features/express_dealmaker/presentation/cubit/express_dealmaker_cubit.dart';
+import 'package:appwizard/features/express_dealmaker/presentation/express_copy.dart';
+import 'package:appwizard/features/express_dealmaker/presentation/widgets/express_error_stage.dart';
+import 'package:appwizard/features/express_dealmaker/presentation/widgets/express_pick_stage.dart';
+import 'package:appwizard/features/express_dealmaker/presentation/widgets/express_results_stage.dart';
+import 'package:appwizard/features/express_dealmaker/presentation/widgets/express_uploading_stage.dart';
+import 'package:appwizard/features/paywall/presentation/paywall_launcher.dart';
+
+/// Route `extra` for [AppRoutes.express].
+class ExpressDealmakerArgs {
+  const ExpressDealmakerArgs({this.conversationId, this.initialPaths = const []});
+
+  /// Reopen a saved Express conversation (from history).
+  final String? conversationId;
+  /// Screenshots already picked (skips the pick stage when non-empty).
+  final List<String> initialPaths;
+}
+
+/// Express Dealmaker (`/express`): pick → uploading → results / error.
+/// Transparent scaffold over the app-wide gradient background.
+class ExpressDealmakerPage extends StatelessWidget {
+  const ExpressDealmakerPage({super.key, this.args});
+
+  final ExpressDealmakerArgs? args;
+
+  @override
+  Widget build(final BuildContext context) {
+    // Resolve inherited data here, not inside the lazy `create` callback
+    // (provider forbids listening to inherited widgets from `create`).
+    final languageCode = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
+    return BlocProvider<ExpressDealmakerCubit>(
+      create: (_) {
+        final profile = di.sl<UserProfileService>();
+        return di.sl<ExpressDealmakerCubit>(
+          param1: ExpressDealmakerCubitParams(
+            vibeId: profile.vibeId,
+            locale: languageCode,
+            marketplace: profile.marketplace,
+          ),
+        );
+      },
+      child: _ExpressDealmakerView(args: args),
+    );
+  }
+}
+
+class _ExpressDealmakerView extends StatefulWidget {
+  const _ExpressDealmakerView({this.args});
+
+  final ExpressDealmakerArgs? args;
+
+  @override
+  State<_ExpressDealmakerView> createState() => _ExpressDealmakerViewState();
+}
+
+class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
+  bool _leaving = false;
+
+  ExpressDealmakerCubit get _cubit => context.read<ExpressDealmakerCubit>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+  }
+
+  /// Gate (paywall) → load profile → start the flow (opens the picker when
+  /// nothing was passed in).
+  Future<void> _init() async {
+    if (!mounted) return;
+    final allowed = await FeatureAccess.ensure(context, GatedFeature.expressDealmaker);
+    if (!mounted) return;
+    if (!allowed) {
+      _leaving = true;
+      _popToHome();
+      return;
+    }
+    final profile = di.sl<UserProfileService>();
+    await profile.ensureLoaded();
+    if (!mounted) return;
+
+    final args = widget.args;
+    final conversationId = args?.conversationId;
+    final initialPaths = args?.initialPaths ?? const <String>[];
+    if (conversationId == null && _cubit.state.vibeId != profile.vibeId) {
+      await _cubit.changeVibe(profile.vibeId);
+    }
+    if (conversationId == null && initialPaths.isEmpty) {
+      unawaited(_cubit.start());
+      await _pickScreenshots();
+      return;
+    }
+    unawaited(_cubit.start(conversationId: conversationId, initialPaths: initialPaths));
+  }
+
+  Future<void> _pickScreenshots() async {
+    final picked = await GalleryPickerHelper.pickImages(context);
+    if (!mounted || picked.isEmpty) return;
+    _cubit.addPaths(picked.map((final x) => x.path).toList());
+  }
+
+  Future<void> _changeVibe(final String vibeId) async {
+    unawaited(di.sl<UserProfileService>().setVibe(vibeId));
+    await _cubit.changeVibe(vibeId);
+  }
+
+  /// Back (chevron / system): save to history, then pop.
+  Future<void> _onBack() async {
+    if (_leaving) return;
+    _leaving = true;
+    await _cubit.saveConversation();
+    if (!mounted) return;
+    _popToHome();
+  }
+
+  void _popToHome() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.main);
+    }
+  }
+
+  @override
+  Widget build(final BuildContext context) {
+    final config = di.sl<RemoteConfigService>().getMainPageConfig();
+    final copy = ExpressCopy.resolve(context, config);
+    final catalog = di.sl<UserProfileService>().catalog;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (final didPop, final _) {
+        if (!didPop) unawaited(_onBack());
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: BlocBuilder<ExpressDealmakerCubit, ExpressDealmakerState>(
+            builder: (final context, final state) {
+              final vibe = catalog.vibeById(state.vibeId);
+              return Column(
+                children: [
+                  WizHeader(
+                    title: copy.headerTitle,
+                    horizontalPadding: 16,
+                    onBack: _onBack,
+                    trailing: WizTag(
+                      label: vibe.shortOf(context),
+                      color: vibe.chipTextColor,
+                      textColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      style: WizType.chip,
+                    ),
+                  ),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      layoutBuilder: (final current, final previous) => Stack(
+                        fit: StackFit.expand,
+                        children: [...previous, if (current != null) current],
+                      ),
+                      child: KeyedSubtree(
+                        key: ValueKey(state.loadingConversation ? 'loading' : state.phase),
+                        child: _buildStage(state, copy, catalog),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStage(
+    final ExpressDealmakerState state,
+    final ExpressCopy copy,
+    final WizCatalog catalog,
+  ) {
+    if (state.loadingConversation) {
+      return const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2, color: WizColors.purple),
+        ),
+      );
+    }
+    switch (state.phase) {
+      case ExpressPhase.pick:
+        return ExpressPickStage(
+          items: state.screenshots,
+          copy: copy,
+          onPick: _pickScreenshots,
+          onRemove: _cubit.removeAt,
+          onStart: () => unawaited(_cubit.startUpload()),
+        );
+      case ExpressPhase.uploading:
+        return ExpressUploadingStage(
+          items: state.screenshots,
+          copy: copy,
+          onRetry: (final i) => unawaited(_cubit.retryUpload(i)),
+        );
+      case ExpressPhase.error:
+        return ExpressErrorStage(
+          copy: copy,
+          onRetry: () => unawaited(_cubit.retry()),
+        );
+      case ExpressPhase.ready:
+        return ExpressResultsStage(
+          state: state,
+          copy: copy,
+          vibes: catalog.vibes,
+          onPick: _pickScreenshots,
+          onRetryUpload: (final i) => unawaited(_cubit.retryUpload(i)),
+          onKeywordChanged: _cubit.setKeyword,
+          onVibeSelected: (final id) => unawaited(_changeVibe(id)),
+          onGetMore: () => unawaited(_cubit.requestReply()),
+        );
+    }
+  }
+}

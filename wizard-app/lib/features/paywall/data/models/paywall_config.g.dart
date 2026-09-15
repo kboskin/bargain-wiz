@@ -31,7 +31,7 @@ PaywallConfig _$PaywallConfigFromJson(
       const [],
   background: json['background'] == null
       ? null
-      : GradientBackgroundConfig.fromJson(
+      : PaywallBackgroundConfig.fromJson(
           json['background'] as Map<String, dynamic>,
         ),
   noPaymentDueText: PaywallConfig._multilocaleFromJson(
@@ -70,6 +70,21 @@ PaywallConfig _$PaywallConfigFromJson(
       : HighlightWordsConfig.fromJson(
           json['no_payment_highlight_words'] as Map<String, dynamic>,
         ),
+  contextHints: json['context_hints'] == null
+      ? const {}
+      : PaywallConfig._hintsFromJson(json['context_hints']),
+  trialTimeline:
+      (json['trial_timeline'] as List<dynamic>?)
+          ?.map(
+            (e) => PaywallTimelineRowConfig.fromJson(e as Map<String, dynamic>),
+          )
+          .toList() ??
+      const [],
+  entryPoints:
+      (json['entry_points'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [],
 );
 
 Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
@@ -98,7 +113,26 @@ Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
       'timeline_today_subtitle': instance.timelineTodaySubtitle,
       'timeline_reminder_subtitle': instance.timelineReminderSubtitle,
       'timeline_billing_subtitle': instance.timelineBillingSubtitle,
+      'context_hints': instance.contextHints,
+      'trial_timeline': instance.trialTimeline,
+      'entry_points': instance.entryPoints,
     };
+
+PaywallTimelineRowConfig _$PaywallTimelineRowConfigFromJson(
+  Map<String, dynamic> json,
+) => PaywallTimelineRowConfig(
+  day: (json['day'] as num).toInt(),
+  title: PaywallTimelineRowConfig._multilocaleFromJson(json['title']),
+  subtitle: PaywallTimelineRowConfig._multilocaleFromJson(json['subtitle']),
+);
+
+Map<String, dynamic> _$PaywallTimelineRowConfigToJson(
+  PaywallTimelineRowConfig instance,
+) => <String, dynamic>{
+  'day': instance.day,
+  'title': instance.title,
+  'subtitle': instance.subtitle,
+};
 
 PaywallStepConfig _$PaywallStepConfigFromJson(Map<String, dynamic> json) =>
     PaywallStepConfig(
@@ -135,6 +169,10 @@ PaywallOption _$PaywallOptionFromJson(Map<String, dynamic> json) =>
       title: PaywallOption._multilocaleFromJson(json['title']),
       description: PaywallOption._multilocaleFromJson(json['description']),
       badge: PaywallOption._multilocaleFromJson(json['badge']),
+      features: json['features'] == null
+          ? const []
+          : PaywallOption._featuresFromJson(json['features']),
+      priceLabel: PaywallOption._multilocaleFromJson(json['price_label']),
     );
 
 Map<String, dynamic> _$PaywallOptionToJson(PaywallOption instance) =>
@@ -144,6 +182,8 @@ Map<String, dynamic> _$PaywallOptionToJson(PaywallOption instance) =>
       'title': instance.title,
       'description': instance.description,
       'badge': instance.badge,
+      'features': instance.features,
+      'price_label': instance.priceLabel,
     };
 
 PaywallMetadata _$PaywallMetadataFromJson(Map<String, dynamic> json) =>

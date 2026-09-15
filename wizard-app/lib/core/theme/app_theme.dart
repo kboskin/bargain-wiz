@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
+import 'wiz_theme.dart';
 
 /// App theme configuration
 class AppTheme {
@@ -10,6 +11,7 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: WizType.bodyFont,
       
       // Color scheme
       colorScheme: ColorScheme.fromSeed(

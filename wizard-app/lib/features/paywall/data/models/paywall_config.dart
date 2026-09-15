@@ -1,5 +1,7 @@
 import 'package:json_annotation/json_annotation.dart';
-import 'package:appwizard/features/onboarding/data/models/remote_config/gradient_background_config.dart';
+import 'package:flutter/material.dart';
+
+import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/highlight_words_config.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_layout.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
@@ -39,9 +41,10 @@ class PaywallConfig {
   /// before the main pricing screen, similar to a 2–3 screen trial explainer.
   @JsonKey(name: 'steps')
   final List<PaywallStepConfig> steps;
-  /// Optional gradient background (same structure as onboarding). When set, paywall uses it instead of solid white.
+  /// Optional background (`{"colors": ["#FFFFFF"], "stops": [1.0]}`). A single colour is used as a
+  /// solid fill, two or more as a gradient; the redesign ships white.
   @JsonKey(name: 'background')
-  final GradientBackgroundConfig? background;
+  final PaywallBackgroundConfig? background;
   /// Optional highlight words for various texts
   @JsonKey(name: 'title_highlight_words')
   final HighlightWordsConfig? titleHighlightWords;
@@ -68,6 +71,21 @@ class PaywallConfig {
   @JsonKey(name: 'timeline_billing_subtitle', fromJson: _multilocaleFromJson)
   final dynamic timelineBillingSubtitle;
 
+  // ── Redesign (design_handoff_bargain_wiz) ──
+
+  /// Context hints shown above the plans when the paywall is opened from a locked feature.
+  /// Keys: "free", "basic_express". Values: multilocale text.
+  @JsonKey(name: 'context_hints', fromJson: _hintsFromJson)
+  final Map<String, MultilocaleText> contextHints;
+
+  /// Remote-configurable trial timeline rows. Placeholders: {date}, {plan}, {price}.
+  @JsonKey(name: 'trial_timeline')
+  final List<PaywallTimelineRowConfig> trialTimeline;
+
+  /// Documented entry points (informational; gating lives in free_tier_rules).
+  @JsonKey(name: 'entry_points')
+  final List<String> entryPoints;
+
   PaywallConfig({
     required this.type,
     required this.title,
@@ -93,6 +111,9 @@ class PaywallConfig {
     this.titleHighlightWords,
     this.descriptionHighlightWords,
     this.noPaymentHighlightWords,
+    this.contextHints = const {},
+    this.trialTimeline = const [],
+    this.entryPoints = const [],
   });
 
   factory PaywallConfig.fromJson(Map<String, dynamic> json) => _$PaywallConfigFromJson(json);
@@ -100,7 +121,79 @@ class PaywallConfig {
   static dynamic _multilocaleFromJson(dynamic json) => 
       json != null ? MultilocaleText.fromJson(json) : null;
 
+  static Map<String, MultilocaleText> _hintsFromJson(dynamic json) {
+    if (json is! Map) return const {};
+    return json.map((k, v) => MapEntry(k.toString(), MultilocaleText.fromJson(v)));
+  }
+
   Map<String, dynamic> toJson() => _$PaywallConfigToJson(this);
+}
+
+/// Paywall background: hex colours + stops (+ optional CSS-style angle). Mirrors the onboarding
+/// gradient config but stays dependency-free so the paywall model can be unit-tested.
+class PaywallBackgroundConfig {
+  const PaywallBackgroundConfig({required this.colors, this.stops = const [], this.angleDeg});
+
+  final List<String> colors;
+  final List<double> stops;
+  final double? angleDeg;
+
+  factory PaywallBackgroundConfig.fromJson(Map<String, dynamic> json) => PaywallBackgroundConfig(
+        colors: (json['colors'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
+        stops: (json['stops'] as List<dynamic>? ?? const [])
+            .map((e) => (e as num).toDouble())
+            .toList(),
+        angleDeg: (json['angle_deg'] as num?)?.toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'colors': colors,
+        'stops': stops,
+        if (angleDeg != null) 'angle_deg': angleDeg,
+      };
+
+  /// Parsed colours (`#RRGGBB` / `#AARRGGBB`); invalid entries are skipped.
+  List<Color> get colorObjects => colors.map(parseHex).whereType<Color>().toList();
+
+  LinearGradient toLinearGradient() {
+    final parsed = colorObjects;
+    return WizColors.angledGradient(
+      parsed,
+      stops.length == parsed.length ? stops : null,
+      angleDeg ?? 135,
+    );
+  }
+
+  static Color? parseHex(String value) {
+    var h = value.trim().replaceFirst('#', '');
+    if (h.length == 6) h = 'FF$h';
+    if (h.length != 8) return null;
+    final n = int.tryParse(h, radix: 16);
+    return n == null ? null : Color(n);
+  }
+}
+
+/// One row of the trial timeline (Today / Day 2 / Day 3).
+@JsonSerializable()
+class PaywallTimelineRowConfig {
+  PaywallTimelineRowConfig({required this.day, this.title, this.subtitle});
+
+  /// Offset in days from today (0 = today).
+  final int day;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic title;
+
+  @JsonKey(fromJson: _multilocaleFromJson)
+  final dynamic subtitle;
+
+  static dynamic _multilocaleFromJson(dynamic json) =>
+      json != null ? MultilocaleText.fromJson(json) : null;
+
+  factory PaywallTimelineRowConfig.fromJson(Map<String, dynamic> json) =>
+      _$PaywallTimelineRowConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$PaywallTimelineRowConfigToJson(this);
 }
 
 /// Optional configuration for an additional paywall step shown *before* the
@@ -166,13 +259,28 @@ class PaywallOption {
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic badge;
 
+  /// Feature bullets (multilocale). Shown in list / compact layouts and the feature summary.
+  @JsonKey(fromJson: _featuresFromJson)
+  final List<MultilocaleText> features;
+
+  /// Optional static price label override (store price is preferred when available).
+  @JsonKey(name: 'price_label', fromJson: _multilocaleFromJson)
+  final dynamic priceLabel;
+
   PaywallOption({
     required this.id,
     required this.tier,
     required this.title,
     required this.description,
     this.badge,
+    this.features = const [],
+    this.priceLabel,
   });
+
+  static List<MultilocaleText> _featuresFromJson(dynamic json) {
+    if (json is! List) return const [];
+    return json.map((e) => MultilocaleText.fromJson(e)).toList();
+  }
 
   factory PaywallOption.fromJson(Map<String, dynamic> json) => _$PaywallOptionFromJson(json);
 

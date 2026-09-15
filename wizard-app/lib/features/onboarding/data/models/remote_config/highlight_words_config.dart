@@ -26,7 +26,7 @@ class HighlightWordsConfig extends ValidatableEntity {
   static dynamic _highlightWordsFieldFromJson(dynamic json) {
     if (json == null) return null;
     if (json is Map) return json as Map<String, dynamic>;
-    if (json is List) return (json as List).map((e) => e.toString()).toList();
+    if (json is List) return json.map((e) => e.toString()).toList();
     return null;
   }
 }

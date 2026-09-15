@@ -13,8 +13,13 @@ GradientBackgroundConfig _$GradientBackgroundConfigFromJson(
   stops: (json['stops'] as List<dynamic>)
       .map((e) => (e as num).toDouble())
       .toList(),
+  angleDeg: (json['angle_deg'] as num?)?.toDouble(),
 );
 
 Map<String, dynamic> _$GradientBackgroundConfigToJson(
   GradientBackgroundConfig instance,
-) => <String, dynamic>{'colors': instance.colors, 'stops': instance.stops};
+) => <String, dynamic>{
+  'colors': instance.colors,
+  'stops': instance.stops,
+  'angle_deg': instance.angleDeg,
+};

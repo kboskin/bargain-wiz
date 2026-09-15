@@ -1,248 +1,179 @@
+import 'dart:math' as math;
+
+import 'package:appwizard/core/routing/app_routes.dart';
+import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/template_text.dart';
+import 'package:appwizard/core/widgets/visual_asset_widget.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_mascot.dart';
+import 'package:appwizard/features/auth/presentation/pages/sign_in_modal.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/welcome_screen_config.dart';
+import 'package:appwizard/features/onboarding/presentation/pages/widgets/onboarding_text.dart';
+import 'package:appwizard/features/onboarding/presentation/pages/widgets/welcome_hero_video.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:appwizard/core/di/injection_container.dart' as di;
-import 'package:appwizard/core/theme/app_colors.dart';
-import 'package:appwizard/core/theme/app_text_styles.dart';
-import 'package:appwizard/core/utils/color_helper.dart';
-import 'package:appwizard/core/utils/text_highlight_helper.dart';
-import 'package:appwizard/core/widgets/styled_description_widget.dart';
-import 'package:appwizard/core/widgets/styled_rich_text_description_widget.dart';
-import 'package:appwizard/core/widgets/styled_title_widget.dart';
-import 'package:appwizard/core/widgets/glass_container.dart';
-import 'package:appwizard/core/widgets/visual_asset_widget.dart';
-import 'package:appwizard/features/onboarding/data/models/remote_config/welcome_screen_config.dart';
-import 'package:appwizard/features/auth/presentation/pages/sign_in_modal.dart';
-import 'package:appwizard/core/routing/app_routes.dart';
+/// Welcome / landing screen (README §1): brand row, H1 with highlight words,
+/// subtitle, frosted hero with yellow disc + mascot, primary CTA and sign-in link.
+class WelcomeScreenWidget extends StatelessWidget {
+  const WelcomeScreenWidget({required this.config, super.key});
 
-/// Widget for the welcome/landing screen
-/// Displays title, description, visual, and action buttons based on remote config
-class WelcomeScreenWidget extends StatefulWidget {
   final WelcomeScreenConfig config;
 
-  const WelcomeScreenWidget({super.key, required this.config});
+  static const double _mascotAspect = 678 / 558;
 
   @override
-  State<WelcomeScreenWidget> createState() => _WelcomeScreenWidgetState();
-}
+  Widget build(BuildContext context) {
+    final textColor = wizHexColor(config.textColor) ?? WizColors.ink;
+    final highlightColor = wizHexColor(config.highlightColor) ?? WizColors.amber;
+    final title = TemplateText.textOf(context, config.title, fallback: 'Get the Best Deals');
+    final description = TemplateText.textOf(context, config.description);
+    final cta = TemplateText.textOf(context, config.primaryButtonText, fallback: 'Get Started');
+    final secondary = config.secondaryAction;
 
-class _WelcomeScreenWidgetState extends State<WelcomeScreenWidget> {
-  late final ColorHelper _colorHelper;
-  late final TextHighlightHelper _textHighlightHelper;
-
-  @override
-  void initState() {
-    super.initState();
-    _colorHelper = di.sl<ColorHelper>();
-    _textHighlightHelper = TextHighlightHelper(_colorHelper);
-  }
-
-  @override
-  Widget build(final BuildContext context) => Scaffold(
+    return Scaffold(
       backgroundColor: Colors.transparent,
-      // Transparent to show global gradient
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (final context, final constraints) => SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
+      body: DecoratedBox(
+        decoration: BoxDecoration(gradient: WizColors.appBackground),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 11, 24, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Center(child: WizBrandRow()),
+                const SizedBox(height: 28),
+                HighlightedText(
+                  title,
+                  style: WizType.welcomeTitle.copyWith(color: textColor),
+                  highlights: config.highlightWords?.title,
+                  defaultHighlightColor: highlightColor,
+                  boldColor: textColor,
+                  textAlign: TextAlign.center,
                 ),
-                child: IntrinsicHeight(
-                  child: Column(
-                    children: [
-                      const Spacer(flex: 1),
-                      // Visual (Lottie, image, or glass container placeholder)
-                      _buildVisual(),
-                      const SizedBox(height: 32),
-                      // Title with optional highlighting
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: StyledTitleWidget(
-                          title: widget.config.title.get(context),
-                          baseColor: _getTextColor(),
-                          highlightWordsData: widget.config.highlightWords?.title,
-                          highlightColor: widget.config.highlightColor,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Description with optional highlighting
-                      _buildDescription(context),
-                      const SizedBox(height: 32),
-                      // Primary action button
-                      _buildPrimaryButton(context),
-                      const SizedBox(height: 12),
-                      // Secondary action (e.g., Sign in link)
-                      if (widget.config.secondaryAction != null) ...[
-                        _buildSecondaryAction(context),
-                      ],
-                      // Add bottom padding to prevent overflow
-                      SizedBox(height: MediaQuery.of(context).padding.bottom),
-                    ],
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  HighlightedText(
+                    description,
+                    style: WizType.bodyLg,
+                    highlights: config.highlightWords?.description,
+                    defaultHighlightColor: highlightColor,
+                    highlightWeight: FontWeight.w600,
+                    boldColor: textColor,
+                    textAlign: TextAlign.center,
                   ),
-                ),
-              ),
-            ),
-        ),
-      ),
-    );
-
-  /// Build visual element (Lottie/image or glass container placeholder)
-  Widget _buildVisual() {
-    if (widget.config.visual != null) {
-      // Use VisualAssetWidget for Lottie/images (reduced size for better visibility of terms)
-      return VisualAssetWidget(
-        visualPath: widget.config.visual!,
-        width: 160,
-        height: 160,
-      );
-    }
-
-    // Use glass container placeholder if no visual specified
-    if (widget.config.glassContainer != null) {
-      final glassConfig = widget.config.glassContainer!;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: GlassContainer(
-          blurSigma: glassConfig.blurSigma,
-          color: _colorHelper.getColor(glassConfig.color) ?? Colors.white,
-          opacity: glassConfig.opacity,
-          borderRadius: BorderRadius.circular(glassConfig.borderRadius),
-          child: SizedBox(
-            height: glassConfig.height,
-            child: Center(
-              child: Icon(
-                Icons.shopping_bag,
-                size: glassConfig.iconSize,
-                color: AppColors.backgroundDark.withValues(
-                  alpha: glassConfig.iconOpacity,
-                ),
-              ),
+                ],
+                Expanded(child: _Hero(visual: config.visual, video: config.video)),
+                WizPrimaryButton(label: cta, onPressed: () => context.push(AppRoutes.onboarding)),
+                if (secondary != null && secondary.type == 'sign_in') ...[
+                  const SizedBox(height: 14),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showSignInModal(context),
+                    child: Text.rich(
+                      TextSpan(
+                        style: WizType.bodySm,
+                        children: [
+                          TextSpan(text: TemplateText.textOf(context, secondary.prefixText)),
+                          TextSpan(
+                            text: TemplateText.textOf(context, secondary.text, fallback: 'Sign in'),
+                            style: WizType.bodySmBold.copyWith(
+                              decoration: TextDecoration.underline,
+                              decorationColor: WizColors.ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
-      );
-    }
-
-    // Default placeholder
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.check_circle_outline,
-        color: AppColors.backgroundDark,
-        size: 60,
       ),
     );
-  }
-
-  /// Build description with optional HTML or word highlighting
-  Widget _buildDescription(BuildContext context) {
-    final description = widget.config.description.get(context);
-    final highlightWordsData = widget.config.highlightWords?.description;
-    final highlightColor = _getHighlightColor();
-
-    return StyledDescriptionWidget(
-      description: description,
-      highlightWordsData: highlightWordsData,
-      highlightColor: highlightColor,
-      textHighlightHelper: _textHighlightHelper,
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      onRichTextDescription: (ctx, desc, data) => StyledRichTextDescriptionWidget(
-        description: desc,
-        highlightWordsData: data,
-        baseColor: _getTextColor(),
-        highlightColor: _getHighlightColor(),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-
-  /// Base text color from config (title/description). Defaults to black when null or invalid.
-  Color _getTextColor() {
-    final hex = widget.config.textColor;
-    if (hex != null && hex.isNotEmpty) {
-      return _colorHelper.getColor(hex) ?? AppColors.backgroundDark;
-    }
-    return AppColors.backgroundDark;
-  }
-
-  /// Get highlight color from config
-  /// Returns null if no valid color is found
-  Color? _getHighlightColor() {
-    if (widget.config.highlightColor != null) {
-      return _colorHelper.getColor(widget.config.highlightColor!);
-    }
-    return null; // No color if not found
-  }
-
-  /// Build primary action button
-  Widget _buildPrimaryButton(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: () {
-            // Navigate to onboarding flow
-            context.push(AppRoutes.onboarding);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.backgroundDark,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: Text(
-            widget.config.primaryButtonText.get(context),
-            style: AppTextStyles.buttonText,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Build secondary action (e.g., Sign in link)
-  Widget _buildSecondaryAction(BuildContext context) {
-    final action = widget.config.secondaryAction!;
-
-    if (action.type == 'sign_in') {
-      return TextButton(
-        onPressed: () => _showSignInModal(context),
-        child: RichText(
-          text: TextSpan(
-            style: TextStyle(color: AppColors.backgroundDark, fontSize: 14),
-            children: [
-              TextSpan(text: action.prefixText.get(context)),
-              TextSpan(
-                text: action.text.get(context),
-                style: TextStyle(
-                  color: AppColors.backgroundDark,
-                  decoration: TextDecoration.underline,
-                  decorationColor: AppColors.backgroundDark,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return const SizedBox.shrink();
   }
 
   void _showSignInModal(BuildContext context) {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => const SignInModal(),
     );
+  }
+}
+
+/// Flex-fill hero: radius 28, white 55%, border white 95%, strong shadow. Shows the
+/// marketing [video] when configured, otherwise the 230px yellow disc + mascot poster.
+class _Hero extends StatelessWidget {
+  const _Hero({this.visual, this.video});
+
+  final String? visual;
+  final WelcomeVideoConfig? video;
+
+  @override
+  Widget build(BuildContext context) {
+    final poster = _MascotPoster(visual: visual);
+    final v = video;
+    return Container(
+      margin: const EdgeInsets.only(top: 26, bottom: 22),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: WizColors.frostedLight,
+        borderRadius: BorderRadius.circular(WizRadii.cardHero),
+        border: Border.all(color: WizColors.frostedBorder),
+        boxShadow: WizShadows.cardStrong,
+      ),
+      child: v != null && v.isEnabled ? WelcomeHeroVideo(config: v, poster: poster) : poster,
+    );
+  }
+}
+
+/// Default hero content: 230px yellow disc at top 22 and the mascot (270 wide)
+/// bottom-aligned, or the configured [visual].
+class _MascotPoster extends StatelessWidget {
+  const _MascotPoster({this.visual});
+
+  final String? visual;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final h = constraints.maxHeight.isFinite ? constraints.maxHeight : 500.0;
+          final disc = math.min(230.0, h * 0.55);
+          final mascotWidth = math.min(270.0, (h - 22) * 0.92 / WelcomeScreenWidget._mascotAspect);
+          final mascotHeight = mascotWidth * WelcomeScreenWidget._mascotAspect;
+          // Keep the disc behind the wizard's hat on tall screens: anchor it to the
+          // mascot instead of the container top (top 22 only when the hero is ~500px).
+          final discBottom = math.max(0.0, math.min(mascotHeight * 0.62, h - 22 - disc));
+          return Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              Positioned(
+                bottom: discBottom,
+                child: Container(
+                  width: disc,
+                  height: disc,
+                  decoration: BoxDecoration(
+                    color: WizColors.yellow.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Positioned(bottom: 0, child: _mascot(mascotWidth)),
+            ],
+          );
+        },
+      );
+
+  Widget _mascot(double width) {
+    final path = visual;
+    if (path == null || path.isEmpty || path.endsWith(WizMascot.asset.split('/').last)) {
+      return WizMascot(width: width);
+    }
+    return VisualAssetWidget(visualPath: path, width: width, height: width * WelcomeScreenWidget._mascotAspect);
   }
 }
