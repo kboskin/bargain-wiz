@@ -165,7 +165,9 @@ class GalleryPickerHelper {
       _isPickerOpen = true;
       try {
         final picker = ImagePicker();
-        final images = await picker.pickMultiImage();
+        // maxWidth/imageQuality make the OS re-encode to JPEG (iOS photos are HEIC
+        // otherwise, which the on-device encoder cannot read) and cap the file size.
+        final images = await picker.pickMultiImage(maxWidth: 2048, imageQuality: 90);
         if (!context.mounted) return [];
         return images;
       } finally {

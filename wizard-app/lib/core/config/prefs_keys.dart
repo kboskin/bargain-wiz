@@ -16,4 +16,8 @@ class PrefsKeys {
 
   /// ISO-8601 UTC timestamp of the last successful Lines that land fetch.
   static const String linesThatLandFetchedAt = 'lines_that_land_fetched_at';
+
+  /// Last entitlement reported by the store (SubscriptionModel JSON); see the
+  /// subscription repository. Cleared by Restore Purchases before re-reading the store.
+  static const String subscriptionStatus = 'subscription_status';
 }

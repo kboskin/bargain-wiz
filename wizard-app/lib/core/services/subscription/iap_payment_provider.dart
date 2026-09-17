@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:in_app_purchase/in_app_purchase.dart' hide PurchaseDetails;
-import 'package:in_app_purchase_android/in_app_purchase_android.dart';
-import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
 import 'package:in_app_purchase_platform_interface/in_app_purchase_platform_interface.dart' as iap_interface;
 
@@ -186,19 +184,12 @@ class IAPPaymentProvider extends PaymentProvider {
   }
 
   PurchaseDetails _convertPurchaseDetails(iap_interface.PurchaseDetails iapDetails) {
-    String receiptData = '';
-    String? originalTransactionId;
-
-    if (Platform.isIOS) {
-      final appStoreDetails = iapDetails as AppStorePurchaseDetails;
-      receiptData = appStoreDetails.verificationData.serverVerificationData;
-      // For iOS, the original transaction ID is in the purchaseID field
-      originalTransactionId = appStoreDetails.purchaseID;
-    } else if (Platform.isAndroid) {
-      final googleDetails = iapDetails as GooglePlayPurchaseDetails;
-      receiptData = googleDetails.verificationData.serverVerificationData;
-    }
-
+    // The base type carries everything we need on every store (Google Play, App Store
+    // StoreKit 1 and StoreKit 2), so no platform casts: a cast to AppStorePurchaseDetails
+    // throws for StoreKit 2 transactions.
+    final receiptData = iapDetails.verificationData.serverVerificationData;
+    // On iOS purchaseID is the (original) transaction identifier.
+    final originalTransactionId = Platform.isIOS ? iapDetails.purchaseID : null;
     // Handle transactionDate which may be null or a String on some platforms
     DateTime transactionDate = DateTime.now();
     final rawDate = iapDetails.transactionDate;

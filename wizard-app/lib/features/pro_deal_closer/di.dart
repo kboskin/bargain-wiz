@@ -1,3 +1,8 @@
+import 'package:appwizard/core/config/app_config.dart';
+import 'package:appwizard/core/network/cloud_functions_client.dart';
+import 'package:appwizard/core/services/user_profile_service.dart';
+import 'package:appwizard/core/utils/screenshot_encoder.dart';
+import 'package:appwizard/features/pro_deal_closer/data/datasources/cloud_pro_deal_closer_remote_datasource.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/conversation/domain/repositories/conversation_repository.dart';
 import 'package:appwizard/features/pro_deal_closer/data/datasources/pro_deal_closer_remote_datasource.dart';
@@ -13,7 +18,14 @@ import 'package:get_it/get_it.dart';
 void registerProDealCloserDependencies(GetIt sl) {
   sl
     ..registerLazySingleton<ProDealCloserRemoteDataSource>(
-      () => MockProDealCloserRemoteDataSource(sl<AppLogger>()),
+      () => AppConfig.useMockAi
+          ? MockProDealCloserRemoteDataSource(sl<AppLogger>())
+          : CloudProDealCloserRemoteDataSource(
+              sl<CloudFunctionsApi>(),
+              sl<UserProfileService>(),
+              sl<ScreenshotEncoder>(),
+              sl<AppLogger>(),
+            ),
     )
     ..registerLazySingleton<WizardReplyMapper>(WizardReplyMapper.new)
     ..registerLazySingleton<DealOptionsMapper>(DealOptionsMapper.new)

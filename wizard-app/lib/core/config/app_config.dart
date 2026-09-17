@@ -8,14 +8,6 @@ class AppConfig {
   static bool get isDev => flavor == 'dev';
   static bool get isProd => flavor == 'prod';
 
-  // API endpoints (example)
-  static String get baseUrl {
-    if (isDev) {
-      return 'https://api-dev.example.com';
-    }
-    return 'https://api.example.com';
-  }
-
   // App name
   static String get appName {
     if (isDev) {
@@ -29,6 +21,10 @@ class AppConfig {
 
   // Logging level
   static bool get verboseLogging => isDev;
+
+  /// `--dart-define=MOCK_AI=true` keeps the canned Express / Pro answers (UI work without
+  /// the Cloud Functions). Default: real `express_dealmaker` / `pro_deal_closer` functions.
+  static const bool useMockAi = bool.fromEnvironment('MOCK_AI');
 
   // Payment provider type
   static PaymentProviderType get paymentProviderType {

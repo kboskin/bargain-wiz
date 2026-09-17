@@ -105,6 +105,7 @@ dependencies:
   # Native store review (Rate Us)
   in_app_review: ^2.0.9
   video_player: ^2.14.0
+  image: ^4.10.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

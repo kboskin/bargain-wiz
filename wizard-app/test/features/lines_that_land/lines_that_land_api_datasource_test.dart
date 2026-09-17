@@ -14,6 +14,10 @@ class _FakeApi implements CloudFunctionsApi {
     paths.add(path);
     return fromJson(payload);
   }
+
+  @override
+  Future<T> post<T>(String path, {required Map<String, dynamic> body, required T Function(Map<String, dynamic> json) fromJson}) =>
+      throw UnimplementedError();
 }
 
 void main() {

@@ -1,7 +1,28 @@
-# Cloud Functions — `lines_that_land`
+# Cloud Functions
 
 Firebase Cloud Functions (2nd gen, Python 3.12) for the Bargain Wiz app, deployed from
-`wizard-backend/` (`firebase.json`, `.firebaserc`). Currently one function.
+`wizard-backend/` (`firebase.json`, `.firebaserc`).
+
+| Function | Method | Purpose |
+|---|---|---|
+| `lines_that_land` | GET | Public negotiation lines for the Lines tab (Remote Config server template) |
+| `express_dealmaker` | POST | Screenshots/text → three negotiation lines (Gemini on Vertex AI) |
+| `pro_deal_closer` | POST | Chat coaching: reply or three lines (Gemini on Vertex AI) |
+
+Contracts, prompting and app wiring for the AI functions: `wizard-app/AI_INTEGRATION.md`.
+Files: `main.py` (entry points), `negotiation.py` (prompts, validation, result shaping),
+`vertex.py` (google-genai client), `runtime.py` (project id, optional Firebase Auth),
+`lines_that_land_service.py`.
+
+## AI functions
+
+- Vertex AI API must be enabled; the runtime service account needs **Vertex AI User**
+  (`roles/aiplatform.user`). Region and model: `VERTEX_LOCATION`, `VERTEX_MODEL` in `.env`.
+- Public invoker; an `Authorization: Bearer <Firebase ID token>` header is optional (uid is
+  logged when present, invalid tokens are rejected). Add App Check before scaling.
+- Local run: `venv/bin/functions-framework --target=express_dealmaker --source=main.py --port=8089`,
+  then POST `{"text": "Selling bike $300"}` to `http://localhost:8089/`. Uses your Application
+  Default Credentials and their project for Vertex AI.
 
 ## `lines_that_land`
 

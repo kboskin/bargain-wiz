@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:appwizard/core/services/remote_config_service.dart';
 
@@ -6,7 +7,7 @@ import 'package:appwizard/core/services/remote_config_service.dart';
 class CloudFunctionException implements Exception {
   const CloudFunctionException(this.status, this.message, {this.httpStatus});
 
-  /// e.g. `METHOD_NOT_ALLOWED`, `INVALID_ARGUMENT`, `INTERNAL`.
+  /// e.g. `METHOD_NOT_ALLOWED`, `INVALID_ARGUMENT`, `UNAUTHENTICATED`, `UPSTREAM_ERROR`.
   final String status;
   final String message;
   final int? httpStatus;
@@ -15,42 +16,98 @@ class CloudFunctionException implements Exception {
   String toString() => 'CloudFunctionException($status, HTTP $httpStatus): $message';
 }
 
+/// Supplies a Firebase ID token for the `Authorization` header, or null when signed out.
+typedef AuthTokenProvider = Future<String?> Function();
+
 /// Typed access to the project's HTTPS Cloud Functions (wizard-backend/functions).
 ///
 /// Functions are plain JSON-over-HTTPS endpoints under the remotely configured
-/// `functions_base_url`; each feature adds its path and response model.
+/// `functions_base_url`; each feature adds its path and request/response models.
 abstract class CloudFunctionsApi {
   /// `GET {functions_base_url}{path}`, decoded with [fromJson].
   ///
   /// Throws [CloudFunctionException] when the function answers with an error body,
   /// [StateError] for anything else unexpected, and [DioException] for transport failures.
   Future<T> get<T>(String path, {required T Function(Map<String, dynamic> json) fromJson});
+
+  /// `POST {functions_base_url}{path}` with a JSON [body], decoded with [fromJson].
+  /// Same failure modes as [get].
+  Future<T> post<T>(
+    String path, {
+    required Map<String, dynamic> body,
+    required T Function(Map<String, dynamic> json) fromJson,
+  });
 }
 
 class CloudFunctionsClient implements CloudFunctionsApi {
-  CloudFunctionsClient(this._dio, this._remoteConfig);
+  /// [authToken] defaults to the signed-in Firebase user's ID token (none when signed out);
+  /// functions accept anonymous calls but use the uid for logging when present.
+  /// [postTimeout] overrides Dio's default receive/send timeout for POSTs: the AI functions
+  /// may take longer than a plain fetch (their own limit is 60 s).
+  CloudFunctionsClient(
+    this._dio,
+    this._remoteConfig, {
+    AuthTokenProvider? authToken,
+    Duration postTimeout = const Duration(seconds: 70),
+  })  : _authToken = authToken ?? _firebaseIdToken,
+        _postTimeout = postTimeout;
 
   final Dio _dio;
   final RemoteConfigService _remoteConfig;
+  final AuthTokenProvider _authToken;
+  final Duration _postTimeout;
+
+  static Future<String?> _firebaseIdToken() async {
+    try {
+      return await FirebaseAuth.instance.currentUser?.getIdToken();
+    } on Object {
+      return null;
+    }
+  }
 
   @override
-  Future<T> get<T>(String path, {required T Function(Map<String, dynamic> json) fromJson}) async {
+  Future<T> get<T>(String path, {required T Function(Map<String, dynamic> json) fromJson}) =>
+      _send(path, method: 'GET', fromJson: fromJson);
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    required Map<String, dynamic> body,
+    required T Function(Map<String, dynamic> json) fromJson,
+  }) =>
+      _send(path, method: 'POST', body: body, fromJson: fromJson);
+
+  Future<T> _send<T>(
+    String path, {
+    required String method,
+    required T Function(Map<String, dynamic> json) fromJson,
+    Map<String, dynamic>? body,
+  }) async {
     final base = _remoteConfig.getFunctionsBaseUrl();
     if (base.isEmpty) throw StateError('Cloud Functions: functions_base_url is not configured');
 
-    final response = await _dio.get<dynamic>(
+    final headers = <String, dynamic>{'Accept': 'application/json'};
+    if (body != null) headers['Content-Type'] = 'application/json';
+    final token = await _authToken();
+    if (token != null && token.isNotEmpty) headers['Authorization'] = 'Bearer $token';
+
+    final response = await _dio.request<dynamic>(
       '$base$path',
+      data: body,
       options: Options(
-        headers: const {'Accept': 'application/json'},
+        method: method,
+        headers: headers,
         responseType: ResponseType.json,
+        receiveTimeout: body != null ? _postTimeout : null,
+        sendTimeout: body != null ? _postTimeout : null,
         // Function errors arrive as 4xx/5xx with an error body; read it instead of throwing.
         validateStatus: (_) => true,
       ),
     );
 
-    final body = response.data;
-    if (body is Map) {
-      final error = body['error'];
+    final data = response.data;
+    if (data is Map) {
+      final error = data['error'];
       if (error is Map) {
         throw CloudFunctionException(
           error['status']?.toString() ?? 'UNKNOWN',
@@ -58,7 +115,7 @@ class CloudFunctionsClient implements CloudFunctionsApi {
           httpStatus: response.statusCode,
         );
       }
-      if (response.statusCode == 200) return fromJson(Map<String, dynamic>.from(body));
+      if (response.statusCode == 200) return fromJson(Map<String, dynamic>.from(data));
     }
     throw StateError('Cloud Functions: unexpected response from $path (HTTP ${response.statusCode})');
   }

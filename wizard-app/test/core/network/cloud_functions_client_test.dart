@@ -44,10 +44,10 @@ ResponseBody _json(Object body, int status) => ResponseBody.fromString(
 void main() {
   const base = 'https://us-central1-wizard-app-dev.cloudfunctions.net';
 
-  (CloudFunctionsClient, _FakeAdapter) build(ResponseBody Function(RequestOptions) handler, {String baseUrl = base}) {
+  (CloudFunctionsClient, _FakeAdapter) build(ResponseBody Function(RequestOptions) handler, {String baseUrl = base, String? token}) {
     final adapter = _FakeAdapter(handler);
     final dio = Dio()..httpClientAdapter = adapter;
-    return (CloudFunctionsClient(dio, _FakeRemoteConfig(baseUrl)), adapter);
+    return (CloudFunctionsClient(dio, _FakeRemoteConfig(baseUrl), authToken: () async => token), adapter);
   }
 
   group('CloudFunctionsClient.get', () {
@@ -61,7 +61,23 @@ void main() {
       expect(req.uri.toString(), '$base/echo');
       expect(req.data, isNull);
       expect(req.headers['Accept'], 'application/json');
+      expect(req.headers.containsKey('Authorization'), isFalse); // signed out
       expect(value, 42);
+    });
+
+    test('POST sends the JSON body and the Firebase ID token when signed in', () async {
+      final (client, adapter) = build((_) => _json({'ok': true}, 200), token: 'id-token');
+
+      final ok = await client.post('/ai', body: {'a': 1}, fromJson: (json) => json['ok'] as bool);
+
+      final req = adapter.requests.single;
+      expect(req.method, 'POST');
+      expect(req.uri.toString(), '$base/ai');
+      expect(req.data, {'a': 1});
+      expect(req.headers['Authorization'], 'Bearer id-token');
+      expect(req.headers['Content-Type'], 'application/json');
+      expect(req.receiveTimeout, const Duration(seconds: 70)); // AI calls outlive the default
+      expect(ok, isTrue);
     });
 
     test('surfaces the function error body as CloudFunctionException', () async {

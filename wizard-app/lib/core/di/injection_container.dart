@@ -14,7 +14,6 @@ import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
 import 'package:appwizard/core/services/subscription/iap_payment_provider.dart';
 import 'package:appwizard/core/services/subscription/stripe_payment_provider.dart';
-import 'package:appwizard/core/services/subscription/subscription_sync_service.dart';
 import 'package:appwizard/core/services/subscription/subscription_checker_service.dart';
 import 'package:appwizard/core/config/app_config.dart';
 import 'package:appwizard/features/subscription/data/datasources/subscription_in_memory_datasource.dart';
@@ -53,6 +52,8 @@ import 'package:appwizard/features/feedback/presentation/bloc/feedback_bloc.dart
 import 'package:appwizard/features/lines_that_land/presentation/bloc/lines_that_land_bloc.dart';
 
 import 'package:appwizard/core/network/cloud_functions_client.dart';
+import 'package:appwizard/core/utils/screenshot_encoder.dart';
+import 'package:appwizard/features/express_dealmaker/data/datasources/cloud_express_dealmaker_remote_datasource.dart';
 import 'package:appwizard/core/network/network_info.dart';
 import 'package:appwizard/core/services/feature_gate_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
@@ -134,8 +135,16 @@ Future<void> init() async {
         sl<AppLogger>(),
       ),
     )
+    ..registerLazySingleton<ScreenshotEncoder>(() => const ScreenshotEncoder())
     ..registerLazySingleton<ExpressDealmakerRemoteDataSource>(
-      () => MockExpressDealmakerRemoteDataSource(sl<AppLogger>()),
+      () => AppConfig.useMockAi
+          ? MockExpressDealmakerRemoteDataSource(sl<AppLogger>())
+          : CloudExpressDealmakerRemoteDataSource(
+              sl<CloudFunctionsApi>(),
+              sl<UserProfileService>(),
+              sl<ScreenshotEncoder>(),
+              sl<AppLogger>(),
+            ),
     )
     ..registerLazySingleton<LinesThatLandApiDataSource>(
       () => LinesThatLandApiDataSourceImpl(sl<CloudFunctionsApi>()),
@@ -232,22 +241,13 @@ Future<void> init() async {
     () => SubscriptionInMemoryDataSourceImpl(sl<AppLogger>()),
   );
 
-  // 3. Subscription Sync Service
-  sl.registerLazySingleton<SubscriptionSyncService>(
-    () => SubscriptionSyncService(
-      sl<AuthService>(),
-      sl<Dio>(),
-      sl<AppLogger>(),
-    ),
-  );
-
-  // 4. Subscription Repository
+  // 3. Subscription Repository (store SDK only; no backend)
   sl.registerLazySingleton<SubscriptionRepository>(
     () => SubscriptionRepositoryImpl(
       sl<PaymentProvider>(),
-      sl<SubscriptionSyncService>(),
       sl<SubscriptionInMemoryDataSource>(),
       sl<RemoteConfigService>(),
+      sl<SharedPreferences>(),
       sl<AppLogger>(),
     ),
   );
