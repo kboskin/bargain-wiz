@@ -38,6 +38,7 @@ class ExpressDealmakerRepositoryImpl implements ExpressDealmakerRepository {
     required final String locale,
     final String? keyword,
     final String? vibe,
+    final String? conversationId,
   }) async {
     try {
       final dto = await _remote.getDealReply(
@@ -45,6 +46,7 @@ class ExpressDealmakerRepositoryImpl implements ExpressDealmakerRepository {
         keyword: keyword,
         locale: locale,
         vibe: vibe,
+        conversationId: conversationId,
       );
       return Right(_dealReplyMapper.toEntity(dto));
     } on Object catch (e, stackTrace) {

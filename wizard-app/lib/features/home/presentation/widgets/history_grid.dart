@@ -1,7 +1,7 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:appwizard/core/widgets/attachment_image.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/widgets/wiz/fade_up.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
@@ -86,10 +86,11 @@ class HistoryTile extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (path != null && path.isNotEmpty)
-              Image.file(
-                File(path),
+              AttachmentImage(
+                path: path,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const StripePlaceholder(),
+                placeholder: const StripePlaceholder(),
+                errorWidget: const StripePlaceholder(),
               )
             else
               const StripePlaceholder(),

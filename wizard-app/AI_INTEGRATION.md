@@ -1,5 +1,10 @@
 # AI integration (Vertex AI) — Express Dealmaker and Pro Deal Closer
 
+> **2026-09-17:** the app now sends Express and Pro turns through the `conversations`
+> function (backend-owned history in Firestore, screenshots in Cloud Storage, see
+> `CONVERSATIONS.md`). The stateless `express_dealmaker` / `pro_deal_closer` endpoints below
+> stay deployed for direct calls and tests; request bodies and the prompting rules are shared.
+
 Both AI features call Gemini on **Vertex AI** through two plain HTTPS Cloud Functions in
 `wizard-backend/functions/` (Python 3.12, 2nd gen). The app never holds a model key; prompts,
 model choice and limits live in the functions. Simple-first: no server-side entitlement
@@ -20,7 +25,8 @@ is present but invalid is rejected.
   "images": [{"mime_type": "image/jpeg", "data": "<base64>"}],
   "text": "optional listing/chat text (typed, or OCR'd on device)",
   "keyword": "scuff",
-  "locale": "en", "vibe": "tactical", "push": 80, "marketplace": "ebay", "deal_size": 550
+  "locale": "en", "vibe": "tactical", "push": 80, "marketplace": "ebay", "deal_size": 550,
+  "deals_per_month": "3_5", "hurdles": ["being_rude", "holding_ground"]
 }
 ```
 → `{"seeing": "IKEA Kallax · $180 · slight scuff", "lines": [{"intent": "opener|counter|close", "text": "…", "why": "…"}], "model": "gemini-2.5-flash"}`
@@ -46,7 +52,10 @@ The newest 40 messages are used; screenshots are kept newest-first within the 6-
 
 `negotiation.py` builds the system prompt from the buyer profile: tone from `vibe`
 (the four onboarding presets), anchor aggressiveness from `push` (0–100, five bands),
-marketplace etiquette, typical deal size, and the output language from `locale`. Lines are
+marketplace etiquette, typical deal size, deal frequency (`deals_per_month`), the buyer's
+known weak spots (`hurdles`, the onboarding `main_hurdle` ids, turned into coaching hints),
+and the output language from `locale`. The same fields live in the Firestore profile
+(`PROFILE_SYNC.md`); the functions may read them from there in a later step. Lines are
 written as the buyer speaking to the seller, one message each, no placeholders, no invented
 facts. Output is constrained with a JSON response schema and normalised (missing intents are
 assigned by position, empty lines dropped).
@@ -65,7 +74,7 @@ needs **Vertex AI User** (`roles/aiplatform.user`). Memory 512 MB, timeout 60 s.
 ## App structure
 
 - `core/network/cloud_functions_client.dart` — `CloudFunctionsApi.get` / `.post` against the
-  remotely configured `functions_base_url`; attaches the Firebase ID token when signed in;
+  remotely configured `api_url`; attaches the Firebase ID token when signed in;
   error bodies → `CloudFunctionException`.
 - `core/utils/screenshot_encoder.dart` — applies EXIF orientation and downscales to ≤ 1280 px
   JPEG (q80) off the UI thread; ~150–300 KB per image, so a 6-shot request stays well under
@@ -93,7 +102,7 @@ id → tier via `subscription_config`, kept in memory and in `SharedPreferences`
 initialises the store provider itself so the purchase stream is always wired. **Restore
 Purchases** re-reads the store and drops the entitlement only when the store reports no active
 purchase, so a lapsed subscription falls back to free. Feature
-gating (`free_tier_rules`) and the paywall copy tell the user what each tier includes.
+gating (`FeatureGatePolicy`, fixed in code) and the paywall copy tell the user what each tier includes.
 
 On iOS the plugin uses StoreKit 2 by default (`in_app_purchase_storekit` ≥ 0.4), so Restore
 reports only *current* entitlements and an expired subscription is not re-granted; purchase

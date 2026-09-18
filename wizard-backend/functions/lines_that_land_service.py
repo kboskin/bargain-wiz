@@ -1,22 +1,18 @@
 """Content for the `lines_that_land` callable.
 
 Reads the `lines_that_land_categories` parameter from this project's **server** Remote Config
-template with the Firebase Admin SDK (`firebase_admin.remote_config`), normalises every text
-to a `{"en": …, "es": …}` map, and caches the result per function instance for
-LINES_REFRESH_INTERVAL_HOURS. The built-in defaults are registered as the template's
+template with the Firebase Admin SDK (`firebase_admin.remote_config`) and normalises every text
+to a `{"en": …, "es": …}` map. The built-in defaults are registered as the template's
 `default_config`, so `evaluate()` always yields content even when Remote Config is down.
 """
 import asyncio
 import json
 import logging
-import threading
-import time
-from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from firebase_admin import remote_config
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger("lines_that_land")
 
@@ -67,19 +63,19 @@ FALLBACK_CATEGORIES: list[dict] = [
 ]
 
 # After serving the fallback, retry Remote Config this soon instead of waiting a full interval.
-FALLBACK_RETRY_SECONDS = 300
 
 # Template with no parameters: evaluate() then resolves everything from default_config.
 _EMPTY_TEMPLATE_JSON = json.dumps({"parameters": {}, "conditions": []})
 
 
-@dataclass(frozen=True)
-class LinesContent:
+class LinesContent(BaseModel):
     """Current lines plus provenance."""
+
+    model_config = ConfigDict(frozen=True)
 
     categories: list[dict]
     updated_at: datetime  # timezone-aware UTC
-    source: str  # "remote_config" | "fallback"
+    source: Literal["remote_config", "fallback"]
 
 
 # ── text helpers ──────────────────────────────────────────────────────────────
@@ -143,7 +139,11 @@ def new_template() -> remote_config.ServerTemplate:
 
 
 def fallback_content() -> LinesContent:
-    return LinesContent(parse_categories({"categories": FALLBACK_CATEGORIES}), datetime.now(UTC), "fallback")
+    return LinesContent(
+        categories=parse_categories({"categories": FALLBACK_CATEGORIES}),
+        updated_at=datetime.now(UTC),
+        source="fallback",
+    )
 
 
 def template_updated_at(template: ServerTemplateLike) -> datetime:
@@ -171,54 +171,20 @@ def read_content(template: ServerTemplateLike) -> LinesContent:
             logger.warning("Remote Config %s has no usable categories; serving defaults", PARAM_KEY)
         return fallback_content()
     if not remote:
-        return LinesContent(categories, datetime.now(UTC), "fallback")
-    return LinesContent(categories, template_updated_at(template), "remote_config")
+        return LinesContent(categories=categories, updated_at=datetime.now(UTC), source="fallback")
+    return LinesContent(
+        categories=categories, updated_at=template_updated_at(template), source="remote_config"
+    )
 
 
-class LinesThatLandService:
-    """Current lines, refreshed from Remote Config at most once per interval per instance.
-
-    Cloud Functions instances are ephemeral, so the cache mostly saves repeated template
-    reads within a warm instance; the app carries the cadence beyond that. A failed refresh
-    keeps the previous content (or serves the defaults) and retries after
-    FALLBACK_RETRY_SECONDS.
-    """
-
-    def __init__(
-        self,
-        refresh_interval_hours: int,
-        template: ServerTemplateLike | None = None,
-        clock: Callable[[], float] = time.monotonic,
-    ):
-        if refresh_interval_hours < 1:
-            raise ValueError("refresh_interval_hours must be >= 1")
-        self._template = template if template is not None else new_template()
-        self._interval = refresh_interval_hours * 3600
-        self._clock = clock
-        self._content: LinesContent | None = None
-        self._expires_at = float("-inf")
-        self._lock = threading.Lock()
-
-    @property
-    def refresh_interval_hours(self) -> int:
-        return self._interval // 3600
-
-    def get(self) -> LinesContent:
-        with self._lock:
-            if self._content is None or self._clock() >= self._expires_at:
-                self._content = self._refresh()
-                healthy = self._content.source == "remote_config"
-                ttl = self._interval if healthy else min(self._interval, FALLBACK_RETRY_SECONDS)
-                self._expires_at = self._clock() + ttl
-            return self._content
-
-    def _refresh(self) -> LinesContent:
-        try:
-            asyncio.run(self._template.load())
-        except Exception as exc:  # noqa: BLE001 - any Remote Config failure degrades gracefully
-            if self._content is not None:
-                logger.warning("Remote Config unavailable (%s); keeping previous content", exc)
-                return self._content
-            logger.warning("Remote Config unavailable (%s); serving built-in defaults", exc)
-            self._template.set(_EMPTY_TEMPLATE_JSON)
-        return read_content(self._template)
+def load_content(template: ServerTemplateLike | None = None) -> LinesContent:
+    """Load the server template and parse PARAM_KEY. Remote Config down or unusable → the
+    built-in defaults, so the endpoint always answers. Called per request: the response is
+    cacheable for LINES_REFRESH_INTERVAL_HOURS and the app caches on device."""
+    template = template if template is not None else new_template()
+    try:
+        asyncio.run(template.load())
+    except Exception as exc:  # noqa: BLE001 - any Remote Config failure degrades gracefully
+        logger.warning("Remote Config unavailable (%s); serving built-in defaults", exc)
+        template.set(_EMPTY_TEMPLATE_JSON)
+    return read_content(template)

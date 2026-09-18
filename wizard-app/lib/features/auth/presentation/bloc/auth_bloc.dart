@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:appwizard/features/shared/presentation/bloc/base_bloc.dart';
@@ -25,49 +27,25 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
     on<SignOutRequested>(_onSignOutRequested);
     on<ResetPasswordRequested>(_onResetPasswordRequested);
 
-    // Check auth status on initialization
+    // The current user is read synchronously (no screen waits on auth); the subscription
+    // keeps the state in sync and the anonymous sign-in runs in the background.
     add(const AuthCheckRequested());
+    _userChanges = _authService.userChanges.listen((_) => add(const AuthCheckRequested()));
+    unawaited(_authService.ensureSignedIn());
   }
+
+  StreamSubscription<User?>? _userChanges;
+
+  /// Anonymous users (every install has one) count as "no account": the drawer, the
+  /// profile card and the router treat [AuthAuthenticated] as "signed in with a provider".
+  static AuthState stateFor(User? user) =>
+      AuthService.isAccount(user) ? AuthAuthenticated(user!) : const AuthUnauthenticated();
 
   Future<void> _onAuthCheckRequested(
     AuthCheckRequested event,
     Emitter<AuthState> emit,
   ) async {
-    try {
-      // Wait for Firebase Auth to initialize by listening to the first auth state change
-      // This ensures Firebase Auth has restored any cached authentication state
-      // The stream emits the current user immediately if already authenticated
-      User? user;
-      try {
-        user = await _authService.authStateChanges
-            .first
-            .timeout(const Duration(seconds: 5));
-      } catch (e) {
-        // If timeout or error, fall back to checking currentUser directly
-        _logger.w('Auth state stream timeout, using currentUser fallback');
-        user = _authService.currentUser;
-      }
-      
-      if (user != null) {
-        emit(AuthAuthenticated(user));
-      } else {
-        emit(const AuthUnauthenticated());
-      }
-    } catch (e, stackTrace) {
-      _logger.e('Error checking auth status', e, stackTrace);
-      // Final fallback: check currentUser directly
-      try {
-        final user = _authService.currentUser;
-        if (user != null) {
-          emit(AuthAuthenticated(user));
-        } else {
-          emit(const AuthUnauthenticated());
-        }
-      } catch (fallbackError, fallbackStackTrace) {
-        _logger.e('Fallback auth check also failed', fallbackError, fallbackStackTrace);
-        emit(AuthError('Failed to check authentication status'));
-      }
-    }
+    emit(stateFor(_authService.currentUser));
   }
 
   Future<void> _onSignInWithEmailRequested(
@@ -144,6 +122,12 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
       _logger.e('Sign out failed', e, stackTrace);
       emit(AuthError(e.toString()));
     }
+  }
+
+  @override
+  Future<void> close() {
+    _userChanges?.cancel();
+    return super.close();
   }
 
   Future<void> _onResetPasswordRequested(

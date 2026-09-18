@@ -81,6 +81,14 @@ void main() {
     expect((m.descriptionHighlights as Map)['magic tube'], '#FF6B35');
   });
 
+  test('select (vibe): every option carries a Font Awesome icon', () {
+    final m = screens[1] as SelectScreenModel;
+    for (final o in m.options) {
+      expect(o.hasIcon, isTrue, reason: o.storedValue);
+      expect((o.iconRaw as Map)['font'], isIn(['solid', 'regular']));
+    }
+  });
+
   test('select_group: two groups writing favorite_marketplace and deals_per_month', () {
     final m = screens[3] as SelectGroupScreenModel;
     expect(m.groups.length, 2);

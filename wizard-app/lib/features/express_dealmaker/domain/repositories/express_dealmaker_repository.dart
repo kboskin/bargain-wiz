@@ -10,10 +10,12 @@ abstract class ExpressDealmakerRepository {
   Future<Either<Failure, UploadScreenshotResult>> uploadScreenshot(final String filePath);
 
   /// Lines for the uploaded screenshots, focused by [keyword] and written in the [vibe] tone.
+  /// With [conversationId] the existing backend deal is regenerated instead of a new one.
   Future<Either<Failure, DealReply>> getDealReply({
     required final List<String> uploadedIds,
     required final String locale,
     final String? keyword,
     final String? vibe,
+    final String? conversationId,
   });
 }

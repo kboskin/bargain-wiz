@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:appwizard/core/widgets/attachment_image.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/widgets/scanning_overlay.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/widgets/pro_message_tile.dart';
@@ -122,12 +122,13 @@ class _ShotTile extends StatelessWidget {
               height: height,
               borderRadius: 12,
               isUploading: isUploading,
-              child: Image.file(
-                File(path),
+              child: AttachmentImage(
+                path: path,
                 width: width,
                 height: height,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                placeholder: Container(width: width, height: height, color: WizColors.surfaceMuted),
+                errorWidget: Container(
                   width: width,
                   height: height,
                   color: WizColors.surfaceMuted,

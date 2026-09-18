@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:dartz/dartz.dart';
 
 import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_state.dart';
@@ -14,10 +13,42 @@ import 'package:appwizard/features/paywall/domain/paywall_args.dart';
 import 'package:appwizard/features/paywall/presentation/pages/paywall_page.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/pages/pro_deal_closer_page.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_bloc.dart';
+import 'package:appwizard/core/app/app_splash.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
-import 'package:appwizard/core/error/failures.dart';
 import 'app_routes.dart';
+
+/// Landing screen: the shell for a signed-in account or a completed onboarding, otherwise the
+/// welcome screen. The onboarding flag is read once from preferences (already loaded by
+/// [AppBootstrap]), so this never waits on the network and never re-reads it on a rebuild.
+class _HomeEntry extends StatefulWidget {
+  const _HomeEntry();
+
+  @override
+  State<_HomeEntry> createState() => _HomeEntryState();
+}
+
+class _HomeEntryState extends State<_HomeEntry> {
+  late final Future<bool> _onboardingCompleted = di
+      .sl<OnboardingRepository>()
+      .isOnboardingCompleted()
+      .then((result) => result.fold((_) => false, (completed) => completed));
+
+  @override
+  Widget build(BuildContext context) => BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, authState) {
+          if (authState is AuthAuthenticated) return const MainShellPage();
+          return FutureBuilder<bool>(
+            future: _onboardingCompleted,
+            builder: (context, snapshot) => switch (snapshot.data) {
+              null => const AppSplash(),
+              true => const MainShellPage(),
+              false => const WelcomeScreenPage(),
+            },
+          );
+        },
+      );
+}
 
 /// App router configuration
 class AppRouter {
@@ -29,33 +60,7 @@ class AppRouter {
         name: AppRoutes.homeName,
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: BlocBuilder<AuthBloc, AuthState>(
-            builder: (context, authState) {
-              if (authState is AuthInitial || authState is AuthLoading) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (authState is AuthAuthenticated) {
-                return const MainShellPage();
-              }
-              // Not authenticated: go to the shell once onboarding has been completed,
-              // otherwise show the welcome screen.
-              final repo = di.sl<OnboardingRepository>();
-              return FutureBuilder<Either<Failure, bool>>(
-                future: repo.isOnboardingCompleted(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Scaffold(
-                      body: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final completed = snapshot.data!.fold((_) => false, (v) => v);
-                  return completed ? const MainShellPage() : const WelcomeScreenPage();
-                },
-              );
-            },
-          ),
+          child: const _HomeEntry(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
               SlideTransition(
             position: Tween(begin: Offset.zero, end: const Offset(-1.0, 0.0))

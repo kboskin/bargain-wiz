@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Conversations are written only by the Cloud Functions (Admin SDK bypasses rules).
+    // Signed-in users, anonymous included, may read their own.
+    match /users/{uid}/conversations/{cid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+      match /messages/{mid} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+    // Everything else under users/{uid} — the profile document itself, limits/, … — is
+    // server-only; the app reads its profile through the `profile` function.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

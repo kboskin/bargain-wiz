@@ -27,44 +27,125 @@ enum ConversationStatus {
   }
 }
 
+/// Lifecycle of a wizard turn stored by the backend (CONVERSATIONS.md): the placeholder is
+/// [pending] while the model works, [failed] when it could not answer, otherwise [done].
+enum MessageStatus {
+  pending,
+  done,
+  failed;
+
+  static MessageStatus fromString(String? value) {
+    switch (value) {
+      case 'pending':
+        return MessageStatus.pending;
+      case 'failed':
+        return MessageStatus.failed;
+      default:
+        return MessageStatus.done;
+    }
+  }
+}
+
+/// A screenshot the backend stored in Cloud Storage, plus the local file when it was picked
+/// on this device (so fresh chats render without a download).
+class ChatAttachment extends Equatable {
+  const ChatAttachment({required this.storagePath, this.localPath, this.width, this.height});
+
+  /// Cloud Storage object path (`users/{uid}/conversations/{cid}/{id}.jpg`).
+  final String storagePath;
+  final String? localPath;
+  final int? width;
+  final int? height;
+
+  /// What to render: the local file when we have it, else the stored object.
+  String get displayPath => localPath ?? storagePath;
+
+  @override
+  List<Object?> get props => [storagePath, localPath, width, height];
+}
+
 /// Single message in a Pro Deal Closer conversation.
 /// [isWizard] marks assistant messages; [options] holds the "Give me options"
 /// lines attached to a wizard reply once requested.
 class ProDealCloserMessage extends Equatable {
   const ProDealCloserMessage({
+    this.id = '',
     required this.text,
     this.attachmentPaths = const [],
+    this.attachments = const [],
     this.isWizard = false,
     this.options = const [],
+    this.status = MessageStatus.done,
+    this.requestId,
+    this.revision = 0,
+    this.seq = 0,
+    this.errorMessage,
   });
 
+  /// Firestore document id; empty for a message that only exists on this device.
+  final String id;
   final String text;
+  /// Local screenshot files (picked on this device).
   final List<String> attachmentPaths;
+  /// Screenshots as stored by the backend.
+  final List<ChatAttachment> attachments;
   final bool isWizard;
   final List<DealLine> options;
+  final MessageStatus status;
+  /// Client request id that produced this turn (matches optimistic bubbles to server echoes).
+  final String? requestId;
+  /// Incremented by every "Redo".
+  final int revision;
+  /// Server-assigned order within the conversation.
+  final int seq;
+  /// User-safe error text when [status] is [MessageStatus.failed].
+  final String? errorMessage;
 
   /// Convenience inverse of [isWizard].
   bool get isUser => !isWizard;
+  bool get isPending => status == MessageStatus.pending;
+  bool get isFailed => status == MessageStatus.failed;
+  bool get hasAttachments => attachmentPaths.isNotEmpty || attachments.isNotEmpty;
+
+  /// Paths to render: local files when we have them, else the stored objects.
+  List<String> get displayPaths =>
+      attachmentPaths.isNotEmpty ? attachmentPaths : [for (final a in attachments) a.displayPath];
 
   ProDealCloserMessage copyWith({
+    String? id,
     String? text,
     List<String>? attachmentPaths,
+    List<ChatAttachment>? attachments,
     bool? isWizard,
     List<DealLine>? options,
+    MessageStatus? status,
+    String? requestId,
+    int? revision,
+    int? seq,
+    String? errorMessage,
   }) =>
       ProDealCloserMessage(
+        id: id ?? this.id,
         text: text ?? this.text,
         attachmentPaths: attachmentPaths ?? this.attachmentPaths,
+        attachments: attachments ?? this.attachments,
         isWizard: isWizard ?? this.isWizard,
         options: options ?? this.options,
+        status: status ?? this.status,
+        requestId: requestId ?? this.requestId,
+        revision: revision ?? this.revision,
+        seq: seq ?? this.seq,
+        errorMessage: errorMessage ?? this.errorMessage,
       );
 
   @override
-  List<Object?> get props => [text, attachmentPaths, isWizard, options];
+  List<Object?> get props =>
+      [id, text, attachmentPaths, attachments, isWizard, options, status, requestId, revision, seq, errorMessage];
 }
 
 /// Generic conversation; [type] segregates which fields are used.
-/// Stored and returned by the same repository/datasource (e.g. API returns all).
+/// Read from the backend's Firestore documents (CONVERSATIONS.md); written only through the
+/// `conversations` function.
 class Conversation extends Equatable {
   const Conversation({
     required this.id,
@@ -75,6 +156,7 @@ class Conversation extends Equatable {
     this.keyword,
     this.messages = const [],
     required this.createdAt,
+    this.updatedAt,
     this.title,
     this.marketplace,
     this.status = ConversationStatus.open,
@@ -82,21 +164,28 @@ class Conversation extends Equatable {
     this.priceAfter,
     this.seeing,
     this.vibe,
+    this.preview,
+    this.thumbnailStoragePath,
+    this.messageCount = 0,
+    this.isTyping = false,
   });
 
   final String id;
   /// [ConversationType.express] or [ConversationType.proDealCloser]. Drives which payload is used.
   final ConversationType type;
-  /// For [ConversationType.express].
+  /// For [ConversationType.express]: local files while the deal is fresh, Cloud Storage paths
+  /// when read back from the backend.
   final List<String> screenshotPaths;
   /// Legacy flat reply strings (kept for backward compatibility with saved data).
   final List<String> replyOptions;
   /// Structured reply lines with intent + why. Preferred over [replyOptions].
   final List<DealLine> replyLines;
   final String? keyword;
-  /// For [ConversationType.proDealCloser].
+  /// For [ConversationType.proDealCloser] (only filled when messages were loaded).
   final List<ProDealCloserMessage> messages;
   final DateTime createdAt;
+  /// Last activity on the server.
+  final DateTime? updatedAt;
 
   // ── History metadata (Bargains History screen) ──
   /// Auto-generated from the screenshot / first message when null.
@@ -110,20 +199,32 @@ class Conversation extends Equatable {
   final String? seeing;
   /// Negotiation vibe id used for this deal (e.g. "friendly").
   final String? vibe;
+  /// Last message text, clipped by the server.
+  final String? preview;
+  /// First screenshot stored for this deal (Cloud Storage path).
+  final String? thumbnailStoragePath;
+  final int messageCount;
+  /// A wizard reply is being generated right now (server `active_turn`).
+  final bool isTyping;
 
   /// Effective reply lines: structured when available, else legacy strings.
   List<DealLine> get effectiveLines => replyLines.isNotEmpty
       ? replyLines
       : replyOptions.map((t) => DealLine(text: t)).toList();
 
-  /// First image usable as a thumbnail (express screenshot or a chat attachment).
+  /// First image usable as a thumbnail: a local screenshot, a chat attachment, or the
+  /// server-stored thumbnail. Render with `AttachmentImage`, which handles both kinds of path.
   String? get thumbnailPath {
     if (screenshotPaths.isNotEmpty) return screenshotPaths.first;
     for (final m in messages) {
-      if (m.attachmentPaths.isNotEmpty) return m.attachmentPaths.first;
+      final paths = m.displayPaths;
+      if (paths.isNotEmpty) return paths.first;
     }
-    return null;
+    return thumbnailStoragePath;
   }
+
+  /// Time to order history by (last activity, else creation).
+  DateTime get sortedAt => updatedAt ?? createdAt;
 
   Conversation copyWith({
     String? id,
@@ -134,6 +235,7 @@ class Conversation extends Equatable {
     String? keyword,
     List<ProDealCloserMessage>? messages,
     DateTime? createdAt,
+    DateTime? updatedAt,
     String? title,
     String? marketplace,
     ConversationStatus? status,
@@ -141,6 +243,10 @@ class Conversation extends Equatable {
     String? priceAfter,
     String? seeing,
     String? vibe,
+    String? preview,
+    String? thumbnailStoragePath,
+    int? messageCount,
+    bool? isTyping,
   }) =>
       Conversation(
         id: id ?? this.id,
@@ -151,6 +257,7 @@ class Conversation extends Equatable {
         keyword: keyword ?? this.keyword,
         messages: messages ?? this.messages,
         createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
         title: title ?? this.title,
         marketplace: marketplace ?? this.marketplace,
         status: status ?? this.status,
@@ -158,6 +265,10 @@ class Conversation extends Equatable {
         priceAfter: priceAfter ?? this.priceAfter,
         seeing: seeing ?? this.seeing,
         vibe: vibe ?? this.vibe,
+        preview: preview ?? this.preview,
+        thumbnailStoragePath: thumbnailStoragePath ?? this.thumbnailStoragePath,
+        messageCount: messageCount ?? this.messageCount,
+        isTyping: isTyping ?? this.isTyping,
       );
 
   @override
@@ -170,6 +281,7 @@ class Conversation extends Equatable {
         keyword,
         messages,
         createdAt,
+        updatedAt,
         title,
         marketplace,
         status,
@@ -177,5 +289,9 @@ class Conversation extends Equatable {
         priceAfter,
         seeing,
         vibe,
+        preview,
+        thumbnailStoragePath,
+        messageCount,
+        isTyping,
       ];
 }

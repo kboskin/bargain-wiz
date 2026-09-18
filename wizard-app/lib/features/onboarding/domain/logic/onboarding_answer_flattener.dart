@@ -35,6 +35,7 @@ class OnboardingAnswerFlattener {
             screenType: screen.type,
             answerKey: key,
             answer: entry.value,
+            options: optionsFor(screen, key),
           ));
         }
         continue;
@@ -46,9 +47,35 @@ class OnboardingAnswerFlattener {
         screenType: screen.type,
         answerKey: keys.isEmpty ? null : keys.first,
         answer: value,
+        options: optionsFor(screen, keys.isEmpty ? null : keys.first),
       ));
     }
     return out;
+  }
+
+  /// Option ids the screen offers for [key]: select-type screens list their option values,
+  /// sliders their stops; null for screens without options.
+  static List<String>? optionsFor(OnboardingModel screen, String? key) {
+    if (screen is SelectScreenModel) return [for (final o in screen.options) o.storedValue];
+    if (screen is MultiSelectScreenModel) return [for (final o in screen.options) o.storedValue];
+    if (screen is SelectGroupScreenModel) {
+      for (final group in screen.groups) {
+        if (group.answerKeyName == key) return [for (final o in group.options) o.storedValue];
+      }
+      return null;
+    }
+    if (screen is SliderScreenModel) return [for (final o in screen.options) _optionId(o.value)];
+    if (screen is SliderLottieScreenModel) {
+      final raw = screen.metadata?.options;
+      if (raw is List) return [for (final o in raw) if (o is Map && o['value'] != null) _optionId(o['value'])];
+    }
+    return null;
+  }
+
+  /// Whole-number stops read as `550`, not `550.0`, so ids match the config as authored.
+  static String _optionId(dynamic value) {
+    if (value is num && value == value.roundToDouble()) return value.toInt().toString();
+    return value.toString();
   }
 
   /// `answerKey → value` view of the in-flow answers (later screens win on duplicates).

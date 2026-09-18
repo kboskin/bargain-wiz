@@ -1,9 +1,9 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'package:appwizard/core/widgets/attachment_image.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 
@@ -39,13 +39,14 @@ class HistoryThumbnail extends StatelessWidget {
     final path = conversation.thumbnailPath;
     final child = path == null
         ? placeholder
-        : Image.file(
-            File(path),
+        : AttachmentImage(
+            path: path,
             width: width,
             height: height,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            errorBuilder: (_, __, ___) => placeholder,
+            placeholder: placeholder,
+            errorWidget: placeholder,
           );
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),

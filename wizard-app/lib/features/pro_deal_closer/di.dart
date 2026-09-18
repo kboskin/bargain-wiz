@@ -1,12 +1,10 @@
-import 'package:appwizard/core/config/app_config.dart';
-import 'package:appwizard/core/network/cloud_functions_client.dart';
+import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
-import 'package:appwizard/core/utils/screenshot_encoder.dart';
-import 'package:appwizard/features/pro_deal_closer/data/datasources/cloud_pro_deal_closer_remote_datasource.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/core/utils/screenshot_encoder.dart';
+import 'package:appwizard/features/conversation/data/datasources/conversations_api.dart';
+import 'package:appwizard/features/conversation/data/datasources/conversations_stream.dart';
 import 'package:appwizard/features/conversation/domain/repositories/conversation_repository.dart';
-import 'package:appwizard/features/pro_deal_closer/data/datasources/pro_deal_closer_remote_datasource.dart';
-import 'package:appwizard/features/pro_deal_closer/data/mappers/pro_deal_closer_mapper.dart';
 import 'package:appwizard/features/pro_deal_closer/data/repositories/pro_deal_closer_repository_impl.dart';
 import 'package:appwizard/features/pro_deal_closer/domain/repositories/pro_deal_closer_repository.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/cubit/pro_deal_closer_cubit.dart';
@@ -14,27 +12,17 @@ import 'package:get_it/get_it.dart';
 
 /// Feature-local dependency registration for `pro_deal_closer`.
 /// Called from core/di/injection_container.dart after core services
-/// ([AppLogger], [ConversationRepository]) are registered.
+/// ([ConversationsApi], [ConversationsStream], [ConversationRepository]) are registered.
 void registerProDealCloserDependencies(GetIt sl) {
   sl
-    ..registerLazySingleton<ProDealCloserRemoteDataSource>(
-      () => AppConfig.useMockAi
-          ? MockProDealCloserRemoteDataSource(sl<AppLogger>())
-          : CloudProDealCloserRemoteDataSource(
-              sl<CloudFunctionsApi>(),
-              sl<UserProfileService>(),
-              sl<ScreenshotEncoder>(),
-              sl<AppLogger>(),
-            ),
-    )
-    ..registerLazySingleton<WizardReplyMapper>(WizardReplyMapper.new)
-    ..registerLazySingleton<DealOptionsMapper>(DealOptionsMapper.new)
     ..registerLazySingleton<ProDealCloserRepository>(
       () => ProDealCloserRepositoryImpl(
-        sl<ProDealCloserRemoteDataSource>(),
-        sl<WizardReplyMapper>(),
-        sl<DealOptionsMapper>(),
-        sl<AppLogger>(),
+        api: sl<ConversationsApi>(),
+        stream: sl<ConversationsStream>(),
+        auth: sl<AuthService>(),
+        profile: sl<UserProfileService>(),
+        encoder: sl<ScreenshotEncoder>(),
+        logger: sl<AppLogger>(),
       ),
     )
     ..registerFactory<ProDealCloserCubit>(

@@ -1,5 +1,7 @@
 # Flavor Configuration Guide
 
+Startup sequence and its rules: `STARTUP.md`.
+
 This project supports two flavors: **dev** and **prod**.
 
 ## Bundle IDs
@@ -38,11 +40,14 @@ flutter build appbundle --flavor prod
 For iOS, you need to pass the flavor via `--dart-define`:
 
 ```bash
-# Run dev flavor (with .dev bundle ID suffix)
-flutter run --dart-define=FLAVOR=dev -t lib/main.dart
+# Run dev flavor (the Xcode scheme is named after the flavour)
+flutter run --flavor dev --dart-define=FLAVOR=dev -t lib/main.dart
 
 # Run prod flavor
-flutter run --dart-define=FLAVOR=prod -t lib/main.dart
+flutter run --flavor prod --dart-define=FLAVOR=prod -t lib/main.dart
+
+# Run against the Firebase emulators
+flutter run --flavor local --dart-define=FLAVOR=local -t lib/main.dart
 
 # Build iOS for dev (requires manual bundle ID update in Xcode or use scheme)
 flutter build ios --dart-define=FLAVOR=dev
@@ -52,6 +57,68 @@ flutter build ios --dart-define=FLAVOR=prod
 ```
 
 **Note**: For iOS, you may need to manually configure schemes in Xcode to fully support automatic bundle ID switching, or use the provided script in `ios/Runner/update_bundle_id.sh` as a build phase.
+
+### App name
+
+One convention on both platforms and in Dart:
+
+| flavour | home-screen label |
+| --- | --- |
+| prod | Bargain Wiz |
+| dev | Bargain Wiz Dev |
+| local | Bargain Wiz Local |
+
+Android takes it from `resValue("string", "app_name", …)` per product flavour, iOS from the
+`APP_DISPLAY_NAME` build setting per configuration (`Info.plist` reads
+`$(APP_DISPLAY_NAME)` for `CFBundleDisplayName`; `CFBundleName` stays the short "Bargain Wiz",
+which Apple caps at 16 characters). `AppConfig.appName` matches, and feeds `MaterialApp.title`
+(the Android task switcher). Change a name in all three places, or they drift.
+
+### iOS flavours
+
+iOS now has the same three flavours as Android, so `--flavor` works on both platforms and one
+IDE run configuration serves either device. Each flavour is an Xcode **scheme** (`dev`, `prod`,
+`local`, shared in `ios/Runner.xcodeproj/xcshareddata/xcschemes/`) plus three **build
+configurations** named `Debug-<flavour>`, `Profile-<flavour>` and `Release-<flavour>`; Flutter
+requires both, and the Podfile maps every one of them to a pod build type.
+
+All three currently build the same bundle id (`com.bargain.wiz`) and the same Firebase app,
+because only the dev Firebase project exists. When a prod project is added, give `*-prod` its
+own `PRODUCT_BUNDLE_IDENTIFIER` and `GoogleService-Info.plist`.
+
+To add another flavour: duplicate the configurations (the `xcodeproj` gem that ships with
+CocoaPods can do it), copy `Runner.xcscheme` to `<flavour>.xcscheme` with the configuration
+names rewritten, add it to the Podfile list, and run `pod install`.
+
+### Local (Firebase emulators)
+
+`local` is the dev app pointed at the emulators (Auth, Firestore, Storage, Functions). Start
+them first from `wizard-backend/` (`firebase emulators:start`, UI at http://127.0.0.1:4000),
+then:
+
+```bash
+# Android emulator (reaches the host through 10.0.2.2)
+flutter run --flavor local --dart-define=FLAVOR=local -d emulator-5554
+
+# iOS simulator (no Xcode flavor needed; shares the host's loopback)
+flutter run --dart-define=FLAVOR=local -d <simulator-udid>
+
+# Physical device on the same Wi-Fi: point at your machine
+flutter run --flavor local --dart-define=FLAVOR=local --dart-define=EMULATOR_HOST=192.168.1.20
+```
+
+On both platforms `--dart-define=FLAVOR=local` is what selects the emulators; in **debug** builds it
+works with any Gradle flavor because `src/debug/res/xml/network_security_config.xml` allows
+plain HTTP (debug builds only). Release and profile builds allow it only in the `local`
+Gradle flavor (`--flavor local`); anything else fails with "Cleartext HTTP traffic to
+10.0.2.2 not permitted" and the app logs an error at startup.
+
+What changes in `local`: Auth, Firestore and Storage use the emulators; `api_url` is replaced by
+the Functions emulator (`http://<host>:5001/wizard-app-dev/us-central1`); Crashlytics and
+Analytics collection are off. Remote Config has no emulator and still reads the dev project.
+The Android flavor shares dev's applicationId (`com.bargain.wiz.dev`) so `google-services.json`
+matches, which means dev and local cannot be installed side by side. Ports follow
+`wizard-backend/firebase.json`; override with `EMULATOR_*_PORT` dart-defines if you change them.
 
 ### VS Code / IDE
 

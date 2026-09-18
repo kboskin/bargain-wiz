@@ -128,37 +128,19 @@ def test_read_content_falls_back_when_the_remote_value_is_unusable():
         assert [c["id"] for c in content.categories] == ["opening", "followup", "closing"]
 
 
-def test_service_caches_until_the_interval_elapses():
-    clock, template = Clock(), FakeTemplate(remote_value=remote_json(CATS))
-    service = svc.LinesThatLandService(24, template=template, clock=clock)
-    first = service.get()
-    clock.t += 24 * 3600 - 1
-    assert service.get() is first
+def test_load_content_reads_remote_config_once():
+    template = FakeTemplate(remote_value=remote_json(CATS))
+    content = svc.load_content(template)
+    assert content.source == "remote_config"
+    assert content.categories == CATS
     assert template.loads == 1
-    clock.t += 2
-    service.get()
-    assert template.loads == 2
 
 
-def test_service_serves_defaults_when_remote_config_is_down_and_retries_soon():
-    clock, template = Clock(), FakeTemplate(remote_value=remote_json(CATS), fail_load=True)
-    service = svc.LinesThatLandService(24, template=template, clock=clock)
-    content = service.get()
+def test_load_content_serves_defaults_when_remote_config_is_down():
+    template = FakeTemplate(remote_value=remote_json(CATS), fail_load=True)
+    content = svc.load_content(template)
     assert content.source == "fallback"
     assert [c["id"] for c in content.categories] == ["opening", "followup", "closing"]
-    clock.t += svc.FALLBACK_RETRY_SECONDS + 1
-    template.fail_load = False
-    assert service.get().source == "remote_config"
-    assert template.loads == 2
-
-
-def test_service_keeps_previous_content_when_a_refresh_fails():
-    clock, template = Clock(), FakeTemplate(remote_value=remote_json(CATS))
-    service = svc.LinesThatLandService(1, template=template, clock=clock)
-    good = service.get()
-    template.fail_load = True
-    clock.t += 3601
-    assert service.get() is good
 
 
 # ── HTTP function ─────────────────────────────────────────────────────────────
@@ -166,20 +148,20 @@ def test_service_keeps_previous_content_when_a_refresh_fails():
 
 @pytest.fixture
 def remote_service(monkeypatch):
-    service = svc.LinesThatLandService(24, template=FakeTemplate(remote_value=remote_json(CATS)))
-    monkeypatch.setattr(main, "_service", service)
-    return service
+    """The function reads a fake server template with remote content."""
+    template = FakeTemplate(remote_value=remote_json(CATS))
+    monkeypatch.setattr(main, "new_template", lambda: template)
+    return template
 
 
-def _get(method="GET"):
-    app = Flask(__name__)
-    with app.test_request_context("/lines_that_land", method=method):
+def _get(_template, method="GET"):
+    with Flask(__name__).test_request_context("/lines_that_land", method=method):
         res = main.lines_that_land(request)
     return res.status_code, json.loads(res.get_data(as_text=True)), res.headers
 
 
 def test_get_returns_multilocale_payload_and_cache_headers(remote_service):
-    status, body, headers = _get()
+    status, body, headers = _get(remote_service)
     assert status == 200
     assert body["categories"] == CATS  # every locale, always
     assert body["locales"] == ["en", "es"]
@@ -192,6 +174,6 @@ def test_get_returns_multilocale_payload_and_cache_headers(remote_service):
 
 
 def test_non_get_methods_are_rejected(remote_service):
-    status, body, _ = _get(method="POST")
+    status, body, _ = _get(remote_service, method="POST")
     assert status == 405
     assert body["error"]["status"] == "METHOD_NOT_ALLOWED"

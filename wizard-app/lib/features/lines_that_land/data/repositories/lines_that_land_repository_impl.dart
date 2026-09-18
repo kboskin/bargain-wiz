@@ -10,12 +10,11 @@ import 'package:appwizard/features/lines_that_land/domain/entities/lines_that_la
 import 'package:appwizard/features/lines_that_land/domain/entities/lines_that_land_feed.dart';
 import 'package:appwizard/features/lines_that_land/domain/repositories/lines_that_land_repository.dart';
 
-/// Function-backed "Lines that land" with an on-device cache (see LINES_THAT_LAND.md):
+/// Function-backed "Lines that land" with an on-device cache (see LINES_THAT_LAND.md).
 ///
-/// 1. cache younger than the function's `refresh_interval_hours` → serve it, no request;
-/// 2. otherwise call the `lines_that_land` Cloud Function and cache the response;
-/// 3. function unreachable → stale cache if any, else [NetworkFailure] with [offlineMessage].
-///
+/// [cached] is what the tab renders at once (no request, works offline); [refresh] talks to
+/// the `lines_that_land` Cloud Function and runs in the background when the copy is older
+/// than the function's `refresh_interval_hours`, or when the user pulls to refresh.
 /// No Remote Config key is read; the function owns the content and its fallback.
 class LinesThatLandRepositoryImpl implements LinesThatLandRepository {
   LinesThatLandRepositoryImpl({
@@ -43,37 +42,51 @@ class LinesThatLandRepositoryImpl implements LinesThatLandRepository {
   static final DateTime _epoch = DateTime.utc(2025, 1, 1);
 
   @override
-  Future<Either<Failure, LinesThatLandFeed>> getFeed() async {
+  LinesThatLandFeed? cached() {
     final now = _now().toUtc();
     final cached = _cache.read();
-    if (cached != null && cached.isFresh(now)) {
-      return Right(_toFeed(cached.response, now, LinesFeedSource.cache));
-    }
+    if (cached == null) return null;
+    return _toFeed(cached.response, now, LinesFeedSource.cache, isStale: !cached.isFresh(now));
+  }
 
+  @override
+  Future<Either<Failure, LinesThatLandFeed>> refresh() async {
+    final now = _now().toUtc();
     try {
       final fresh = await _api.fetchFeed();
       await _cache.write(fresh, now);
       return Right(_toFeed(fresh, now, LinesFeedSource.network));
     } on Object catch (e, stackTrace) {
-      if (cached != null) {
-        _logger.w('Lines that land function unavailable ($e); serving stale cache');
-        return Right(_toFeed(cached.response, now, LinesFeedSource.cache));
-      }
-      _logger.e('Lines that land function unavailable and nothing cached', e, stackTrace);
+      _logger.e('Lines that land function unavailable', e, stackTrace);
       return const Left(NetworkFailure(offlineMessage));
     }
+  }
+
+  @override
+  Future<Either<Failure, LinesThatLandFeed>> getFeed() async {
+    final local = cached();
+    if (local != null && !local.isStale) return Right(local);
+    final result = await refresh();
+    if (local == null) return result;
+    return result.fold((_) => Right(local), Right.new); // a stale copy beats an offline failure
   }
 
   @override
   Future<Either<Failure, List<LinesThatLandCategory>>> getDailyCategories() async =>
       (await getFeed()).map((feed) => feed.categories);
 
-  LinesThatLandFeed _toFeed(LinesThatLandResponse response, DateTime now, LinesFeedSource source) =>
+  LinesThatLandFeed _toFeed(
+    LinesThatLandResponse response,
+    DateTime now,
+    LinesFeedSource source, {
+    bool isStale = false,
+  }) =>
       LinesThatLandFeed(
         categories: _mapper.toCategoryEntities(response.categories, now.difference(_epoch).inDays),
         locales: response.locales,
         updatedAt: response.updatedAt,
         refreshInterval: response.refreshInterval,
         source: source,
+        isStale: isStale,
       );
 }

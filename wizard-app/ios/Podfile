@@ -1,14 +1,19 @@
 # Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
-project 'Runner', {
-  'Debug' => :debug,
-  'Profile' => :release,
-  'Release' => :release,
-}
+# Flavours add Xcode configurations named `<Base>-<flavour>` (see README_FLAVORS.md); every
+# one needs a build type here or CocoaPods builds the pods with the wrong settings.
+flavor_configurations = { 'Debug' => :debug, 'Profile' => :release, 'Release' => :release }
+%w[dev prod local].each do |flavor|
+  flavor_configurations["Debug-#{flavor}"] = :debug
+  flavor_configurations["Profile-#{flavor}"] = :release
+  flavor_configurations["Release-#{flavor}"] = :release
+end
+
+project 'Runner', flavor_configurations
 
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
@@ -39,5 +44,9 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    # Xcode 27 rejects deployment targets below 15.0; some pods still declare 9.0–13.0.
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
   end
 end

@@ -25,9 +25,9 @@ import 'package:appwizard/core/utils/asset_path_helper.dart';
 import 'package:appwizard/core/utils/color_helper.dart';
 import 'package:appwizard/features/onboarding/data/datasources/onboarding_local_datasource.dart';
 import 'package:appwizard/features/express_dealmaker/data/datasources/express_dealmaker_remote_datasource.dart';
-import 'package:appwizard/features/conversation/data/datasources/conversation_local_datasource.dart';
-import 'package:appwizard/features/conversation/data/mappers/conversation_mapper.dart';
-import 'package:appwizard/features/conversation/data/mappers/conversation_type_mapper.dart';
+import 'package:appwizard/features/conversation/data/datasources/conversations_api.dart';
+import 'package:appwizard/features/conversation/data/datasources/conversations_stream.dart';
+import 'package:appwizard/features/conversation/data/datasources/fake_conversations_backend.dart';
 import 'package:appwizard/features/onboarding/data/mappers/onboarding_data_mapper.dart';
 import 'package:appwizard/features/onboarding/data/mappers/onboarding_screen_type_mapper.dart';
 import 'package:appwizard/features/express_dealmaker/data/mappers/express_dealmaker_mapper.dart';
@@ -52,7 +52,10 @@ import 'package:appwizard/features/feedback/presentation/bloc/feedback_bloc.dart
 import 'package:appwizard/features/lines_that_land/presentation/bloc/lines_that_land_bloc.dart';
 
 import 'package:appwizard/core/network/cloud_functions_client.dart';
+import 'package:appwizard/core/services/installation_id_service.dart';
+import 'package:appwizard/core/services/profile_sync_service.dart';
 import 'package:appwizard/core/utils/screenshot_encoder.dart';
+import 'package:appwizard/features/profile/data/datasources/profile_remote_datasource.dart';
 import 'package:appwizard/features/express_dealmaker/data/datasources/cloud_express_dealmaker_remote_datasource.dart';
 import 'package:appwizard/core/network/network_info.dart';
 import 'package:appwizard/core/services/feature_gate_service.dart';
@@ -109,9 +112,14 @@ Future<void> init() async {
     ..registerLazySingleton<RemoteConfigService>(
       () => RemoteConfigService(sl<AppLogger>()),
     )
-    // Typed GET access to our HTTPS Cloud Functions (base URL from Remote Config)
+    // Typed access to our HTTPS Cloud Functions (base URL from Remote Config). Every call
+    // carries the Firebase ID token; AuthService signs in anonymously first when needed.
     ..registerLazySingleton<CloudFunctionsApi>(
-      () => CloudFunctionsClient(sl<Dio>(), sl<RemoteConfigService>()),
+      () => CloudFunctionsClient(
+        sl<Dio>(),
+        sl<RemoteConfigService>(),
+        authToken: () => sl<AuthService>().idToken(),
+      ),
     )
     ..registerLazySingleton<AnalyticsService>(
       () => AnalyticsService(logger: sl<AppLogger>()),
@@ -129,22 +137,23 @@ Future<void> init() async {
         sl<AppLogger>(),
       ),
     )
-    ..registerLazySingleton<ConversationLocalDataSource>(
-      () => ConversationLocalDataSourceImpl(
-        sl<SharedPreferences>(),
-        sl<AppLogger>(),
-      ),
+    // Backend-owned conversations (CONVERSATIONS.md): writes via the `conversations`
+    // function, reads via Firestore listeners. MOCK_AI swaps both for an in-memory fake.
+    ..registerLazySingleton<FakeConversationsBackend>(FakeConversationsBackend.new)
+    ..registerLazySingleton<ConversationsApi>(
+      () => AppConfig.useMockAi ? sl<FakeConversationsBackend>() : CloudConversationsApi(sl<CloudFunctionsApi>()),
+    )
+    ..registerLazySingleton<ConversationsStream>(
+      () => AppConfig.useMockAi ? sl<FakeConversationsBackend>() : FirestoreConversationsStream(),
     )
     ..registerLazySingleton<ScreenshotEncoder>(() => const ScreenshotEncoder())
     ..registerLazySingleton<ExpressDealmakerRemoteDataSource>(
-      () => AppConfig.useMockAi
-          ? MockExpressDealmakerRemoteDataSource(sl<AppLogger>())
-          : CloudExpressDealmakerRemoteDataSource(
-              sl<CloudFunctionsApi>(),
-              sl<UserProfileService>(),
-              sl<ScreenshotEncoder>(),
-              sl<AppLogger>(),
-            ),
+      () => CloudExpressDealmakerRemoteDataSource(
+        sl<ConversationsApi>(),
+        sl<UserProfileService>(),
+        sl<ScreenshotEncoder>(),
+        sl<AppLogger>(),
+      ),
     )
     ..registerLazySingleton<LinesThatLandApiDataSource>(
       () => LinesThatLandApiDataSourceImpl(sl<CloudFunctionsApi>()),
@@ -160,10 +169,6 @@ Future<void> init() async {
       ),
     )
     // Mappers (enum mappers registered first, then mappers that depend on them)
-    ..registerLazySingleton<ConversationTypeMapper>(() => ConversationTypeMapper())
-    ..registerLazySingleton<ConversationMapper>(
-      () => ConversationMapper(sl<ConversationTypeMapper>(), sl<AppLogger>()),
-    )
     ..registerLazySingleton<OnboardingScreenTypeMapper>(() => OnboardingScreenTypeMapper())
     ..registerLazySingleton<OnboardingDataMapper>(
       () => OnboardingDataMapper(sl<OnboardingScreenTypeMapper>(), sl<AppLogger>()),
@@ -178,13 +183,15 @@ Future<void> init() async {
         sl<OnboardingLocalDataSource>(),
         sl<OnboardingDataMapper>(),
         sl<AppLogger>(),
+        uploader: (data) => sl<ProfileSyncService>().pushOnboarding(data),
       ),
     )
     ..registerLazySingleton<ConversationRepository>(
       () => ConversationRepositoryImpl(
-        sl<ConversationLocalDataSource>(),
-        sl<ConversationMapper>(),
-        sl<AppLogger>(),
+        api: sl<ConversationsApi>(),
+        stream: sl<ConversationsStream>(),
+        auth: sl<AuthService>(),
+        logger: sl<AppLogger>(),
       ),
     )
     ..registerLazySingleton<ExpressDealmakerRepository>(
@@ -272,7 +279,6 @@ Future<void> init() async {
   sl.registerLazySingleton<FeatureGateService>(
     () => FeatureGateService(
       sl<SubscriptionCheckerService>(),
-      sl<RemoteConfigService>(),
       sl<SharedPreferences>(),
       sl<AppLogger>(),
     ),
@@ -286,6 +292,21 @@ Future<void> init() async {
       sl<AppLogger>(),
     ),
   );
+
+  // Profile sync: device answers → `profile` Cloud Function → Firestore (PROFILE_SYNC.md)
+  sl
+    ..registerLazySingleton<InstallationIdService>(() => InstallationIdService(sl<SharedPreferences>()))
+    ..registerLazySingleton<ProfileRemoteDataSource>(() => ProfileRemoteDataSourceImpl(sl<CloudFunctionsApi>()))
+    ..registerLazySingleton<ProfileSyncService>(
+      () => ProfileSyncService(
+        profile: sl<UserProfileService>(),
+        remote: sl<ProfileRemoteDataSource>(),
+        installation: sl<InstallationIdService>(),
+        auth: sl<AuthService>(),
+        onboarding: sl<OnboardingRepository>(),
+        logger: sl<AppLogger>(),
+      ),
+    );
 
   // Auth BLoC
   sl.registerFactory<AuthBloc>(

@@ -4,6 +4,10 @@ import 'package:appwizard/features/lines_that_land/data/models/lines_that_land_r
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeApi implements CloudFunctionsApi {
+  @override
+  Future<T> delete<T>(String path, {required T Function(Map<String, dynamic> json) fromJson}) =>
+      throw UnimplementedError();
+
   _FakeApi(this.payload);
 
   final Map<String, dynamic> payload;
@@ -17,6 +21,10 @@ class _FakeApi implements CloudFunctionsApi {
 
   @override
   Future<T> post<T>(String path, {required Map<String, dynamic> body, required T Function(Map<String, dynamic> json) fromJson}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<T> patch<T>(String path, {required Map<String, dynamic> body, required T Function(Map<String, dynamic> json) fromJson}) =>
       throw UnimplementedError();
 }
 

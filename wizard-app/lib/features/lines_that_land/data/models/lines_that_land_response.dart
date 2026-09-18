@@ -3,7 +3,7 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'lines_that_land_response.g.dart';
 
-/// Payload of `GET {functions_base_url}/lines_that_land` (wizard-backend/functions); also the
+/// Payload of `GET {api_url}/lines_that_land` (wizard-backend/functions); also the
 /// on-device cache format. Every text is a [MultilocaleText]; the app picks the language.
 /// See LINES_THAT_LAND.md.
 @JsonSerializable(explicitToJson: true)

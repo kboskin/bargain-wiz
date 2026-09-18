@@ -34,12 +34,18 @@ class OnboardingAnswer extends Equatable {
   final String? answerKey; // Key from answerStructure in screen config
   final dynamic answer;
 
+  /// Option ids the screen offered for this key (select-type and slider screens), so the
+  /// answer stays interpretable across experiments. Captured at completion; null when
+  /// unknown (e.g. entities rebuilt from local storage).
+  final List<String>? options;
+
   const OnboardingAnswer({
     required this.screenIndex,
     required this.screenTitle,
     required this.screenType,
     this.answerKey,
     required this.answer,
+    this.options,
   });
 
   Map<String, dynamic> toJson() {
@@ -49,6 +55,7 @@ class OnboardingAnswer extends Equatable {
       'screenType': screenType.name,
       'answerKey': answerKey,
       'answer': answer,
+      if (options != null) 'options': options,
     };
   }
 
@@ -59,10 +66,11 @@ class OnboardingAnswer extends Equatable {
       screenType: OnboardingScreenType.fromString(json['screenType'] as String),
       answerKey: json['answerKey'] as String?,
       answer: json['answer'],
+      options: (json['options'] as List?)?.map((e) => e.toString()).toList(),
     );
   }
 
   @override
-  List<Object?> get props => [screenIndex, screenTitle, screenType, answerKey, answer];
+  List<Object?> get props => [screenIndex, screenTitle, screenType, answerKey, answer, options];
 }
 

@@ -1,3 +1,5 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:appwizard/core/utils/app_logger.dart';
@@ -14,54 +16,65 @@ import 'package:appwizard/features/home/data/models/refer_config.dart';
 import 'package:appwizard/features/home/data/models/share_config.dart';
 import 'package:appwizard/core/config/app_config.dart';
 
-/// Service for managing Firebase Remote Config values
-/// Always fetches fresh values from Remote Config (no caching)
-class RemoteConfigService {
+/// Firebase Remote Config values, with the bundled asset defaults as a floor.
+///
+/// Notifies its listeners when a fetch activates new values, so the widget tree can pick
+/// them up after the first frame (see [loadDefaults] / [refresh]).
+class RemoteConfigService extends ChangeNotifier {
   final AppLogger _logger;
 
   RemoteConfigService(this._logger);
 
-  /// Initialize Remote Config
-  Future<void> initialize() async {
+  /// Parsed configs, memoised by key. The getters below are called from `build` methods (the
+  /// root gradient on every root rebuild), and decoding the same JSON on every frame is pure
+  /// waste. Cleared whenever new values are activated.
+  final Map<String, Object?> _parsed = {};
+
+  T? _memo<T>(String key, T? Function() parse) {
+    if (_parsed.containsKey(key)) return _parsed[key] as T?;
+    final value = parse();
+    _parsed[key] = value;
+    return value;
+  }
+
+  /// Bundled defaults from the asset file: everything the UI can render without a network
+  /// call. Awaited once at startup.
+  Future<void> loadDefaults() async {
+    final remoteConfig = FirebaseService.remoteConfig;
+    if (remoteConfig == null) {
+      _logger.w('Firebase Remote Config not available');
+      return;
+    }
     try {
-      _logger.i('Initializing Remote Config Service...');
+      final defaultsJson = await rootBundle.loadString('assets/config/remote_config_defaults.json');
+      final defaultsMap = jsonDecode(defaultsJson) as Map<String, dynamic>;
+      // setDefaults takes strings; the asset values are already JSON-encoded strings.
+      final defaults = <String, dynamic>{
+        for (final entry in defaultsMap.entries) entry.key: entry.value.toString(),
+      };
+      await remoteConfig.setDefaults(defaults);
+      _parsed.clear();
+      _logger.i('Remote Config defaults loaded from asset file (${defaults.length} keys)');
+    } on Object catch (e, stackTrace) {
+      _logger.e('Error loading Remote Config defaults', e, stackTrace);
+    }
+  }
 
-      final remoteConfig = FirebaseService.remoteConfig;
-      if (remoteConfig == null) {
-        _logger.w('Firebase Remote Config not available');
-        return;
+  /// Fetches and activates remote values, then notifies listeners so config-driven widgets
+  /// rebuild. Runs in the background: the fetch can take seconds (10 s timeout), so no frame
+  /// ever waits for it.
+  Future<void> refresh() async {
+    final remoteConfig = FirebaseService.remoteConfig;
+    if (remoteConfig == null) return;
+    try {
+      final activated = await remoteConfig.fetchAndActivate();
+      _logger.i('Remote Config fetched${activated ? ' and activated' : ' (unchanged)'}');
+      if (activated) {
+        _parsed.clear();
+        notifyListeners();
       }
-
-      // Load defaults from asset file
-      try {
-        final defaultsJson = await rootBundle.loadString('assets/config/remote_config_defaults.json');
-        final defaultsMap = jsonDecode(defaultsJson) as Map<String, dynamic>;
-        
-        // Remote Config setDefaults expects Map<String, dynamic> where values are strings
-        // The values in remote_config_defaults.json are already JSON-encoded strings
-        final defaults = <String, dynamic>{};
-        defaultsMap.forEach((key, value) {
-          // Values are already strings (JSON-encoded), so use them directly
-          defaults[key] = value.toString();
-        });
-        
-        await remoteConfig.setDefaults(defaults);
-        _logger.i('Remote Config defaults loaded from asset file (${defaults.length} keys)');
-      } catch (e) {
-        _logger.w('Error loading Remote Config defaults: $e');
-      }
-
-      // Fetch fresh values from Remote Config
-      try {
-        await remoteConfig.fetchAndActivate();
-        _logger.i('Remote Config fetched and activated');
-      } catch (e) {
-        _logger.w('Error fetching Remote Config: $e');
-      }
-      
-      _logger.i('Remote Config Service initialized');
-    } catch (e, stackTrace) {
-      _logger.e('Error initializing Remote Config Service', e, stackTrace);
+    } on Object catch (e) {
+      _logger.w('Error fetching Remote Config: $e');
     }
   }
 
@@ -81,13 +94,15 @@ class RemoteConfigService {
     }
   }
 
-  /// Base URL of the project's Cloud Functions (key: [functions_base_url]) without a
-  /// trailing slash, e.g. `https://us-central1-wizard-app-dev.cloudfunctions.net`.
+  /// Base URL of our backend, the project's Cloud Functions host (key: [api_url]), without
+  /// a trailing slash, e.g. `https://us-central1-wizard-app-dev.cloudfunctions.net`.
   /// Set per Firebase project (dev / prod). Empty when not configured.
-  String getFunctionsBaseUrl() {
-    final url = getString('functions_base_url').trim().replaceAll(RegExp(r'/+$'), '');
+  String getApiUrl() {
+    // Local flavor: the Functions emulator, whatever Remote Config says.
+    if (AppConfig.isLocal) return AppConfig.localApiUrl(Firebase.app().options.projectId);
+    final url = getString('api_url').trim().replaceAll(RegExp(r'/+$'), '');
     if (url.isEmpty) {
-      _logger.w('functions_base_url is not configured');
+      _logger.w('api_url is not configured');
     }
     return url;
   }
@@ -185,25 +200,26 @@ class RemoteConfigService {
   /// Get onboarding config from Remote Config (key: [onboarding_config]).
   /// Contains e.g. background gradient for onboarding flow.
   /// Returns null if not configured.
-  OnboardingConfig? getOnboardingConfig() {
-    try {
-      final jsonString = getString('onboarding_config');
-      if (jsonString.isEmpty) {
+  OnboardingConfig? getOnboardingConfig() => _memo('onboarding_config', () {
+      try {
+        final jsonString = getString('onboarding_config');
+        if (jsonString.isEmpty) {
+          return null;
+        }
+
+        final json = jsonDecode(jsonString);
+        if (json is! Map<String, dynamic>) {
+          _logger.w('Invalid onboarding_config format');
+          return null;
+        }
+
+        return OnboardingConfig.fromJson(json);
+      } catch (e, stackTrace) {
+        _logger.e('Error parsing onboarding config', e, stackTrace);
         return null;
       }
-
-      final json = jsonDecode(jsonString);
-      if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid onboarding_config format');
-        return null;
-      }
-
-      return OnboardingConfig.fromJson(json);
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing onboarding config', e, stackTrace);
-      return null;
-    }
-  }
+  
+      });
 
   /// Main-screen gradient from [main_page_config].background.
   /// Used by root PastelGradientBackground.
@@ -212,26 +228,27 @@ class RemoteConfigService {
 
   /// Get welcome screen configuration from Remote Config
   /// Returns null if not configured
-  WelcomeScreenConfig? getWelcomeScreenConfig() {
-    try {
-      final jsonString = getString('welcome_screen_config');
-      if (jsonString.isEmpty) {
-        _logger.w('Welcome screen config is empty');
+  WelcomeScreenConfig? getWelcomeScreenConfig() => _memo('welcome_screen_config', () {
+      try {
+        final jsonString = getString('welcome_screen_config');
+        if (jsonString.isEmpty) {
+          _logger.w('Welcome screen config is empty');
+          return null;
+        }
+
+        final json = jsonDecode(jsonString);
+        if (json is! Map<String, dynamic>) {
+          _logger.w('Invalid welcome_screen_config format');
+          return null;
+        }
+
+        return WelcomeScreenConfig.fromJson(json);
+      } catch (e, stackTrace) {
+        _logger.e('Error parsing welcome screen config', e, stackTrace);
         return null;
       }
-
-      final json = jsonDecode(jsonString);
-      if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid welcome_screen_config format');
-        return null;
-      }
-
-      return WelcomeScreenConfig.fromJson(json);
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing welcome screen config', e, stackTrace);
-      return null;
-    }
-  }
+  
+      });
 
   /// Get Privacy Policy URL from Remote Config
   /// Returns empty string if not configured
@@ -265,26 +282,27 @@ class RemoteConfigService {
 
   /// Get subscription configuration from Remote Config
   /// Returns null if not configured
-  SubscriptionConfig? getSubscriptionConfig() {
-    try {
-      final jsonString = getString('subscription_config');
-      if (jsonString.isEmpty) {
-        _logger.w('Subscription config is empty');
+  SubscriptionConfig? getSubscriptionConfig() => _memo('subscription_config', () {
+      try {
+        final jsonString = getString('subscription_config');
+        if (jsonString.isEmpty) {
+          _logger.w('Subscription config is empty');
+          return null;
+        }
+
+        final json = jsonDecode(jsonString);
+        if (json is! Map<String, dynamic>) {
+          _logger.w('Invalid subscription_config format');
+          return null;
+        }
+
+        return SubscriptionConfig.fromJson(json);
+      } catch (e, stackTrace) {
+        _logger.e('Error parsing subscription config', e, stackTrace);
         return null;
       }
-
-      final json = jsonDecode(jsonString);
-      if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid subscription_config format');
-        return null;
-      }
-
-      return SubscriptionConfig.fromJson(json);
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing subscription config', e, stackTrace);
-      return null;
-    }
-  }
+  
+      });
 
   /// Get paywall configuration from Remote Config
   /// Returns null if not configured or parsing fails
@@ -314,86 +332,90 @@ class RemoteConfigService {
 
   /// Get main page configuration from Remote Config (key: [main_page_config]).
   /// Button texts and center visual (path + metadata) for the home screen.
-  MainPageConfig? getMainPageConfig() {
-    try {
-      final jsonString = getString('main_page_config');
-      if (jsonString.isEmpty) {
+  MainPageConfig? getMainPageConfig() => _memo('main_page_config', () {
+      try {
+        final jsonString = getString('main_page_config');
+        if (jsonString.isEmpty) {
+          return null;
+        }
+        final json = jsonDecode(jsonString);
+        if (json is! Map<String, dynamic>) {
+          _logger.w('Invalid main_page_config format');
+          return null;
+        }
+        return MainPageConfig.fromJson(json);
+      } catch (e, stackTrace) {
+        _logger.e('Error parsing main page config', e, stackTrace);
         return null;
       }
-      final json = jsonDecode(jsonString);
-      if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid main_page_config format');
-        return null;
-      }
-      return MainPageConfig.fromJson(json);
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing main page config', e, stackTrace);
-      return null;
-    }
-  }
+  
+      });
 
   /// Get share configuration from Remote Config (key: [share_config]).
   /// Used when the user taps Share to generate a Firebase link with title, description, imageUrl.
   /// Returns null if not configured.
-  ShareConfig? getShareConfig() {
-    try {
-      final jsonString = getString('share_config');
-      if (jsonString.isEmpty) {
+  ShareConfig? getShareConfig() => _memo('share_config', () {
+      try {
+        final jsonString = getString('share_config');
+        if (jsonString.isEmpty) {
+          return null;
+        }
+        final json = jsonDecode(jsonString);
+        if (json is! Map<String, dynamic>) {
+          _logger.w('Invalid share_config format');
+          return null;
+        }
+        return ShareConfig.fromJson(json);
+      } catch (e, stackTrace) {
+        _logger.e('Error parsing share config', e, stackTrace);
         return null;
       }
-      final json = jsonDecode(jsonString);
-      if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid share_config format');
-        return null;
-      }
-      return ShareConfig.fromJson(json);
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing share config', e, stackTrace);
-      return null;
-    }
-  }
+  
+      });
 
   /// Rate Us / satisfaction modal config (key: [rate_us_modal_config]).
   /// Same structure as permission screen: title, visual, buttons (ButtonConfig).
   /// Returns null if not configured or parsing fails.
-  RateUsModalConfig? getRateUsModalConfig() {
-    try {
-      final jsonString = getString('rate_us_modal_config');
-      if (jsonString.isEmpty) {
+  RateUsModalConfig? getRateUsModalConfig() => _memo('rate_us_modal_config', () {
+      try {
+        final jsonString = getString('rate_us_modal_config');
+        if (jsonString.isEmpty) {
+          return null;
+        }
+        final json = jsonDecode(jsonString);
+        if (json is! Map<String, dynamic>) {
+          _logger.w('Invalid rate_us_modal_config format');
+          return null;
+        }
+        return RateUsModalConfig.fromJson(json);
+      } catch (e, stackTrace) {
+        _logger.e('Error parsing rate_us_modal_config', e, stackTrace);
         return null;
       }
-      final json = jsonDecode(jsonString);
-      if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid rate_us_modal_config format');
-        return null;
-      }
-      return RateUsModalConfig.fromJson(json);
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing rate_us_modal_config', e, stackTrace);
-      return null;
-    }
-  }
+  
+      });
 
   /// Refer / invite-friends config (key: [refer_config]).
   /// Title, benefits list, CTA button text; optional share_title, share_description, share_link_url.
   /// Returns null if not configured or parsing fails.
-  ReferConfig? getReferConfig() {
-    try {
-      final jsonString = getString('refer_config');
-      if (jsonString.isEmpty) {
+  ReferConfig? getReferConfig() => _memo('refer_config', () {
+      try {
+        final jsonString = getString('refer_config');
+        if (jsonString.isEmpty) {
+          return null;
+        }
+        final json = jsonDecode(jsonString);
+        if (json is! Map<String, dynamic>) {
+          _logger.w('Invalid refer_config format');
+          return null;
+        }
+        return ReferConfig.fromJson(json);
+      } catch (e, stackTrace) {
+        _logger.e('Error parsing refer_config', e, stackTrace);
         return null;
       }
-      final json = jsonDecode(jsonString);
-      if (json is! Map<String, dynamic>) {
-        _logger.w('Invalid refer_config format');
-        return null;
-      }
-      return ReferConfig.fromJson(json);
-    } catch (e, stackTrace) {
-      _logger.e('Error parsing refer_config', e, stackTrace);
-      return null;
-    }
-  }
+  
+      });
 
   /// Get payment provider type, primarily from paywall config.
   /// Falls back to AppConfig.default (env) and then IAP.

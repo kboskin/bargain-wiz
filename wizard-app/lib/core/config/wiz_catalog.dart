@@ -15,6 +15,7 @@ class VibeDef {
     required this.textOnColor,
     required this.chipTextColor,
     required this.subtext,
+    this.icon,
   });
 
   final String id;
@@ -28,6 +29,9 @@ class VibeDef {
   /// AA-safe color when the vibe is shown as text / header chip.
   final Color chipTextColor;
   final dynamic subtext;
+
+  /// Glyph shown on option cards and chips (Font Awesome by default; remote `icon` overrides).
+  final IconData? icon;
 
   String labelOf(BuildContext c) => TemplateText.textOf(c, label);
   String shortOf(BuildContext c) => TemplateText.textOf(c, short);
@@ -101,6 +105,7 @@ class WizCatalog {
       textOnColor: WizColors.tealInk,
       chipTextColor: WizColors.tealText,
       subtext: {'en': 'Polite, builds rapport, asks nicely.', 'es': 'Educado, crea confianza, pide con amabilidad.'},
+      icon: IconData(0xf2b5, fontFamily: 'FontAwesomeRegular', fontPackage: 'font_awesome_flutter'), // handshake
     ),
     VibeDef(
       id: 'no_nonsense',
@@ -110,6 +115,7 @@ class WizCatalog {
       textOnColor: Colors.white,
       chipTextColor: WizColors.orange,
       subtext: {'en': 'Direct, brief, and values time over small talk.', 'es': 'Directo, breve y valora el tiempo más que la charla.'},
+      icon: IconData(0xf0e7, fontFamily: 'FontAwesomeSolid', fontPackage: 'font_awesome_flutter'), // bolt
     ),
     VibeDef(
       id: 'tactical',
@@ -119,6 +125,7 @@ class WizCatalog {
       textOnColor: WizColors.ink,
       chipTextColor: WizColors.yellowText,
       subtext: {'en': 'Uses logic, data, and persistence to win.', 'es': 'Usa lógica, datos y persistencia para ganar.'},
+      icon: IconData(0xf441, fontFamily: 'FontAwesomeRegular', fontPackage: 'font_awesome_flutter'), // chess knight
     ),
     VibeDef(
       id: 'quiet_closer',
@@ -128,6 +135,7 @@ class WizCatalog {
       textOnColor: Colors.white,
       chipTextColor: WizColors.textTertiary,
       subtext: {'en': 'Subtle and non-confrontational but gets the deal.', 'es': 'Sutil y sin confrontación, pero cierra el trato.'},
+      icon: IconData(0xf52d, fontFamily: 'FontAwesomeSolid', fontPackage: 'font_awesome_flutter'), // feather
     ),
   ];
 
@@ -268,6 +276,7 @@ class WizCatalog {
                 textOnColor: color.computeLuminance() > 0.5 ? WizColors.ink : Colors.white,
                 chipTextColor: base.id == id ? base.chipTextColor : color,
                 subtext: meta['subtext'] ?? base.subtext,
+                icon: o['icon'] != null ? IconResolver.resolve(o['icon']).icon : base.icon,
               );
             }).toList(),
       pushLevels: pushOpts == null || pushOpts.isEmpty

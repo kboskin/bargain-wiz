@@ -231,6 +231,7 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
       keyword: keyword.isEmpty ? null : keyword,
       locale: _locale,
       vibe: state.vibeId,
+      conversationId: state.conversationId,
     );
     if (isClosed) return;
     result.fold(
@@ -245,6 +246,7 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
           replyLoading: false,
           lines: reply.lines,
           seeing: reply.seeing,
+          conversationId: reply.conversationId ?? state.conversationId,
           requestId: state.requestId + 1,
           clearError: true,
         ));
@@ -291,11 +293,11 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
 
   // ── Persistence ────────────────────────────────────────────────────────
 
-  /// Saves the deal to history (called on back). Returns true when a
-  /// conversation was written; nothing is saved before results exist unless
-  /// the conversation was reopened from history.
+  /// Persists history metadata (title, tone, marketplace) for the backend conversation
+  /// (called on back). The deal itself already lives on the server; nothing to save before
+  /// the backend has created it.
   Future<bool> saveConversation() async {
-    if (!state.isSaveable) return false;
+    if (!state.isSaveable || state.conversationId == null) return false;
     final conversation = buildConversation();
     final result = await _conversationRepository.saveConversation(conversation);
     return result.isRight();

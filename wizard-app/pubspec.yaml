@@ -106,6 +106,8 @@ dependencies:
   in_app_review: ^2.0.9
   video_player: ^2.14.0
   image: ^4.10.1
+  cloud_firestore: ^5.6.12
+  firebase_storage: ^12.4.10
 dev_dependencies:
   flutter_test:
     sdk: flutter

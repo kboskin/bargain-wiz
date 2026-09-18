@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:appwizard/core/config/feature_gate_config.dart';
+import 'package:appwizard/core/config/feature_gate_policy.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';

@@ -5,3 +5,8 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# Pydantic turns ValueError (not TypeError) raised inside validators into a 400-able
+# ValidationError, so type checks in validators must raise ValueError.
+ignore = ["TRY004"]

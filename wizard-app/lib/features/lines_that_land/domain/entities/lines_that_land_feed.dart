@@ -15,7 +15,8 @@ enum LinesFeedSource {
 ///
 /// [updatedAt] is when the content last changed on the server; [refreshInterval] is the
 /// cadence the endpoint declares (`refresh_interval_hours`), used both for the on-device
-/// cache TTL and the "new lines every …" caption.
+/// cache TTL and the "new lines every …" caption. [isStale] marks a cached copy older than
+/// that cadence: still shown, but worth a background refresh.
 class LinesThatLandFeed extends Equatable {
   const LinesThatLandFeed({
     required this.categories,
@@ -23,6 +24,7 @@ class LinesThatLandFeed extends Equatable {
     required this.source,
     this.locales = const [],
     this.updatedAt,
+    this.isStale = false,
   });
 
   final List<LinesThatLandCategory> categories;
@@ -32,7 +34,8 @@ class LinesThatLandFeed extends Equatable {
   final DateTime? updatedAt;
   final Duration refreshInterval;
   final LinesFeedSource source;
+  final bool isStale;
 
   @override
-  List<Object?> get props => [categories, locales, updatedAt, refreshInterval, source];
+  List<Object?> get props => [categories, locales, updatedAt, refreshInterval, source, isStale];
 }

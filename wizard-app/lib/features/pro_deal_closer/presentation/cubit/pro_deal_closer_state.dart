@@ -18,20 +18,28 @@ class ProChatMessage extends Equatable {
     this.showActions = false,
     this.optionsLoading = false,
     this.restored = false,
+    this.status = MessageStatus.done,
+    this.requestId,
   });
 
+  /// [localPaths] are this device's files for a turn it sent (server refs otherwise).
   factory ProChatMessage.fromEntity(
     ProDealCloserMessage entity, {
     required String id,
     bool restored = false,
+    List<String>? localPaths,
   }) =>
       ProChatMessage(
         id: id,
-        text: entity.text,
-        attachmentPaths: List<String>.from(entity.attachmentPaths),
+        text: entity.isWizard && entity.isFailed && entity.text.isEmpty
+            ? (entity.errorMessage ?? 'The wizard could not answer. Try again.')
+            : entity.text,
+        attachmentPaths: List<String>.from(localPaths ?? entity.displayPaths),
         isWizard: entity.isWizard,
         options: List<DealLine>.from(entity.options),
         restored: restored,
+        status: entity.status,
+        requestId: entity.requestId,
       );
 
   /// Stable key for list items / per-row widget state.
@@ -48,9 +56,14 @@ class ProChatMessage extends Equatable {
   final bool optionsLoading;
   /// Loaded from history: rendered without entrance animation, actions hidden.
   final bool restored;
+  /// Server lifecycle (pending = typing placeholder, failed = needs a Redo / resend).
+  final MessageStatus status;
+  /// Client request id of the turn this bubble belongs to.
+  final String? requestId;
 
   bool get isUser => !isWizard;
   bool get hasAttachments => attachmentPaths.isNotEmpty;
+  bool get isFailed => status == MessageStatus.failed;
 
   ProDealCloserMessage toEntity() => ProDealCloserMessage(
         text: text,
@@ -68,6 +81,7 @@ class ProChatMessage extends Equatable {
     bool? showActions,
     bool? optionsLoading,
     bool? restored,
+    MessageStatus? status,
   }) =>
       ProChatMessage(
         id: id,
@@ -79,6 +93,8 @@ class ProChatMessage extends Equatable {
         showActions: showActions ?? this.showActions,
         optionsLoading: optionsLoading ?? this.optionsLoading,
         restored: restored ?? this.restored,
+        status: status ?? this.status,
+        requestId: requestId,
       );
 
   @override
@@ -92,6 +108,8 @@ class ProChatMessage extends Equatable {
         showActions,
         optionsLoading,
         restored,
+        status,
+        requestId,
       ];
 }
 

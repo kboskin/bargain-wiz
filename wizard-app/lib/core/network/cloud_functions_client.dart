@@ -22,21 +22,32 @@ typedef AuthTokenProvider = Future<String?> Function();
 /// Typed access to the project's HTTPS Cloud Functions (wizard-backend/functions).
 ///
 /// Functions are plain JSON-over-HTTPS endpoints under the remotely configured
-/// `functions_base_url`; each feature adds its path and request/response models.
+/// `api_url`; each feature adds its path and request/response models.
 abstract class CloudFunctionsApi {
-  /// `GET {functions_base_url}{path}`, decoded with [fromJson].
+  /// `GET {api_url}{path}`, decoded with [fromJson].
   ///
   /// Throws [CloudFunctionException] when the function answers with an error body,
   /// [StateError] for anything else unexpected, and [DioException] for transport failures.
   Future<T> get<T>(String path, {required T Function(Map<String, dynamic> json) fromJson});
 
-  /// `POST {functions_base_url}{path}` with a JSON [body], decoded with [fromJson].
+  /// `POST {api_url}{path}` with a JSON [body], decoded with [fromJson].
   /// Same failure modes as [get].
   Future<T> post<T>(
     String path, {
     required Map<String, dynamic> body,
     required T Function(Map<String, dynamic> json) fromJson,
   });
+
+  /// `PATCH {api_url}{path}` with a JSON [body] (partial update), decoded with
+  /// [fromJson]. Same failure modes as [get].
+  Future<T> patch<T>(
+    String path, {
+    required Map<String, dynamic> body,
+    required T Function(Map<String, dynamic> json) fromJson,
+  });
+
+  /// `DELETE {api_url}{path}`, decoded with [fromJson]. Same failure modes as [get].
+  Future<T> delete<T>(String path, {required T Function(Map<String, dynamic> json) fromJson});
 }
 
 class CloudFunctionsClient implements CloudFunctionsApi {
@@ -77,14 +88,26 @@ class CloudFunctionsClient implements CloudFunctionsApi {
   }) =>
       _send(path, method: 'POST', body: body, fromJson: fromJson);
 
+  @override
+  Future<T> patch<T>(
+    String path, {
+    required Map<String, dynamic> body,
+    required T Function(Map<String, dynamic> json) fromJson,
+  }) =>
+      _send(path, method: 'PATCH', body: body, fromJson: fromJson);
+
+  @override
+  Future<T> delete<T>(String path, {required T Function(Map<String, dynamic> json) fromJson}) =>
+      _send(path, method: 'DELETE', fromJson: fromJson);
+
   Future<T> _send<T>(
     String path, {
     required String method,
     required T Function(Map<String, dynamic> json) fromJson,
     Map<String, dynamic>? body,
   }) async {
-    final base = _remoteConfig.getFunctionsBaseUrl();
-    if (base.isEmpty) throw StateError('Cloud Functions: functions_base_url is not configured');
+    final base = _remoteConfig.getApiUrl();
+    if (base.isEmpty) throw StateError('Cloud Functions: api_url is not configured');
 
     final headers = <String, dynamic>{'Accept': 'application/json'};
     if (body != null) headers['Content-Type'] = 'application/json';

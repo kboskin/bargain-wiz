@@ -52,10 +52,12 @@ class FakeExpressRepository implements ExpressDealmakerRepository {
     required final String locale,
     final String? keyword,
     final String? vibe,
+    final String? conversationId,
   }) async {
     replyRequests.add(ReplyRequest(ids: uploadedIds, locale: locale, keyword: keyword, vibe: vibe));
     if (failReply) return const Left(ServerFailure('reply failed'));
-    return Right(reply);
+    // Like the backend: the first reply creates the conversation, later ones keep its id.
+    return Right(DealReply(lines: reply.lines, seeing: reply.seeing, conversationId: conversationId ?? 'conv_1'));
   }
 }
 
@@ -78,9 +80,4 @@ class FakeConversationRepository implements ConversationRepository {
     return const Right(null);
   }
 
-  @override
-  Future<Either<Failure, void>> clearAll() async {
-    store.clear();
-    return const Right(null);
-  }
 }

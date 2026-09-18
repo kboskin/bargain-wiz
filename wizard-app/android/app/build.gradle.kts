@@ -43,6 +43,15 @@ android {
             dimension = "environment"
             resValue("string", "app_name", "Bargain Wiz")
         }
+        // Dev app pointed at the Firebase emulators (flutter run --flavor local
+        // --dart-define=FLAVOR=local). Same applicationId as dev so google-services.json
+        // matches; src/local/AndroidManifest.xml allows http to the host machine.
+        create("local") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-local"
+            resValue("string", "app_name", "Bargain Wiz Local")
+        }
     }
 
     buildTypes {

@@ -12,6 +12,7 @@ class UploadScreenshotResultMapper {
 class DealReplyMapper {
   DealReply toEntity(final DealReplyDto dto) => DealReply(
         seeing: dto.seeing,
+        conversationId: dto.conversationId,
         lines: dto.lines.map(toLine).toList(),
       );
 

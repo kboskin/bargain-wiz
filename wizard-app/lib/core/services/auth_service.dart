@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,34 +7,103 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../utils/app_logger.dart';
 
-/// Authentication service for handling Firebase Auth
+/// Firebase Auth for an app that never forces sign-in (see CONVERSATIONS.md §2).
+///
+/// Every install is signed in **anonymously** on first use, so there is always a uid for the
+/// backend and for Firestore rules. Signing in with Google / Apple / email *links* that
+/// credential to the anonymous user, keeping the uid and everything stored under it. When the
+/// credential already belongs to another account we switch to that account instead (the
+/// anonymous history stays behind until the server-side merge ships). Signing out signs in
+/// anonymously again right away, so the device is never without a uid.
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  AuthService(this._logger, {FirebaseAuth? auth, GoogleSignIn? googleSignIn})
+      : _auth = auth ?? FirebaseAuth.instance,
+        _googleSignIn = googleSignIn ?? GoogleSignIn();
+
+  final FirebaseAuth _auth;
+  final GoogleSignIn _googleSignIn;
   final AppLogger _logger;
 
-  AuthService(this._logger);
+  Future<User?>? _signingIn;
+  DateTime? _retryNotBefore;
 
-  /// Get current user
+  /// After a failed anonymous sign-in (offline, emulator down), callers get null without a
+  /// new network attempt for this long. Every backend call asks for a token, so without a
+  /// cooldown a dead network turns into a retry storm.
+  static const Duration retryCooldown = Duration(seconds: 5);
+
+  /// The anonymous uid we left behind when switching to an existing account (input for the
+  /// future `POST /me/merge`).
+  String? previousAnonymousUid;
+
+  /// Current Firebase user, anonymous or not.
   User? get currentUser => _auth.currentUser;
 
-  /// Get auth state stream
+  /// Fires on sign-in / sign-out (a link keeps the uid, so it is silent here).
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  /// Check if user is signed in
+  /// Also fires when the user is linked to a provider or its profile changes.
+  Stream<User?> get userChanges => _auth.userChanges();
+
+  /// The uid over time: anonymous → same uid after linking → a new one after sign-out.
+  Stream<String?> get uidChanges => userChanges.map((user) => user?.uid).distinct();
+
+  /// A Firebase user exists (anonymous counts).
   bool get isSignedIn => _auth.currentUser != null;
 
-  /// Sign in with email and password
+  /// Signed in with a real provider, not anonymously.
+  bool get hasAccount => isAccount(_auth.currentUser);
+
+  static bool isAccount(User? user) => user != null && !user.isAnonymous;
+
+  /// Signs in anonymously when there is no user yet. Cheap to call often; concurrent calls
+  /// share one request. Returns null when Firebase is unreachable (offline first launch):
+  /// callers carry on without a uid and try again on the next call.
+  Future<User?> ensureSignedIn() {
+    final current = _auth.currentUser;
+    if (current != null) return Future.value(current);
+    final notBefore = _retryNotBefore;
+    if (notBefore != null && DateTime.now().isBefore(notBefore)) return Future.value(null);
+    return _signingIn ??= _signInAnonymously().whenComplete(() => _signingIn = null);
+  }
+
+  /// The uid, signing in anonymously first when needed.
+  Future<String?> ensureUid() async => (await ensureSignedIn())?.uid;
+
+  /// ID token for backend calls, signing in anonymously first when needed.
+  Future<String?> idToken({bool forceRefresh = false}) async {
+    final user = await ensureSignedIn();
+    if (user == null) return null;
+    try {
+      return await user.getIdToken(forceRefresh);
+    } on Object catch (e) {
+      _logger.w('Could not get an ID token: $e');
+      return null;
+    }
+  }
+
+  Future<User?> _signInAnonymously() async {
+    try {
+      final credential = await _auth.signInAnonymously();
+      _logger.i('Signed in anonymously (${credential.user?.uid})');
+      return credential.user;
+    } on Object catch (e) {
+      _retryNotBefore = DateTime.now().add(retryCooldown);
+      _logger.w('Anonymous sign-in failed (offline?), next attempt in ${retryCooldown.inSeconds}s: $e');
+      return null;
+    }
+  }
+
+  /// Sign in to an existing email account. An existing account always has its own uid, so
+  /// this switches accounts rather than linking.
   Future<UserCredential> signInWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
     try {
-      _logger.i('Signing in with email: $email');
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      _logger.i('Signing in with email');
+      _rememberAnonymous();
+      final credential = await _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
       _logger.i('Successfully signed in with email');
       return credential;
     } on FirebaseAuthException catch (e) {
@@ -45,19 +115,25 @@ class AuthService {
     }
   }
 
-  /// Sign up with email and password
+  /// Create an email account: links the credential to the anonymous user so the uid (and
+  /// the deals under it) survive.
   Future<UserCredential> signUpWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
     try {
-      _logger.i('Signing up with email: $email');
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      _logger.i('Signing up with email');
+      final credential = EmailAuthProvider.credential(email: email.trim(), password: password);
+      final anonymous = _auth.currentUser;
+      final UserCredential result;
+      if (anonymous != null && anonymous.isAnonymous) {
+        result = await anonymous.linkWithCredential(credential);
+        await _afterLink(result);
+      } else {
+        result = await _auth.createUserWithEmailAndPassword(email: email.trim(), password: password);
+      }
       _logger.i('Successfully signed up with email');
-      return credential;
+      return result;
     } on FirebaseAuthException catch (e) {
       _logger.e('Email sign up error', e);
       throw _handleAuthException(e);
@@ -67,34 +143,22 @@ class AuthService {
     }
   }
 
-  /// Sign in with Google
+  /// Sign in with Google: link to the anonymous user, or switch to the existing account.
   Future<UserCredential> signInWithGoogle() async {
     try {
       _logger.i('Starting Google sign in');
-      
-      // Trigger the authentication flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
       if (googleUser == null) {
         throw Exception('Google sign in was cancelled');
       }
-
-      // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Create a new credential
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-
-      // Sign in to Firebase with the Google credential
-      _logger.i('Signing in to Firebase with Google credential');
-      final userCredential = await _auth.signInWithCredential(credential);
+      final result = await _linkOrSignIn(credential);
       _logger.i('Successfully signed in with Google');
-      
-      return userCredential;
+      return result;
     } on FirebaseAuthException catch (e) {
       _logger.e('Google sign in error', e);
       throw _handleAuthException(e);
@@ -104,35 +168,26 @@ class AuthService {
     }
   }
 
-  /// Sign in with Apple (iOS only)
+  /// Sign in with Apple (iOS only): link to the anonymous user, or switch to the existing account.
   Future<UserCredential> signInWithApple() async {
     try {
       if (!Platform.isIOS) {
         throw UnsupportedError('Apple Sign-In is only available on iOS');
       }
-
       _logger.i('Starting Apple sign in');
-
-      // Request credential for the currently signed in Apple account
       final appleCredential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
       );
-
-      // Create an `OAuthCredential` from the credential returned by Apple
       final oauthCredential = OAuthProvider("apple.com").credential(
         idToken: appleCredential.identityToken,
         accessToken: appleCredential.authorizationCode,
       );
-
-      // Sign in to Firebase with the Apple credential
-      _logger.i('Signing in to Firebase with Apple credential');
-      final userCredential = await _auth.signInWithCredential(oauthCredential);
+      final result = await _linkOrSignIn(oauthCredential);
       _logger.i('Successfully signed in with Apple');
-      
-      return userCredential;
+      return result;
     } on FirebaseAuthException catch (e) {
       _logger.e('Apple sign in error', e);
       throw _handleAuthException(e);
@@ -142,7 +197,49 @@ class AuthService {
     }
   }
 
-  /// Sign out
+  /// Link [credential] to the anonymous user (uid unchanged). When the credential already has
+  /// an account, sign in to it instead and remember the anonymous uid for a later merge.
+  Future<UserCredential> _linkOrSignIn(AuthCredential credential) async {
+    var toUse = credential;
+    final anonymous = _auth.currentUser;
+    if (anonymous != null && anonymous.isAnonymous) {
+      try {
+        final result = await anonymous.linkWithCredential(toUse);
+        await _afterLink(result);
+        _logger.i('Linked ${toUse.providerId} to the anonymous user');
+        return result;
+      } on FirebaseAuthException catch (e) {
+        if (!_isConflict(e.code)) rethrow;
+        _logger.i('Credential already has an account (${e.code}); switching to it');
+        toUse = e.credential ?? toUse;
+      }
+    }
+    _rememberAnonymous();
+    return _auth.signInWithCredential(toUse);
+  }
+
+  static bool _isConflict(String code) =>
+      code == 'credential-already-in-use' ||
+      code == 'email-already-in-use' ||
+      code == 'account-exists-with-different-credential' ||
+      code == 'provider-already-linked';
+
+  void _rememberAnonymous() {
+    final user = _auth.currentUser;
+    if (user != null && user.isAnonymous) previousAnonymousUid = user.uid;
+  }
+
+  /// Refresh the ID token so the backend sees the new provider claim right away.
+  Future<void> _afterLink(UserCredential result) async {
+    try {
+      await result.user?.getIdToken(true);
+    } on Object catch (e) {
+      _logger.w('Token refresh after link failed: $e');
+    }
+  }
+
+  /// Sign out of the account and continue anonymously with a fresh, empty uid. The account's
+  /// deals stay on the server.
   Future<void> signOut() async {
     try {
       _logger.i('Signing out');
@@ -150,6 +247,7 @@ class AuthService {
         _auth.signOut(),
         _googleSignIn.signOut(),
       ]);
+      await ensureSignedIn();
       _logger.i('Successfully signed out');
     } catch (e, stackTrace) {
       _logger.e('Error signing out', e, stackTrace);
@@ -160,7 +258,7 @@ class AuthService {
   /// Send password reset email
   Future<void> sendPasswordResetEmail(String email) async {
     try {
-      _logger.i('Sending password reset email to: $email');
+      _logger.i('Sending password reset email');
       await _auth.sendPasswordResetEmail(email: email.trim());
       _logger.i('Password reset email sent');
     } on FirebaseAuthException catch (e) {
@@ -181,6 +279,8 @@ class AuthService {
         return 'Incorrect password. Please try again.';
       case 'email-already-in-use':
         return 'An account already exists with this email address.';
+      case 'credential-already-in-use':
+        return 'This account is already linked to another user.';
       case 'weak-password':
         return 'Password is too weak. Please use a stronger password.';
       case 'invalid-email':
@@ -201,4 +301,3 @@ class AuthService {
   /// Check if Apple Sign-In is available
   bool get isAppleSignInAvailable => Platform.isIOS;
 }
-

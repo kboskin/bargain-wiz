@@ -77,6 +77,25 @@ void main() {
     });
   });
 
+  group('vibe icons', () {
+    test('every default vibe has a Font Awesome glyph', () {
+      for (final v in WizCatalog.defaultVibes) {
+        expect(v.icon, isNotNull, reason: v.id);
+        expect(v.icon!.fontPackage, 'font_awesome_flutter', reason: v.id);
+      }
+    });
+
+    test('a remote option icon overrides the default glyph', () {
+      final c = catalog.withRemoteOptions({
+        'negotiation_vibe': [
+          {'label': 'Friendly', 'value': 'friendly', 'icon': {'code': '0xf0e7', 'font': 'solid'}},
+        ],
+      });
+      expect(c.vibes.single.icon!.codePoint, 0xf0e7);
+      expect(c.vibes.single.icon!.fontFamily, 'FontAwesomeSolid');
+    });
+  });
+
   group('withRemoteOptions', () {
     test('overrides colors/labels from onboarding options and keeps defaults otherwise', () {
       final c = catalog.withRemoteOptions({
@@ -90,6 +109,7 @@ void main() {
       expect(c.vibes.length, 1);
       expect(c.vibes.first.color, const Color(0xFF123456));
       expect(c.vibes.first.short, 'Chill');
+      expect(c.vibes.first.icon, WizCatalog.defaultVibes.first.icon); // kept from the base vibe
       expect(c.pushLevels.length, 1);
       expect(c.pushLevels.first.emoji, '🍃');
       expect(c.dealSizes.length, 3);

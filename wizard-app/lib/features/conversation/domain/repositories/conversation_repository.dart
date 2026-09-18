@@ -6,8 +6,8 @@ import 'package:appwizard/features/conversation/domain/entities/conversation.dar
 abstract class ConversationRepository {
   Future<Either<Failure, List<Conversation>>> getConversations();
   Future<Either<Failure, void>> saveConversation(Conversation conversation);
+  /// Removes the deal from the user's history (the backend archives it, nothing is destroyed).
   Future<Either<Failure, void>> deleteConversation(String id);
-  Future<Either<Failure, void>> clearAll();
 }
 
 /// Convenience queries built on the core CRUD above. Implemented as an extension

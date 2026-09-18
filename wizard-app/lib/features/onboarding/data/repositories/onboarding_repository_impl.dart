@@ -8,11 +8,14 @@ import 'package:appwizard/features/onboarding/data/mappers/onboarding_data_mappe
 
 /// Implementation of OnboardingRepository
 class OnboardingRepositoryImpl implements OnboardingRepository {
-  OnboardingRepositoryImpl(this.localDataSource, this._mapper, this._logger);
+  /// [uploader] pushes completed onboarding data to the profile endpoint (resolved lazily
+  /// to avoid a dependency cycle with the profile services).
+  OnboardingRepositoryImpl(this.localDataSource, this._mapper, this._logger, {this.uploader});
 
   final OnboardingLocalDataSource localDataSource;
   final OnboardingDataMapper _mapper;
   final AppLogger _logger;
+  final Future<void> Function(OnboardingDataEntity data)? uploader;
 
   @override
   Future<Either<Failure, void>> saveOnboardingData(OnboardingDataEntity entity) async {
@@ -63,14 +66,15 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
   @override
   Future<Either<Failure, void>> uploadUserData(
       OnboardingDataEntity entity) async {
+    // Best effort: onboarding must complete even when the backend is unreachable; the
+    // sync service retries and every later profile change pushes the full state again.
     try {
-      // TODO: Replace with real backend API call (e.g. POST /api/onboarding/sync)
-      await Future<void>.delayed(const Duration(seconds: 3));
-      return const Right(null);
+      await uploader?.call(entity);
     } catch (e, stackTrace) {
+      _logger.w('Onboarding profile upload deferred: $e');
       _logger.e('Error uploading onboarding user data', e, stackTrace);
-      return Left(CacheFailure(e.toString()));
     }
+    return const Right(null);
   }
 }
 

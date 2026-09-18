@@ -1,0 +1,216 @@
+import 'dart:async';
+
+import 'package:appwizard/core/error/failures.dart';
+import 'package:appwizard/core/services/auth_service.dart';
+import 'package:appwizard/core/services/installation_id_service.dart';
+import 'package:appwizard/core/services/profile_sync_service.dart';
+import 'package:appwizard/core/services/user_profile_service.dart';
+import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
+import 'package:appwizard/features/onboarding/domain/entities/onboarding_data_entity.dart';
+import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
+import 'package:appwizard/features/profile/data/datasources/profile_remote_datasource.dart';
+import 'package:appwizard/features/profile/data/models/profile_api_models.dart';
+import 'package:dartz/dartz.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show VoidCallback;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _SilentLogger implements AppLogger {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _FakeAuth implements AuthService {
+  final controller = StreamController<User?>.broadcast();
+  @override
+  Stream<User?> get authStateChanges => controller.stream;
+  @override
+  Stream<User?> get userChanges => controller.stream;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _FakeProfile implements UserProfileService {
+  OnboardingDataEntity? entity;
+  final listeners = <VoidCallback>[];
+  int refreshes = 0;
+
+  @override
+  OnboardingDataEntity? get data => entity;
+  @override
+  Future<void> ensureLoaded() async {}
+  @override
+  Future<void> refresh() async => refreshes++;
+  @override
+  Map<String, dynamic> get answers =>
+      {for (final a in entity?.answers ?? const <OnboardingAnswer>[]) if (a.answerKey != null) a.answerKey!: a.answer};
+  @override
+  void addListener(VoidCallback listener) => listeners.add(listener);
+  @override
+  void removeListener(VoidCallback listener) => listeners.remove(listener);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _FakeRemote implements ProfileRemoteDataSource {
+  final patches = <ProfilePatchRequest>[];
+  ProfileDocument? stored;
+  bool fail = false;
+
+  @override
+  Future<ProfileDocument> patch(ProfilePatchRequest request) async {
+    if (fail) throw StateError('offline');
+    patches.add(request);
+    return stored ?? const ProfileDocument();
+  }
+
+  @override
+  Future<ProfileDocument?> fetch({required String installationId}) async => stored;
+}
+
+class _FakeOnboardingRepo implements OnboardingRepository {
+  OnboardingDataEntity? saved;
+  @override
+  Future<Either<Failure, void>> saveOnboardingData(OnboardingDataEntity data) async {
+    saved = data;
+    return const Right(null);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+OnboardingAnswer _a(String key, dynamic value, {OnboardingScreenType type = OnboardingScreenType.select, List<String>? options}) =>
+    OnboardingAnswer(screenIndex: 0, screenTitle: 'T:$key', screenType: type, answerKey: key, answer: value, options: options);
+
+void main() {
+  late _FakeProfile profile;
+  late _FakeRemote remote;
+  late _FakeAuth auth;
+  late _FakeOnboardingRepo onboarding;
+  late ProfileSyncService service;
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({'installation_id': '3fa85f64-5717-4562-b3fc-2c963f66afa6'});
+    final prefs = await SharedPreferences.getInstance();
+    profile = _FakeProfile();
+    remote = _FakeRemote();
+    auth = _FakeAuth();
+    onboarding = _FakeOnboardingRepo();
+    service = ProfileSyncService(
+      profile: profile,
+      remote: remote,
+      installation: InstallationIdService(prefs),
+      auth: auth,
+      onboarding: onboarding,
+      logger: _SilentLogger(),
+      debounce: Duration.zero,
+      retryDelay: const Duration(days: 1),
+      localeCode: () => 'es',
+    );
+  });
+
+  tearDown(() {
+    service.dispose();
+    auth.controller.close();
+  });
+
+  final entity = OnboardingDataEntity(
+    answers: [
+      _a('main_hurdle', ['starting', 'fair_price'], type: OnboardingScreenType.multiSelect, options: ['starting', 'counter_offers', 'fair_price']),
+      _a('negotiation_vibe', 'tactical'),
+      _a('risk_tolerance', 80),
+      _a('favorite_marketplace', 'ebay', type: OnboardingScreenType.selectGroup),
+      _a('deals_per_month', '3_5', type: OnboardingScreenType.selectGroup),
+      _a('average_deal_size', 550),
+      _a('referral_code', 'FRIEND-42'),
+    ],
+    isCompleted: true,
+  );
+
+  test('buildPatch derives typed preferences and carries answers and the flow trace', () {
+    final patch = service.buildPatch(entity, completed: true, includeFlow: true).toJson();
+
+    expect(patch['installation_id'], '3fa85f64-5717-4562-b3fc-2c963f66afa6');
+    expect(patch['preferences'], {
+      'vibe': 'tactical', 'push': 80, 'marketplace': 'ebay', 'deals_per_month': '3_5', 'deal_size': 550, 'locale': 'es',
+      'hurdles': ['starting', 'fair_price'],
+    });
+    final ob = patch['onboarding'] as Map<String, dynamic>;
+    expect(ob['answers']['main_hurdle'], ['starting', 'fair_price']);
+    expect(ob['completed'], isTrue);
+    expect(ob.containsKey('variant'), isFalse);
+    expect((ob['flow'] as List).length, 7);
+    expect((ob['flow'] as List).first, {
+      'index': 0, 'key': 'main_hurdle', 'type': 'multiSelect', 'title': 'T:main_hurdle',
+      'options': ['starting', 'counter_offers', 'fair_price'],
+    });
+    expect(((ob['flow'] as List)[1] as Map).containsKey('options'), isFalse); // none recorded → omitted
+    expect(patch['referral'], {'code': 'FRIEND-42'});
+    expect((patch['app'] as Map)['flavor'], isNotNull);
+    expect((patch['app'] as Map)['locale'], 'es');
+  });
+
+  test('buildPatch falls back to catalog defaults; edits after onboarding carry no flow', () {
+    final patch = service.buildPatch(const OnboardingDataEntity(answers: [], isCompleted: false), completed: false).toJson();
+    expect((patch['preferences'] as Map)['vibe'], 'friendly');
+    expect((patch['preferences'] as Map)['push'], 60);
+    expect((patch['preferences'] as Map).containsKey('hurdles'), isFalse);
+    final ob = patch['onboarding'] as Map;
+    expect(ob.containsKey('completed'), isFalse);
+    expect(ob.containsKey('flow'), isFalse);
+    expect(patch.containsKey('referral'), isFalse);
+  });
+
+  test('pushOnboarding sends the completed answers; a failure schedules a retry silently', () async {
+    await service.pushOnboarding(entity);
+    expect(remote.patches.single.onboarding!.completed, isTrue);
+
+    remote.fail = true;
+    await service.pushOnboarding(entity); // must not throw
+    expect(remote.patches.length, 1);
+  });
+
+  test('profile changes are pushed (debounced) once started', () async {
+    service.start();
+    profile.entity = entity;
+    for (final l in profile.listeners) l();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(remote.patches.length, 1);
+    expect(remote.patches.single.preferences!.vibe, 'tactical');
+  });
+
+  test('pushNow does nothing without local answers', () async {
+    await service.pushNow();
+    expect(remote.patches, isEmpty);
+  });
+
+  test('onSignedIn hydrates an empty device from the account and refreshes the profile', () async {
+    remote.stored = ProfileDocument(
+      onboarding: const ProfileOnboarding(
+        answers: {'negotiation_vibe': 'quiet_closer', 'risk_tolerance': 20},
+        completedAt: '2026-09-17T12:00:00Z',
+      ),
+    );
+
+    await service.onSignedIn();
+
+    expect(onboarding.saved, isNotNull);
+    expect(onboarding.saved!.isCompleted, isTrue);
+    expect(onboarding.saved!.answers.map((a) => a.answerKey), ['negotiation_vibe', 'risk_tolerance']);
+    expect(profile.refreshes, 1);
+  });
+
+  test('onSignedIn keeps local answers (they were pushed and win server-side)', () async {
+    profile.entity = entity;
+    remote.stored = const ProfileDocument(onboarding: ProfileOnboarding(answers: {'negotiation_vibe': 'friendly'}));
+
+    await service.onSignedIn();
+
+    expect(remote.patches.length, 1); // the merge push
+    expect(onboarding.saved, isNull);
+  });
+
+}

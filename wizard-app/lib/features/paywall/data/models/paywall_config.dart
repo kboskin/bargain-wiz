@@ -82,7 +82,7 @@ class PaywallConfig {
   @JsonKey(name: 'trial_timeline')
   final List<PaywallTimelineRowConfig> trialTimeline;
 
-  /// Documented entry points (informational; gating lives in free_tier_rules).
+  /// Documented entry points (informational; gating lives in FeatureGatePolicy).
   @JsonKey(name: 'entry_points')
   final List<String> entryPoints;
 

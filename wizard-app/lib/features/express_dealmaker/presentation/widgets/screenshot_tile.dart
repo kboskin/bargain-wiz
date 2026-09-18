@@ -1,7 +1,7 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:appwizard/core/widgets/attachment_image.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/widgets/scanning_overlay.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
@@ -59,10 +59,11 @@ class ScreenshotTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.file(
-              File(path),
+            AttachmentImage(
+              path: path,
               fit: BoxFit.cover,
-              errorBuilder: (final _, final __, final ___) => const ColoredBox(
+              placeholder: const ColoredBox(color: WizColors.surfaceMuted),
+              errorWidget: const ColoredBox(
                 color: WizColors.surfaceMuted,
                 child: Icon(Icons.image_outlined, color: WizColors.textTertiary),
               ),

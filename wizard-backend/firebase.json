@@ -4,7 +4,43 @@
       "source": "functions",
       "codebase": "lines-that-land",
       "runtime": "python312",
-      "ignore": ["venv", ".venv", "__pycache__", "*.pyc", ".pytest_cache", ".ruff_cache", "tests", "pyproject.toml", "requirements-dev.txt"]
+      "ignore": [
+        "venv",
+        ".venv",
+        "__pycache__",
+        "*.pyc",
+        ".pytest_cache",
+        ".ruff_cache",
+        "tests",
+        "pyproject.toml",
+        "requirements-dev.txt"
+      ]
     }
-  ]
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
+    "singleProjectMode": true
+  }
 }

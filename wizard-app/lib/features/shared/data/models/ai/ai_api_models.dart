@@ -46,6 +46,8 @@ class ExpressDealmakerRequest {
     this.keyword,
     this.marketplace,
     this.dealSize,
+    this.dealsPerMonth,
+    this.hurdles,
   });
 
   factory ExpressDealmakerRequest.fromJson(Map<String, dynamic> json) => _$ExpressDealmakerRequestFromJson(json);
@@ -63,6 +65,13 @@ class ExpressDealmakerRequest {
   final String? marketplace;
   @JsonKey(name: 'deal_size')
   final num? dealSize;
+
+  /// Onboarding `deals_per_month` bucket (`0_2` | `3_5` | `6_plus`).
+  @JsonKey(name: 'deals_per_month')
+  final String? dealsPerMonth;
+
+  /// Onboarding `main_hurdle` ids the coach should compensate for.
+  final List<String>? hurdles;
 
   Map<String, dynamic> toJson() => _$ExpressDealmakerRequestToJson(this);
 }
@@ -108,6 +117,8 @@ class ProDealCloserRequest {
     this.regenerate = false,
     this.marketplace,
     this.dealSize,
+    this.dealsPerMonth,
+    this.hurdles,
   });
 
   factory ProDealCloserRequest.fromJson(Map<String, dynamic> json) => _$ProDealCloserRequestFromJson(json);
@@ -123,6 +134,9 @@ class ProDealCloserRequest {
   final String? marketplace;
   @JsonKey(name: 'deal_size')
   final num? dealSize;
+  @JsonKey(name: 'deals_per_month')
+  final String? dealsPerMonth;
+  final List<String>? hurdles;
 
   Map<String, dynamic> toJson() => _$ProDealCloserRequestToJson(this);
 }

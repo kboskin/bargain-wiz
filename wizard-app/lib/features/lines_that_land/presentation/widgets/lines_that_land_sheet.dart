@@ -71,10 +71,11 @@ class _LinesThatLandSheetState extends State<LinesThatLandSheet> {
 
     return BlocBuilder<LinesThatLandBloc, LinesThatLandState>(
       builder: (context, state) {
-        if (state is LinesThatLandInitial && !_loadRequested) {
+        final wantsRefresh = state is LinesThatLandInitial || (state is LinesThatLandLoaded && state.isStale);
+        if (wantsRefresh && !_loadRequested) {
           _loadRequested = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) context.read<LinesThatLandBloc>().add(const LoadLinesThatLandRequested());
+            if (mounted) context.read<LinesThatLandBloc>().add(const LinesThatLandOpened());
           });
         }
         return WizSheet(

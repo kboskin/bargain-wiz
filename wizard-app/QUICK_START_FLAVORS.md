@@ -52,6 +52,7 @@ flutter run --flavor dev --dart-define=FLAVOR=dev -d <device_id>
 
 # Run PROD flavor on iOS
 flutter run --flavor prod --dart-define=FLAVOR=prod -d <device_id>
+flutter run --flavor local --dart-define=FLAVOR=local -d <device_id>   # Firebase emulators (see README_FLAVORS.md)
 
 # Build iOS for DEV
 flutter build ios --flavor dev --dart-define=FLAVOR=dev

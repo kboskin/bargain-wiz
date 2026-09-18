@@ -6,7 +6,9 @@ import pytest
 from flask import Flask, request
 
 import main
-from vertex import UpstreamError
+from auth import StaticAuthenticator
+from errors import UpstreamError
+from negotiation import EXPRESS_SCHEMA, OPTIONS_SCHEMA, REPLY_SCHEMA
 
 PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
 LINES = [
@@ -29,27 +31,33 @@ class FakeGenerator:
         return self.result
 
 
-@pytest.fixture
-def fake(monkeypatch):
-    def install(result=None, error=None):
-        gen = FakeGenerator(result, error)
-        monkeypatch.setattr(main, "_generator", gen)
-        return gen
-
-    return install
+@pytest.fixture(autouse=True)
+def _restore_main(monkeypatch):
+    """Tests swap the constructors `main` uses for fakes; monkeypatch puts the real ones back."""
+    monkeypatch.setattr(main, "VertexGenerator", main.VertexGenerator)
+    monkeypatch.setattr(main, "FirebaseAuthenticator", main.FirebaseAuthenticator)
 
 
-def _post(func, body, method="POST", headers=None):
+def _install(result=None, error=None, auth=None):
+    """Make the functions use a fake Gemini (and identity); returns the function map and the fake."""
+    gen = FakeGenerator(result, error)
+    main.VertexGenerator = lambda: gen
+    main.FirebaseAuthenticator = lambda: auth or StaticAuthenticator(None)
+    return {"/express_dealmaker": main.express_dealmaker, "/pro_deal_closer": main.pro_deal_closer}, gen
+
+
+def _post(path, functions, body, method="POST", headers=None):
     app = Flask(__name__)
-    with app.test_request_context("/", method=method, json=body, headers=headers or {}):
-        res = func(request)
+    with app.test_request_context(path, method=method, json=body, headers=headers or {}):
+        res = functions[path](request)
     return res.status_code, json.loads(res.get_data(as_text=True))
 
 
-def test_express_returns_seeing_and_lines(fake):
-    gen = fake({"seeing": "IKEA Kallax · $180", "lines": LINES})
+def test_express_returns_seeing_and_lines():
+    c, gen = _install({"seeing": "IKEA Kallax · $180", "lines": LINES})
     status, body = _post(
-        main.express_dealmaker,
+        "/express_dealmaker",
+        c,
         {"images": [{"mime_type": "image/png", "data": PNG}], "keyword": "scuff", "vibe": "no_nonsense", "locale": "en"},
     )
     assert status == 200
@@ -58,65 +66,66 @@ def test_express_returns_seeing_and_lines(fake):
     assert body["model"] == "fake-gemini"
     call = gen.calls[0]
     assert "No-Nonsense" in call["system"]
-    assert call["parts"][0]["type"] == "image" and call["schema"] is main.EXPRESS_SCHEMA
+    assert call["parts"][0]["type"] == "image" and call["schema"] is EXPRESS_SCHEMA
 
 
-def test_express_accepts_text_only(fake):
-    fake({"seeing": "Text listing", "lines": LINES[:1]})
-    status, body = _post(main.express_dealmaker, {"text": "Selling bike $300, some rust"})
+def test_express_accepts_text_only():
+    c, _ = _install({"seeing": "Text listing", "lines": LINES[:1]})
+    status, body = _post("/express_dealmaker", c, {"text": "Selling bike $300, some rust"})
     assert status == 200 and len(body["lines"]) == 1
 
 
-def test_express_rejects_empty_and_non_post(fake):
-    fake({"seeing": "", "lines": LINES})
-    status, body = _post(main.express_dealmaker, {})
+def test_express_rejects_empty_and_non_post():
+    c, _ = _install({"seeing": "", "lines": LINES})
+    status, body = _post("/express_dealmaker", c, {})
     assert status == 400 and body["error"]["status"] == "INVALID_ARGUMENT"
-    status, body = _post(main.express_dealmaker, None, method="GET")
-    assert status == 405
+    status, body = _post("/express_dealmaker", c, None, method="GET")
+    assert status == 405 and body["error"]["status"] == "METHOD_NOT_ALLOWED"
 
 
-def test_express_maps_model_failures_to_502(fake):
-    fake(error=UpstreamError("quota"))
-    status, body = _post(main.express_dealmaker, {"text": "x"})
+def test_express_maps_model_failures_to_502():
+    c, _ = _install(error=UpstreamError("quota"))
+    status, body = _post("/express_dealmaker", c, {"text": "x"})
     assert status == 502 and body["error"]["status"] == "UPSTREAM_ERROR"
-    fake({"seeing": "x", "lines": []})
-    status, body = _post(main.express_dealmaker, {"text": "x"})
-    assert status == 502
+    assert "quota" not in body["error"]["message"]  # internals never leak
+    c, _ = _install({"seeing": "x", "lines": []})
+    status, body = _post("/express_dealmaker", c, {"text": "x"})
+    assert status == 502 and body["error"]["status"] == "UPSTREAM_ERROR"
 
 
-def test_express_rejects_invalid_bearer_token(fake, monkeypatch):
-    fake({"seeing": "x", "lines": LINES})
-    import runtime
+def test_unexpected_exceptions_are_a_bare_500():
+    c, _ = _install(error=RuntimeError("secret detail"))
+    status, body = _post("/express_dealmaker", c, {"text": "x"})
+    assert status == 500 and body["error"] == {"status": "INTERNAL", "message": "Unexpected error."}
 
-    def boom(req):
-        raise runtime.Unauthorized("bad token")
 
-    monkeypatch.setattr(main, "optional_uid", boom)
-    status, body = _post(main.express_dealmaker, {"text": "x"}, headers={"Authorization": "Bearer nope"})
+def test_express_rejects_invalid_bearer_token():
+    c, _ = _install({"seeing": "x", "lines": LINES}, auth=StaticAuthenticator(None, invalid_token=True))
+    status, body = _post("/express_dealmaker", c, {"text": "x"}, headers={"Authorization": "Bearer nope"})
     assert status == 401 and body["error"]["status"] == "UNAUTHENTICATED"
 
 
-def test_pro_reply_and_options(fake):
-    gen = fake({"reply": "Open at $140 and offer pickup today."})
+def test_pro_reply_and_options():
+    c, gen = _install({"reply": "Open at $140 and offer pickup today."})
     messages = [{"role": "user", "text": "Kallax listed at $180, what do I say?"}]
-    status, body = _post(main.pro_deal_closer, {"messages": messages, "vibe": "friendly"})
+    status, body = _post("/pro_deal_closer", c, {"messages": messages, "vibe": "friendly"})
     assert status == 200 and body["reply"].startswith("Open at $140")
-    assert gen.calls[0]["schema"] is main.REPLY_SCHEMA
+    assert gen.calls[0]["schema"] is REPLY_SCHEMA
 
-    gen = fake({"lines": LINES})
-    status, body = _post(main.pro_deal_closer, {"messages": messages, "mode": "options"})
+    c, gen = _install({"lines": LINES})
+    status, body = _post("/pro_deal_closer", c, {"messages": messages, "mode": "options"})
     assert status == 200 and len(body["lines"]) == 3
-    assert gen.calls[0]["schema"] is main.OPTIONS_SCHEMA
+    assert gen.calls[0]["schema"] is OPTIONS_SCHEMA
 
 
-def test_pro_validation(fake):
-    fake({"reply": "x"})
-    status, body = _post(main.pro_deal_closer, {"messages": []})
+def test_pro_validation():
+    c, _ = _install({"reply": "x"})
+    status, body = _post("/pro_deal_closer", c, {"messages": []})
     assert status == 400 and body["error"]["status"] == "INVALID_ARGUMENT"
 
 
-def test_express_accepts_json_without_content_type(fake):
-    fake({"seeing": "x", "lines": LINES})
+def test_express_accepts_json_without_content_type():
+    _install({"seeing": "x", "lines": LINES})
     app = Flask(__name__)
     with app.test_request_context("/", method="POST", data=json.dumps({"text": "bike $300"}), content_type="text/plain"):
         res = main.express_dealmaker(request)

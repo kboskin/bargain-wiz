@@ -76,6 +76,9 @@ class UserProfileService extends ChangeNotifier {
 
   bool get isOnboardingCompleted => _data?.isCompleted ?? false;
 
+  /// The stored onboarding entity (null before [ensureLoaded] or when nothing is saved).
+  OnboardingDataEntity? get data => _data;
+
   /// Raw answer by key (null when unanswered). Synchronous; call [ensureLoaded] first.
   dynamic answer(String key) {
     final answers = _data?.answers;

@@ -20,4 +20,8 @@ class PrefsKeys {
   /// Last entitlement reported by the store (SubscriptionModel JSON); see the
   /// subscription repository. Cleared by Restore Purchases before re-reading the store.
   static const String subscriptionStatus = 'subscription_status';
+
+  /// Random UUID minted on first launch; identifies this install to the profile endpoint
+  /// while the user is signed out (see PROFILE_SYNC.md).
+  static const String installationId = 'installation_id';
 }

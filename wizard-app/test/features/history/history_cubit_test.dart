@@ -36,11 +36,6 @@ class FakeConversationRepository implements ConversationRepository {
     return const Right(null);
   }
 
-  @override
-  Future<Either<Failure, void>> clearAll() async {
-    items.clear();
-    return const Right(null);
-  }
 }
 
 void main() {

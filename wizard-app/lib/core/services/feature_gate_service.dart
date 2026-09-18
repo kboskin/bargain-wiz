@@ -1,18 +1,15 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:appwizard/core/config/app_config.dart';
-import 'package:appwizard/core/config/feature_gate_config.dart';
-import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/core/config/feature_gate_policy.dart';
 import 'package:appwizard/core/services/subscription/subscription_checker_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 
-export 'package:appwizard/core/config/feature_gate_config.dart';
+export 'package:appwizard/core/config/feature_gate_policy.dart';
 
-/// Decides whether a feature is available for the current tier, per `free_tier_rules`.
+/// Decides whether a feature is available for the current tier, per [FeatureGatePolicy].
 ///
 /// Free: Lines that land only; Express and Pro open the paywall.
 /// Basic (Text Wizard): Pro works; Express opens the paywall with the Vision hint.
@@ -21,12 +18,11 @@ export 'package:appwizard/core/config/feature_gate_config.dart';
 /// In debug / dev builds a tier override can be set (Profile → developer row) so QA can
 /// walk every gate without a store purchase.
 class FeatureGateService extends ChangeNotifier {
-  FeatureGateService(this._checker, this._remoteConfig, this._prefs, this._logger);
+  FeatureGateService(this._checker, this._prefs, this._logger);
 
   static const String debugTierKey = 'debug_tier_override';
 
   final SubscriptionCheckerService _checker;
-  final RemoteConfigService _remoteConfig;
   final SharedPreferences _prefs;
   final AppLogger _logger;
 
@@ -73,22 +69,9 @@ class FeatureGateService extends ChangeNotifier {
     }
   }
 
-  FeatureGateConfig get config {
-    try {
-      final raw = _remoteConfig.getString('free_tier_rules');
-      if (raw.isEmpty) return FeatureGateConfig.defaults;
-      final json = jsonDecode(raw);
-      if (json is! Map<String, dynamic>) return FeatureGateConfig.defaults;
-      return FeatureGateConfig.fromJson(json);
-    } catch (e, st) {
-      _logger.e('Error parsing free_tier_rules', e, st);
-      return FeatureGateConfig.defaults;
-    }
-  }
-
   Future<GateDecision> check(GatedFeature feature) async {
     final tier = await currentTier();
-    return config.decide(tier, feature);
+    return FeatureGatePolicy.decide(tier, feature);
   }
 
   /// Call after a purchase / restore so cached tier is re-read.

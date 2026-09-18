@@ -3,6 +3,12 @@
 "Lines that land" (the Lines tab and the home bottom sheet) is served by a Google Cloud
 Function, not read from Remote Config by the app and not part of the subscriptions service.
 
+> **Client loading (2026-09-18):** nothing is fetched at app start. The tab is primed from the
+> on-device copy (`LinesThatLandPrimed`, no network) and refreshes in the background only when
+> it becomes visible with a stale or missing copy (`LinesThatLandOpened`); the user can pull to
+> refresh (`LinesThatLandRefreshRequested`). Content on screen is never replaced by a spinner;
+> a failed refresh keeps it and shows a toast. Repository: `cached()` + `refresh()`.
+
 ## Function
 
 `lines_that_land` — plain HTTPS Firebase Cloud Function (2nd gen, Python 3.12) in
@@ -10,10 +16,10 @@ Function, not read from Remote Config by the app and not part of the subscriptio
 The app calls it with Dio:
 
 ```
-GET {functions_base_url}/lines_that_land
+GET {api_url}/lines_that_land
 ```
 
-No body, no auth. `functions_base_url` is a Remote Config key set per Firebase project
+No body, no auth. `api_url` is a Remote Config key set per Firebase project
 (bundled default: the dev project's `https://us-central1-wizard-app-dev.cloudfunctions.net`).
 Errors come back as `{"error": {"status": "...", "message": "..."}}` with a 4xx/5xx status.
 
@@ -79,8 +85,8 @@ Spanish falls back to English in the app, so partial translations are safe.
 Structure (clean-architecture layers, reusable for any future function):
 
 - `core/network/cloud_functions_client.dart` — `CloudFunctionsApi` (interface) and
-  `CloudFunctionsClient` (Dio). `GET {functions_base_url}{path}` decoded with a `fromJson`;
-  the base URL is `RemoteConfigService.getFunctionsBaseUrl()` (key `functions_base_url`,
+  `CloudFunctionsClient` (Dio). `GET {api_url}{path}` decoded with a `fromJson`;
+  the base URL is `RemoteConfigService.getApiUrl()` (key `api_url`,
   set per Firebase project; bundled default is the dev project). A function error body
   surfaces as `CloudFunctionException`, anything else unexpected as `StateError`. A new
   function only needs `api.get('/my_function', fromJson: MyResponse.fromJson)`.

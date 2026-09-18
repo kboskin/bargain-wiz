@@ -8,11 +8,26 @@ Firebase Cloud Functions (2nd gen, Python 3.12) for the Bargain Wiz app, deploye
 | `lines_that_land` | GET | Public negotiation lines for the Lines tab (Remote Config server template) |
 | `express_dealmaker` | POST | Screenshots/text → three negotiation lines (Gemini on Vertex AI) |
 | `pro_deal_closer` | POST | Chat coaching: reply or three lines (Gemini on Vertex AI) |
+| `profile` | GET / PATCH | The user's profile document in Firestore (`users/{uid|inst_<id>}`), partial updates |
 
 Contracts, prompting and app wiring for the AI functions: `wizard-app/AI_INTEGRATION.md`.
-Files: `main.py` (entry points), `negotiation.py` (prompts, validation, result shaping),
-`vertex.py` (google-genai client), `runtime.py` (project id, optional Firebase Auth),
-`lines_that_land_service.py`.
+Profile schema and sync rules: `wizard-app/PROFILE_SYNC.md` (needs Firestore enabled in the
+project; the runtime service account needs `roles/datastore.user`).
+Layout follows the firebase-functions-python samples: `main.py` calls `initialize_app()`,
+sets `options.set_global_options(...)` and defines one `@https_fn.on_request` function per
+endpoint. Nothing is kept between requests: each function builds its collaborators
+(`VertexGenerator()`, `FirestoreProfileStore()`, …) when it runs, and the Admin SDK caches its
+own clients. Every tunable is an environment variable declared once in `config.py` (Firebase
+params, values in `.env`) and read at call time; tests set them with `monkeypatch.setenv` and
+swap the constructors `main` imports for fakes. `http_layer.py` has the JSON helpers and the
+`@json_endpoint(methods=…)` decorator that maps the `errors.py` classes to statuses; `auth.py`
+verifies Firebase ID tokens and App Check; `validation.py` holds the pydantic helpers.
+Domain modules: `negotiation.py` (prompts, request models, result shaping), `vertex.py`
+(google-genai client), `user_profile.py` (profile schema + Firestore merge),
+`conversations.py` + `conversation_store.py` + `images.py` (backend-owned conversations),
+`lines_that_land_service.py`, `markers.py` (DELETE / SERVER_TIME patch markers).
+Request bodies are **pydantic** models; validators raise `ValueError`, `validate_model` turns
+the `ValidationError` into a 400 with a `field: message` list (ruff ignores TRY004 for that).
 
 ## AI functions
 
@@ -44,7 +59,7 @@ curl -s https://us-central1-<project>.cloudfunctions.net/lines_that_land
 
 No query parameters: every locale is returned and the app picks the language. Errors are
 `{"error": {"status": "METHOD_NOT_ALLOWED", "message": "…"}}` with the matching HTTP status. The response carries `Cache-Control: public, max-age=<interval>`
-and `Last-Modified`. The app calls it with Dio (`GET {functions_base_url}/lines_that_land`).
+and `Last-Modified`. The app calls it with Dio (`GET {api_url}/lines_that_land`).
 
 - Content is the **`lines_that_land_categories` parameter of the project's *server*
   Remote Config template**, read with the Admin SDK (`firebase_admin.remote_config`,
@@ -67,7 +82,52 @@ and `Last-Modified`. The app calls it with Dio (`GET {functions_base_url}/lines_
 Files: `main.py` (the callable), `lines_that_land_service.py` (Remote Config read via the
 Admin SDK, text normalisation, per-instance cache), `tests/` (fake server template).
 
+## `conversations`
+
+Backend-owned deal conversations (design and security model: `wizard-app/CONVERSATIONS.md`).
+The app writes through this function and reads with a Firestore listener; every write carries
+a Firebase ID token (anonymous users included) and a client `request_id` for idempotency.
+
+- Firestore: `users/{uid}/conversations/{cid}` + `messages/{mid}`; rules in
+  `../firestore.rules` (owner read, no client writes). Screenshots are re-encoded with Pillow
+  and stored in Cloud Storage under `users/{uid}/conversations/{cid}/`; rules in
+  `../storage.rules`. Deploy both with `firebase deploy --only firestore:rules,storage`.
+- Project setup: enable **Anonymous** sign-in in Authentication; create the Firestore
+  database and the default Storage bucket (set `STORAGE_BUCKET` in `.env` if it is not the
+  default one); add a Firestore **TTL policy** on `expires_at` for the `conversations`
+  collection group; grant the runtime service account `roles/datastore.user` and
+  `roles/storage.objectAdmin` on the bucket.
+- Env (`.env`): `STORAGE_BUCKET`, `CONVERSATION_RETENTION_DAYS`, `MAX_TURNS_PER_DAY`,
+  `MAX_MESSAGES_PER_CONVERSATION`, `IMAGE_MAX_SIDE`, `IMAGE_JPEG_QUALITY`, `REQUIRE_APP_CHECK`
+  (false until the app ships App Attest / Play Integrity); full list in `config.py`.
+- Routes: `POST /conversations` (the first turn opens the conversation; `type: express`
+  returns the result inline), `POST /conversations/{cid}/messages`,
+  `POST /conversations/{cid}/options`, `POST /conversations/{cid}/redo`,
+  `PATCH|GET /conversations/{cid}`, `DELETE /conversations/{cid}` (soft delete: `active: false`,
+  the TTL removes the data later), `GET /conversations` (active ones).
+  409 while a reply is pending, 429 over the daily cap, 404 for anything not owned or archived.
+- The history query needs the composite index in `../firestore.indexes.json`
+  (`active` + `updated_at`), deployed with `firebase deploy --only firestore`.
+
 ## Local development
+
+Emulators (Auth, Functions, Firestore, Storage, UI on http://127.0.0.1:4000) from `wizard-backend/`:
+
+```bash
+firebase emulators:start
+```
+
+The Functions emulator runs `functions/venv/bin/python`, so create the venv first (below) and
+keep `functions/.env` valid: keys must be `UPPER_SNAKE_CASE` and must not use the CLI's
+reserved names (`FUNCTION_*`, `FIREBASE_*`, `GCLOUD_PROJECT`, `PORT`, …). Vertex AI calls go
+to the real project with your Application Default Credentials; Firestore, Storage and Auth
+stay local. To run the manifest discovery by hand (what the emulator does on start):
+
+```bash
+cd functions && set -a && source .env && set +a
+GCLOUD_PROJECT=wizard-app-dev venv/bin/python -c "from firebase_functions.private.serving import *; print(functions_as_yaml(get_functions()))"
+```
+
 
 ```bash
 cd wizard-backend/functions

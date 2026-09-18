@@ -211,6 +211,13 @@ class _ExpressResultsStageState extends State<ExpressResultsStage> {
               if (i > 0) const SizedBox(width: 6),
               WizChip(
                 label: widget.vibes[i].shortOf(context),
+                // Vibe glyph; inherits the chip foreground when selected (filled in the vibe colour).
+                leading: widget.vibes[i].icon == null
+                    ? null
+                    : Icon(
+                        widget.vibes[i].icon,
+                        color: widget.vibes[i].id == widget.state.vibeId ? null : widget.vibes[i].chipTextColor,
+                      ),
                 compact: true,
                 selected: widget.vibes[i].id == widget.state.vibeId,
                 selectedColor: widget.vibes[i].color,

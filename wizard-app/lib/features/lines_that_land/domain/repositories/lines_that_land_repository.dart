@@ -6,13 +6,19 @@ import 'package:appwizard/features/lines_that_land/domain/entities/lines_that_la
 
 /// Repository for "Lines that land" categories (each with a daily tip).
 ///
-/// Content comes only from the backend endpoint the `lines_that_land` Cloud Function and is
-/// cached on device for the `refresh_interval_hours` the endpoint declares. Offline with
-/// no cache yields a [NetworkFailure]; the app reads no Remote Config key for this.
-/// See LINES_THAT_LAND.md.
+/// Content comes only from the `lines_that_land` Cloud Function and is cached on device for
+/// the `refresh_interval_hours` the endpoint declares. The app reads no Remote Config key for
+/// this. See LINES_THAT_LAND.md.
 abstract class LinesThatLandRepository {
-  /// Current feed: categories plus freshness metadata (when the content last changed,
-  /// how often it refreshes, where this copy came from).
+  /// The on-device copy, instantly and without any network call; null before the first
+  /// successful fetch. [LinesThatLandFeed.isStale] says whether a refresh is due.
+  LinesThatLandFeed? cached();
+
+  /// Calls the endpoint and replaces the on-device copy. Callers keep showing [cached] while
+  /// this runs and apply the result when it lands.
+  Future<Either<Failure, LinesThatLandFeed>> refresh();
+
+  /// Convenience: [cached] when fresh, else [refresh]; a stale copy beats an offline failure.
   Future<Either<Failure, LinesThatLandFeed>> getFeed();
 
   /// Returns categories with one daily tip each (rotated by day index).

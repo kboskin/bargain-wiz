@@ -6,19 +6,16 @@ Pure Python (no SDK imports) so the behaviour is unit-testable; `main.py` wires 
 """
 import base64
 import binascii
-from dataclasses import dataclass, field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+import config
+from errors import BadRequest, UpstreamError
+from validation import clip_text, number_or_none, validate_model
 
 SUPPORTED_MIME = {"image/jpeg", "image/png", "image/webp"}
-MAX_IMAGES = 6
-MAX_IMAGE_BYTES = 1_500_000
-MAX_TOTAL_IMAGE_BYTES = 6_000_000
-MAX_TEXT_CHARS = 8_000
-MAX_MESSAGE_CHARS = 4_000
-MAX_MESSAGES = 40
 INTENTS = ("opener", "counter", "close")
-MAX_LINES = 3  # the UI shows three cards; anything past that is noise
-DEFAULT_VIBE = "friendly"
-DEFAULT_PUSH = 60
 
 LANGUAGES = {"en": "English", "es": "Spanish"}
 
@@ -34,6 +31,28 @@ VIBES = {
     "moves the deal towards a close.",
 }
 
+
+def default_vibe() -> str:
+    """Configured default tone, or the first known one when the configured id is unknown."""
+    value = config.DEFAULT_VIBE.value.strip().lower()
+    return value if value in VIBES else next(iter(VIBES))
+
+# Onboarding "main_hurdle" ids → what the coach should compensate for.
+HURDLES = {
+    "starting": "hesitates to open a negotiation: make the opener easy and confident to send.",
+    "counter_offers": "gets ignored after offering: make messages concrete and hard to ignore "
+    "(a number, a time, a next step).",
+    "being_rude": "fears sounding rude: keep every line warm and polite while still firm on price.",
+    "holding_ground": "tends to accept the first counter: include a line that holds the position.",
+    "fair_price": "is unsure what a fair price is: anchor with concrete comparables or condition.",
+}
+
+DEALS_PER_MONTH = {
+    "0_2": "an occasional buyer (a couple of deals a month): explain briefly why a line works.",
+    "3_5": "a regular buyer (several deals a month).",
+    "6_plus": "a frequent buyer (many deals a month): be efficient, skip basics.",
+}
+
 MARKETPLACES = {
     "ebay": "eBay: written offers/messages, buyer protection, shipping cost is a lever.",
     "amazon": "Amazon third-party seller: formal messages, little price room; focus on "
@@ -44,173 +63,245 @@ MARKETPLACES = {
 }
 
 
-class BadRequest(ValueError):
-    """Client error → 400."""
+# ── models ────────────────────────────────────────────────────────────────────
 
 
-@dataclass(frozen=True)
-class Image:
+class Image(BaseModel):
+    """`{"mime_type": "image/jpeg", "data": "<base64>"}` → decoded, size-checked bytes."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
     mime_type: str
     data: bytes
 
+    @field_validator("mime_type", mode="before")
+    @classmethod
+    def _mime(cls, value: object) -> str:
+        mime = str(value or "").lower()
+        if mime not in SUPPORTED_MIME:
+            raise ValueError(f"unsupported image type {mime!r}; use JPEG, PNG or WebP")
+        return mime
 
-@dataclass(frozen=True)
-class Profile:
-    vibe: str = DEFAULT_VIBE
-    push: int = DEFAULT_PUSH
+    @field_validator("data", mode="before")
+    @classmethod
+    def _decode(cls, value: object) -> bytes:
+        if isinstance(value, bytes):
+            data = value
+        elif isinstance(value, str):
+            try:
+                data = base64.b64decode(value, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError("image data must be base64") from exc
+        else:
+            raise ValueError("image data must be base64")
+        if not data:
+            raise ValueError("image data is empty")
+        if len(data) > config.MAX_IMAGE_BYTES.value:
+            raise ValueError(f"each image must be under {config.MAX_IMAGE_BYTES.value // 1000} KB; downscale before sending")
+        return data
+
+
+class Profile(BaseModel):
+    """Buyer profile from onboarding, sent with every AI request (see PROFILE_SYNC.md).
+    Unknown values fall back to defaults; only wrong types are rejected."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    vibe: str = Field(default_factory=lambda: default_vibe())
+    push: int = Field(default_factory=lambda: config.DEFAULT_PUSH.value)
     marketplace: str | None = None
     deal_size: float | None = None
     locale: str = "en"
+    hurdles: tuple[str, ...] = ()
+    deals_per_month: str | None = None
+
+    @field_validator("vibe", mode="before")
+    @classmethod
+    def _vibe(cls, value: object) -> str:
+        text = (clip_text(value, 40) or default_vibe()).lower()
+        return text if text in VIBES else default_vibe()
+
+    @field_validator("push", mode="before")
+    @classmethod
+    def _push(cls, value: object) -> int:
+        number = number_or_none(value)
+        return config.DEFAULT_PUSH.value if number is None else int(min(100, max(0, number)))
+
+    @field_validator("deal_size", mode="before")
+    @classmethod
+    def _deal_size(cls, value: object) -> float | None:
+        return number_or_none(value)
+
+    @field_validator("marketplace", "deals_per_month", mode="before")
+    @classmethod
+    def _short_text(cls, value: object) -> str | None:
+        return clip_text(value, 40)
+
+    @field_validator("locale", mode="before")
+    @classmethod
+    def _locale(cls, value: object) -> str:
+        return clip_text(value, 10) or "en"
+
+    @field_validator("hurdles", mode="before")
+    @classmethod
+    def _hurdles(cls, value: object) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if not isinstance(value, list | tuple):
+            raise ValueError("must be a list of ids")
+        return tuple(h.strip().lower() for h in value if isinstance(h, str) and h.strip())[:8]
 
     @property
     def language(self) -> str:
         return LANGUAGES.get(self.locale.split("-")[0].lower(), "English")
 
 
-@dataclass(frozen=True)
-class ExpressRequest:
-    profile: Profile
-    images: list[Image]
-    text: str | None
-    keyword: str | None
+def _profile_of(model: Profile) -> Profile:
+    return Profile(**{name: getattr(model, name) for name in Profile.model_fields})
 
 
-@dataclass(frozen=True)
-class ChatMessage:
-    role: str  # "user" | "wizard"
-    text: str
-    images: list[Image] = field(default_factory=list)
+class ExpressRequest(Profile):
+    """`express_dealmaker` body: screenshots and/or text plus the buyer profile."""
+
+    images: list[Image] = []
+    text: str | None = None
+    keyword: str | None = None
+
+    @field_validator("images", mode="before")
+    @classmethod
+    def _images(cls, value: object) -> list:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("must be a list")
+        if len(value) > config.MAX_IMAGES.value:
+            raise ValueError(f"at most {config.MAX_IMAGES.value} images per request")
+        return value
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _text(cls, value: object) -> str | None:
+        return clip_text(value, config.MAX_TEXT_CHARS.value)
+
+    @field_validator("keyword", mode="before")
+    @classmethod
+    def _keyword(cls, value: object) -> str | None:
+        return clip_text(value, 120)
+
+    @model_validator(mode="after")
+    def _has_material(self) -> "ExpressRequest":
+        if sum(len(image.data) for image in self.images) > config.MAX_TOTAL_IMAGE_BYTES.value:
+            raise ValueError(f"images together must be under {config.MAX_TOTAL_IMAGE_BYTES.value // 1_000_000} MB")
+        if not self.images and not self.text:
+            raise ValueError('provide "images" (screenshots) or "text" (listing / chat text)')
+        return self
+
+    @property
+    def profile(self) -> Profile:
+        return _profile_of(self)
 
 
-@dataclass(frozen=True)
-class ProRequest:
-    profile: Profile
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    role: Literal["user", "wizard"] = "user"
+    text: str = ""
+    images: list[Image] = []
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _role(cls, value: object) -> object:
+        return "user" if value is None else str(value).lower()
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _text(cls, value: object) -> str:
+        return clip_text(value, config.MAX_MESSAGE_CHARS.value) or ""
+
+    @field_validator("images", mode="before")
+    @classmethod
+    def _images(cls, value: object) -> list:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("must be a list")
+        if len(value) > config.MAX_IMAGES.value:
+            raise ValueError(f"at most {config.MAX_IMAGES.value} images per message")
+        return value
+
+
+class ProRequest(Profile):
+    """`pro_deal_closer` body: the chat so far plus the buyer profile."""
+
     messages: list[ChatMessage]
-    mode: str  # "reply" | "options"
+    mode: Literal["reply", "options"] = "reply"
     regenerate: bool = False
 
+    @field_validator("messages", mode="before")
+    @classmethod
+    def _messages(cls, value: object) -> list:
+        if not isinstance(value, list) or not value:
+            raise ValueError("must be a non-empty list")
+        return value[-config.MAX_MESSAGES.value:]
 
-# ── parsing ───────────────────────────────────────────────────────────────────
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _mode(cls, value: object) -> object:
+        return "reply" if value is None else str(value).lower()
+
+    @model_validator(mode="after")
+    def _apply_image_budget(self) -> "ProRequest":
+        """Newest attachments matter most: walk backwards so the budget favours them, and
+        drop turns that end up with neither text nor images."""
+        budget, total = config.MAX_IMAGES.value, 0
+        kept: list[ChatMessage] = []
+        for message in reversed(self.messages):
+            images = message.images[:budget]
+            budget -= len(images)
+            total += sum(len(image.data) for image in images)
+            if total > config.MAX_TOTAL_IMAGE_BYTES.value:
+                raise ValueError(f"images together must be under {config.MAX_TOTAL_IMAGE_BYTES.value // 1_000_000} MB")
+            if not message.text and not images:
+                continue
+            kept.append(message.model_copy(update={"images": images}))
+        if not kept:
+            raise ValueError("messages have no text or images")
+        kept.reverse()
+        self.messages = kept
+        return self
+
+    @property
+    def profile(self) -> Profile:
+        return _profile_of(self)
 
 
-def _text(value, max_chars: int, name: str) -> str | None:
-    """Trimmed string or None. Over-long text is truncated rather than rejected: a buyer
-    pasting a long chat should not get an error for it."""
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise BadRequest(f'"{name}" must be a string')
-    text = value.strip()
-    if len(text) > max_chars:
-        text = text[:max_chars].rstrip() + "…"
-    return text or None
+# ── parsing (body dict → model; pydantic errors → BadRequest) ──────────────────
 
 
 def parse_profile(body: dict) -> Profile:
-    vibe = _text(body.get("vibe"), 40, "vibe") or DEFAULT_VIBE
-    if vibe not in VIBES:
-        vibe = DEFAULT_VIBE
-    push = body.get("push", DEFAULT_PUSH)
-    if not isinstance(push, (int, float)) or isinstance(push, bool):
-        raise BadRequest('"push" must be a number between 0 and 100')
-    push = int(min(100, max(0, push)))
-    deal_size = body.get("deal_size")
-    if deal_size is not None and (not isinstance(deal_size, (int, float)) or isinstance(deal_size, bool)):
-        raise BadRequest('"deal_size" must be a number')
-    return Profile(
-        vibe=vibe,
-        push=push,
-        marketplace=_text(body.get("marketplace"), 40, "marketplace"),
-        deal_size=float(deal_size) if deal_size is not None else None,
-        locale=_text(body.get("locale"), 10, "locale") or "en",
-    )
+    return validate_model(Profile, body, BadRequest)
 
 
-def parse_images(raw, *, max_images: int = MAX_IMAGES, already_used: int = 0) -> list[Image]:
-    """`[{"mime_type": "image/jpeg", "data": "<base64>"}]` → decoded images, size-checked.
-    [already_used] bytes count towards the request-wide total (chat with several turns)."""
+def parse_images(raw, *, max_images: int = config.MAX_IMAGES.value) -> list[Image]:
+    """`[{"mime_type": …, "data": …}]` → decoded images, size-checked as a set."""
     if raw is None:
         return []
     if not isinstance(raw, list):
         raise BadRequest('"images" must be a list')
     if len(raw) > max_images:
         raise BadRequest(f"At most {max_images} images per request")
-    images: list[Image] = []
-    total = already_used
-    for item in raw:
-        if not isinstance(item, dict):
-            raise BadRequest("Each image must be an object with mime_type and data")
-        mime = str(item.get("mime_type", "")).lower()
-        if mime not in SUPPORTED_MIME:
-            raise BadRequest(f"Unsupported image type {mime!r}; use JPEG, PNG or WebP")
-        try:
-            data = base64.b64decode(item.get("data", ""), validate=True)
-        except (binascii.Error, TypeError, ValueError) as exc:
-            raise BadRequest("Image data must be base64") from exc
-        if not data:
-            raise BadRequest("Image data is empty")
-        if len(data) > MAX_IMAGE_BYTES:
-            raise BadRequest(f"Each image must be under {MAX_IMAGE_BYTES // 1000} KB; downscale before sending")
-        total += len(data)
-        if total > MAX_TOTAL_IMAGE_BYTES:
-            raise BadRequest(f"Images together must be under {MAX_TOTAL_IMAGE_BYTES // 1_000_000} MB")
-        images.append(Image(mime_type=mime, data=data))
+    images = [validate_model(Image, item, BadRequest) for item in raw]
+    if sum(len(image.data) for image in images) > config.MAX_TOTAL_IMAGE_BYTES.value:
+        raise BadRequest(f"Images together must be under {config.MAX_TOTAL_IMAGE_BYTES.value // 1_000_000} MB")
     return images
 
 
 def parse_express_request(body: dict) -> ExpressRequest:
-    images = parse_images(body.get("images"))
-    text = _text(body.get("text"), MAX_TEXT_CHARS, "text")
-    if not images and not text:
-        raise BadRequest('Provide "images" (screenshots) or "text" (listing / chat text)')
-    return ExpressRequest(
-        profile=parse_profile(body),
-        images=images,
-        text=text,
-        keyword=_text(body.get("keyword"), 120, "keyword"),
-    )
+    return validate_model(ExpressRequest, body, BadRequest)
 
 
 def parse_pro_request(body: dict) -> ProRequest:
-    raw_messages = body.get("messages")
-    if not isinstance(raw_messages, list) or not raw_messages:
-        raise BadRequest('"messages" must be a non-empty list')
-    if len(raw_messages) > MAX_MESSAGES:
-        raw_messages = raw_messages[-MAX_MESSAGES:]
-    messages: list[ChatMessage] = []
-    image_budget = MAX_IMAGES
-    image_bytes = 0
-    # Newest attachments matter most: walk backwards so the budget favours them.
-    for item in reversed(raw_messages):
-        if not isinstance(item, dict):
-            raise BadRequest("Each message must be an object")
-        role = str(item.get("role", "user")).lower()
-        if role not in ("user", "wizard"):
-            raise BadRequest('Message "role" must be "user" or "wizard"')
-        text = _text(item.get("text"), MAX_MESSAGE_CHARS, "messages[].text") or ""
-        images = (
-            parse_images(item.get("images"), max_images=MAX_IMAGES, already_used=image_bytes)
-            if image_budget > 0
-            else []
-        )
-        images = images[:image_budget]
-        image_budget -= len(images)
-        image_bytes += sum(len(img.data) for img in images)
-        if not text and not images:
-            continue
-        messages.append(ChatMessage(role=role, text=text, images=images))
-    messages.reverse()
-    if not messages:
-        raise BadRequest("Messages have no text or images")
-    mode = _text(body.get("mode"), 20, "mode") or "reply"
-    if mode not in ("reply", "options"):
-        raise BadRequest('"mode" must be "reply" or "options"')
-    return ProRequest(
-        profile=parse_profile(body),
-        messages=messages,
-        mode=mode,
-        regenerate=bool(body.get("regenerate", False)),
-    )
+    return validate_model(ProRequest, body, BadRequest)
 
 
 # ── prompting ─────────────────────────────────────────────────────────────────
@@ -240,13 +331,19 @@ def system_prompt(profile: Profile) -> str:
             "concrete numbers derived from the material. Never invent facts that are not in the material; "
             "if the price is unknown, negotiate on terms (pickup, bundle, condition, shipping) instead."
         ),
-        f"Tone: {VIBES.get(profile.vibe, VIBES[DEFAULT_VIBE])}",
+        f"Tone: {VIBES.get(profile.vibe, VIBES[default_vibe()])}",
         f"Push level: {push_guidance(profile.push)}",
     ]
     if marketplace:
         lines.append(f"Marketplace etiquette: {marketplace}")
     if profile.deal_size:
         lines.append(f"The buyer's typical deal is around ${profile.deal_size:,.0f}; keep numbers proportionate.")
+    frequency = DEALS_PER_MONTH.get(profile.deals_per_month or "")
+    if frequency:
+        lines.append(f"The buyer is {frequency}")
+    known = [HURDLES[h] for h in profile.hurdles if h in HURDLES]
+    if known:
+        lines.append("Known weak spots of this buyer, compensate for them: " + " ".join(known))
     return "\n".join(lines)
 
 
@@ -325,11 +422,11 @@ OPTIONS_SCHEMA = {"type": "object", "properties": {"lines": LINES_SCHEMA}, "requ
 
 
 def normalize_lines(raw) -> list[dict]:
-    """Keep up to MAX_LINES non-empty lines; fix missing/unknown intents by position
+    """Keep up to config.MAX_LINES.value non-empty lines; fix missing/unknown intents by position
     (opener, counter, close)."""
     out: list[dict] = []
     for item in raw if isinstance(raw, list) else []:
-        if len(out) >= MAX_LINES:
+        if len(out) >= config.MAX_LINES.value:
             break
         if not isinstance(item, dict):
             continue
@@ -347,19 +444,19 @@ def normalize_lines(raw) -> list[dict]:
 def express_result(raw: dict) -> dict:
     lines = normalize_lines(raw.get("lines"))
     if not lines:
-        raise ValueError("model returned no lines")
+        raise UpstreamError("model returned no lines")
     return {"seeing": str(raw.get("seeing") or "").strip(), "lines": lines}
 
 
 def reply_result(raw: dict) -> dict:
     reply = str(raw.get("reply") or "").strip()
     if not reply:
-        raise ValueError("model returned an empty reply")
+        raise UpstreamError("model returned an empty reply")
     return {"reply": reply}
 
 
 def options_result(raw: dict) -> dict:
     lines = normalize_lines(raw.get("lines"))
     if not lines:
-        raise ValueError("model returned no lines")
+        raise UpstreamError("model returned no lines")
     return {"lines": lines}

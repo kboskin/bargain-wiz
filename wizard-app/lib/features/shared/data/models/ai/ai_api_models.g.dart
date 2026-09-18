@@ -41,6 +41,10 @@ ExpressDealmakerRequest _$ExpressDealmakerRequestFromJson(
   keyword: json['keyword'] as String?,
   marketplace: json['marketplace'] as String?,
   dealSize: json['deal_size'] as num?,
+  dealsPerMonth: json['deals_per_month'] as String?,
+  hurdles: (json['hurdles'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
 );
 
 Map<String, dynamic> _$ExpressDealmakerRequestToJson(
@@ -54,6 +58,8 @@ Map<String, dynamic> _$ExpressDealmakerRequestToJson(
   'push': instance.push,
   'marketplace': ?instance.marketplace,
   'deal_size': ?instance.dealSize,
+  'deals_per_month': ?instance.dealsPerMonth,
+  'hurdles': ?instance.hurdles,
 };
 
 ExpressDealmakerResponse _$ExpressDealmakerResponseFromJson(
@@ -105,6 +111,10 @@ ProDealCloserRequest _$ProDealCloserRequestFromJson(
   regenerate: json['regenerate'] as bool? ?? false,
   marketplace: json['marketplace'] as String?,
   dealSize: json['deal_size'] as num?,
+  dealsPerMonth: json['deals_per_month'] as String?,
+  hurdles: (json['hurdles'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
 );
 
 Map<String, dynamic> _$ProDealCloserRequestToJson(
@@ -118,6 +128,8 @@ Map<String, dynamic> _$ProDealCloserRequestToJson(
   'push': instance.push,
   'marketplace': ?instance.marketplace,
   'deal_size': ?instance.dealSize,
+  'deals_per_month': ?instance.dealsPerMonth,
+  'hurdles': ?instance.hurdles,
 };
 
 ProReplyResponse _$ProReplyResponseFromJson(Map<String, dynamic> json) =>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only (src/debug is never part of release or profile builds).
+  The Firebase emulators speak plain HTTP from the host machine (10.0.2.2 from the Android
+  emulator, a LAN address from a physical device), so debug builds may use cleartext.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

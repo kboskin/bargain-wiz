@@ -3,7 +3,9 @@ import base64
 
 import pytest
 
+import config
 import negotiation as n
+from errors import UpstreamError
 
 PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 100).decode()
 
@@ -26,8 +28,8 @@ def test_parse_images_validates_type_encoding_and_size():
     with pytest.raises(n.BadRequest):
         n.parse_images([{"mime_type": "image/png", "data": "not base64!!"}])
     with pytest.raises(n.BadRequest):
-        n.parse_images([{"mime_type": "image/png", "data": PNG}] * (n.MAX_IMAGES + 1))
-    big = base64.b64encode(b"0" * (n.MAX_IMAGE_BYTES + 1)).decode()
+        n.parse_images([{"mime_type": "image/png", "data": PNG}] * (config.MAX_IMAGES.value + 1))
+    big = base64.b64encode(b"0" * (config.MAX_IMAGE_BYTES.value + 1)).decode()
     with pytest.raises(n.BadRequest):
         n.parse_images([{"mime_type": "image/jpeg", "data": big}])
 
@@ -50,6 +52,17 @@ def test_system_prompt_reflects_profile():
     prompt = n.system_prompt(n.Profile(vibe="no_nonsense", push=90, marketplace="ebay", deal_size=550, locale="es"))
     assert "Spanish" in prompt and "No-Nonsense" in prompt and "Hard bargainer" in prompt
     assert "eBay" in prompt and "$550" in prompt
+    assert "weak spots" not in prompt
+
+
+def test_hurdles_and_frequency_reach_the_prompt():
+    profile = n.parse_profile({"hurdles": ["Being_Rude", "unknown", "holding_ground"], "deals_per_month": "6_plus"})
+    assert profile.hurdles == ("being_rude", "unknown", "holding_ground")
+    prompt = n.system_prompt(profile)
+    assert "fears sounding rude" in prompt and "holds the position" in prompt
+    assert "frequent buyer" in prompt
+    with pytest.raises(n.BadRequest):
+        n.parse_profile({"hurdles": "starting"})
 
 
 def test_pro_request_keeps_newest_images_within_budget_and_orders_messages():
@@ -65,9 +78,9 @@ def test_pro_request_keeps_newest_images_within_budget_and_orders_messages():
     req = n.parse_pro_request(body)
     assert [m.role for m in req.messages] == ["user", "wizard", "user"]
     assert len(req.messages[2].images) == 4  # newest message keeps all its images
-    assert len(req.messages[0].images) == n.MAX_IMAGES - 4  # oldest gets what is left
+    assert len(req.messages[0].images) == config.MAX_IMAGES.value - 4  # oldest gets what is left
     parts = n.pro_parts(req)
-    assert sum(1 for p in parts if p["type"] == "image") == n.MAX_IMAGES
+    assert sum(1 for p in parts if p["type"] == "image") == config.MAX_IMAGES.value
     assert "Buyer: Kallax $180 (screenshot attached)" in parts[-1]["text"]
     assert "three ready-to-paste lines" in parts[-1]["text"]
 
@@ -90,23 +103,23 @@ def test_normalize_lines_fixes_intents_and_drops_empties():
         {"intent": "opener", "text": "Hi", "why": None},
         {"intent": "counter", "text": "Counter", "why": "because"},
     ]
-    with pytest.raises(ValueError):
+    with pytest.raises(UpstreamError):
         n.express_result({"seeing": "x", "lines": []})
     assert n.reply_result({"reply": " Go lower. "}) == {"reply": "Go lower."}
-    with pytest.raises(ValueError):
+    with pytest.raises(UpstreamError):
         n.reply_result({"reply": ""})
 
 
 def test_long_free_text_is_truncated_not_rejected():
-    req = n.parse_express_request({"text": "x" * (n.MAX_TEXT_CHARS + 500)})
-    assert req.text is not None and len(req.text) == n.MAX_TEXT_CHARS + 1 and req.text.endswith("…")
-    pro = n.parse_pro_request({"messages": [{"role": "user", "text": "y" * (n.MAX_MESSAGE_CHARS + 5)}]})
-    assert len(pro.messages[0].text) == n.MAX_MESSAGE_CHARS + 1
+    req = n.parse_express_request({"text": "x" * (config.MAX_TEXT_CHARS.value + 500)})
+    assert req.text is not None and len(req.text) == config.MAX_TEXT_CHARS.value + 1 and req.text.endswith("…")
+    pro = n.parse_pro_request({"messages": [{"role": "user", "text": "y" * (config.MAX_MESSAGE_CHARS.value + 5)}]})
+    assert len(pro.messages[0].text) == config.MAX_MESSAGE_CHARS.value + 1
     assert n.parse_profile({"locale": "es-419-something-long"}).locale.startswith("es-419")
 
 
 def test_chat_images_share_one_byte_budget():
-    big = base64.b64encode(b"0" * (n.MAX_TOTAL_IMAGE_BYTES // 2 + 1)).decode()
+    big = base64.b64encode(b"0" * (config.MAX_TOTAL_IMAGE_BYTES.value // 2 + 1)).decode()
     # Two 3 MB+ images in different turns exceed the request-wide 6 MB budget.
     body = {"messages": [{"role": "user", "text": "a", "images": [{"mime_type": "image/jpeg", "data": big}]},
                          {"role": "user", "text": "b", "images": [{"mime_type": "image/jpeg", "data": big}]}]}
@@ -122,4 +135,4 @@ def test_transcript_line_for_image_only_turn_has_no_double_space():
 def test_normalize_lines_caps_at_three():
     lines = n.normalize_lines([{"text": f"line {i}"} for i in range(6)])
     assert [line["intent"] for line in lines] == ["opener", "counter", "close"]
-    assert len(lines) == n.MAX_LINES
+    assert len(lines) == config.MAX_LINES.value

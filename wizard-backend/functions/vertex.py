@@ -7,30 +7,12 @@ import json
 import logging
 from typing import Any, Protocol
 
-from firebase_functions import params
-
+import config
+from errors import UpstreamError
 from runtime import firebase_project_id
 
 logger = logging.getLogger("vertex")
 
-VERTEX_LOCATION = params.StringParam(
-    "VERTEX_LOCATION", default="us-central1", description="Vertex AI region for Gemini calls."
-)
-VERTEX_MODEL = params.StringParam(
-    "VERTEX_MODEL",
-    default="gemini-2.5-flash",
-    description="Gemini model id used by the negotiation functions.",
-)
-VERTEX_THINKING_BUDGET = params.IntParam(
-    "VERTEX_THINKING_BUDGET",
-    default=0,
-    description="Thinking token budget for Gemini 2.5 models (0 = off: fastest and cheapest; "
-    "-1 = do not send the setting, for models without thinking).",
-)
-
-
-class UpstreamError(Exception):
-    """The model call failed or returned something unusable → 502."""
 
 
 class JsonGenerator(Protocol):
@@ -43,25 +25,22 @@ class VertexGenerator:
     """`parts` items: `{"type": "text", "text": str}` or
     `{"type": "image", "mime_type": str, "data": bytes}`."""
 
-    def __init__(
-        self,
-        project: str | None = None,
-        location: str | None = None,
-        model: str | None = None,
-        temperature: float = 0.7,
-        max_output_tokens: int = 2048,
-        thinking_budget: int | None = None,
-    ):
+    def __init__(self):
+        """Client for the configured project / region / model (config.py). Construction is
+        cheap; credentials are resolved lazily by google-auth."""
         from google import genai
 
-        project = project or firebase_project_id()
+        project = firebase_project_id()
         if not project:
             raise UpstreamError("Vertex AI: no Google Cloud project id available")
-        self.model = model or VERTEX_MODEL.value
-        self._temperature = temperature
-        self._max_output_tokens = max_output_tokens
-        self._thinking_budget = VERTEX_THINKING_BUDGET.value if thinking_budget is None else thinking_budget
-        self._client = genai.Client(vertexai=True, project=project, location=location or VERTEX_LOCATION.value)
+        self.model = config.VERTEX_MODEL.value
+        self._temperature = float(config.VERTEX_TEMPERATURE.value)
+        self._max_output_tokens = config.VERTEX_MAX_OUTPUT_TOKENS.value
+        self._thinking_budget = config.VERTEX_THINKING_BUDGET.value
+        try:
+            self._client = genai.Client(vertexai=True, project=project, location=config.VERTEX_LOCATION.value)
+        except Exception as exc:
+            raise UpstreamError(f"Vertex AI client could not be created: {exc}") from exc
 
     def generate_json(self, *, system: str, parts: list[dict], schema: dict) -> dict:
         from google.genai import types

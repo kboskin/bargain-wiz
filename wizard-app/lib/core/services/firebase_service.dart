@@ -1,9 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show appFlavor;
 
 import '../config/app_config.dart';
 import 'package:appwizard/core/services/firebase_options.dart';
@@ -39,6 +43,8 @@ class FirebaseService {
         options: _getFirebaseOptions(),
       );
       debugPrint('[INFO] Firebase Core initialized');
+
+      if (AppConfig.isLocal) await _useEmulators();
 
       // Initialize Analytics
       _analytics = FirebaseAnalytics.instance;
@@ -109,6 +115,28 @@ class FirebaseService {
       debugPrint('[ERROR] Error requesting notification permission: $e');
       return null;
     }
+  }
+
+  /// Local flavor: Auth, Firestore and Storage talk to `firebase emulators:start`
+  /// (wizard-backend/firebase.json ports). Must run before any of them is used. Remote Config
+  /// has no emulator and keeps reading the dev project; the Functions emulator URL replaces
+  /// `api_url` in [RemoteConfigService.getApiUrl]. Crash and analytics reporting is off.
+  static Future<void> _useEmulators() async {
+    final host = AppConfig.emulatorHost;
+    if (defaultTargetPlatform == TargetPlatform.android && appFlavor != 'local' && !kDebugMode) {
+      // Debug builds allow plain HTTP through src/debug/res/xml/network_security_config.xml;
+      // release and profile builds only do so in the `local` Gradle flavor.
+      debugPrint('[ERROR] FLAVOR=local in a non-debug build needs the Android `local` flavor '
+          '(built with "${appFlavor ?? 'none'}"): cleartext HTTP to $host will be rejected.');
+    }
+    await FirebaseAuth.instance.useAuthEmulator(host, AppConfig.emulatorAuthPort);
+    FirebaseFirestore.instance.useFirestoreEmulator(host, AppConfig.emulatorFirestorePort);
+    await FirebaseStorage.instance.useStorageEmulator(host, AppConfig.emulatorStoragePort);
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(false);
+    await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(false);
+    debugPrint('[INFO] Local flavor: Firebase emulators at $host '
+        '(auth ${AppConfig.emulatorAuthPort}, firestore ${AppConfig.emulatorFirestorePort}, '
+        'storage ${AppConfig.emulatorStoragePort}, functions ${AppConfig.emulatorFunctionsPort})');
   }
 
   /// Get Firebase options based on flavor

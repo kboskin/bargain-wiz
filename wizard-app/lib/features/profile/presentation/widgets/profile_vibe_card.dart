@@ -41,7 +41,9 @@ class ProfileVibeCard extends StatelessWidget {
                 WizChip(
                   compact: true,
                   label: v.shortOf(context),
-                  dotColor: v.color,
+                  // Vibe glyph tinted in the vibe colour; inherits the chip foreground when selected.
+                  leading: v.icon == null ? null : Icon(v.icon, color: v.id == selected?.id ? null : v.chipTextColor),
+                  dotColor: v.icon == null ? v.color : null,
                   selected: v.id == selected?.id,
                   fill: Colors.white,
                   textStyle: WizType.captionStrong,

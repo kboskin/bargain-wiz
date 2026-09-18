@@ -12,7 +12,7 @@ class _FakeRemoteConfig implements RemoteConfigService {
   final String baseUrl;
 
   @override
-  String getFunctionsBaseUrl() => baseUrl;
+  String getApiUrl() => baseUrl;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -51,7 +51,7 @@ void main() {
   }
 
   group('CloudFunctionsClient.get', () {
-    test('GETs functions_base_url + path with no body and decodes with fromJson', () async {
+    test('GETs api_url + path with no body and decodes with fromJson', () async {
       final (client, adapter) = build((_) => _json({'answer': 42}, 200));
 
       final value = await client.get('/echo', fromJson: (json) => json['answer'] as int);
@@ -80,6 +80,16 @@ void main() {
       expect(ok, isTrue);
     });
 
+    test('PATCH sends a JSON body with the same envelope handling', () async {
+      final (client, adapter) = build((_) => _json({'merged': true}, 200));
+
+      final merged = await client.patch('/profile', body: {'a': 1}, fromJson: (json) => json['merged'] as bool);
+
+      expect(adapter.requests.single.method, 'PATCH');
+      expect(adapter.requests.single.data, {'a': 1});
+      expect(merged, isTrue);
+    });
+
     test('surfaces the function error body as CloudFunctionException', () async {
       final (client, _) = build((_) => _json({'error': {'status': 'METHOD_NOT_ALLOWED', 'message': 'Use GET.'}}, 405));
 
@@ -97,7 +107,7 @@ void main() {
       await expectLater(client.get('/echo', fromJson: (json) => json), throwsStateError);
     });
 
-    test('fails before any request when functions_base_url is not configured', () async {
+    test('fails before any request when api_url is not configured', () async {
       final (client, adapter) = build((_) => _json({}, 200), baseUrl: '');
       await expectLater(client.get('/echo', fromJson: (json) => json), throwsStateError);
       expect(adapter.requests, isEmpty);

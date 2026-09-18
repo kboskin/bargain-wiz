@@ -17,9 +17,11 @@ class DealLineDto {
 
 /// Deal reply DTO from backend (what was seen + multiple lines).
 class DealReplyDto {
-  const DealReplyDto({required this.lines, this.seeing});
+  const DealReplyDto({required this.lines, this.seeing, this.conversationId});
   final List<DealLineDto> lines;
   final String? seeing;
+  /// Backend conversation holding this deal (null for mocks).
+  final String? conversationId;
 }
 
 /// Remote data source for Express Dealmaker (upload screenshots, get reply).
@@ -33,6 +35,8 @@ abstract class ExpressDealmakerRemoteDataSource {
     final String? keyword,
     /// Negotiation vibe id ("friendly" | "no_nonsense" | "tactical" | "quiet_closer").
     final String? vibe,
+    /// Existing backend conversation to regenerate ("Get More", tone change); null creates one.
+    final String? conversationId,
   });
 }
 
@@ -140,6 +144,7 @@ class MockExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteData
     required final String locale,
     final String? keyword,
     final String? vibe,
+    final String? conversationId,
   }) async {
     _logger.i('Mock getDealReply ids: $uploadedIds keyword: $keyword locale: $locale vibe: $vibe');
     await Future<void>.delayed(_getReplyDelay);

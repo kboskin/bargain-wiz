@@ -1,6 +1,6 @@
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 
-/// Which lock tags the Home CTA stack shows for a tier (see README §3 / `free_tier_rules`).
+/// Which lock tags the Home CTA stack shows for a tier (see README §3 / `FeatureGatePolicy`).
 ///
 /// - Express Dealmaker: yellow "Vision" tag for free and basic (Text Wizard).
 /// - Pro Deal Closer: yellow 🔒 tag for free only.
