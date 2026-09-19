@@ -243,7 +243,10 @@ the device locale, so the set follows the funnel rather than a client release
 
 **The queue is the rate limiter.** `generate` declares `RateLimits`
 (`max_dispatches_per_second`, `max_concurrent_dispatches`) and `RetryConfig` (`max_attempts`),
-all from `.env`. That is the platform's own mechanism and it needs no state of ours.
+all from `.env`. That is the platform's own mechanism and it needs no state of ours. Both
+ceilings (100/s, 1000 outstanding) sit well above what `MAX_INSTANCES` can serve, so today they
+bound a burst rather than the steady rate — the instance cap is what paces normal traffic, and
+the queue values are the knob to turn down when the project needs throttling.
 
 It throttles the **project**, not a person: one account can still consume the whole budget,
 and everyone else queues behind it. Accepted deliberately for now. What limits a single user

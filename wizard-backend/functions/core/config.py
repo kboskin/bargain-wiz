@@ -42,11 +42,13 @@ PREVIEW_CHARS = params.IntParam("PREVIEW_CHARS", default=140, description="Lengt
 TITLE_CHARS = params.IntParam("TITLE_CHARS", default=60, description="Length of the derived conversation title.")
 
 # ── Generation queue (Cloud Tasks: the rate limiter, project-wide not per user) ─
+# Both ceilings sit above what MAX_INSTANCES can serve, so they bound a burst rather than the
+# steady rate; lower them here to throttle the project without redeploying the functions.
 QUEUE_MAX_DISPATCHES_PER_SECOND = params.IntParam(
-    "QUEUE_MAX_DISPATCHES_PER_SECOND", default=10, description="Model calls started per second across the project."
+    "QUEUE_MAX_DISPATCHES_PER_SECOND", default=100, description="Model calls started per second across the project."
 )
 QUEUE_MAX_CONCURRENT_DISPATCHES = params.IntParam(
-    "QUEUE_MAX_CONCURRENT_DISPATCHES", default=20, description="Model calls running at once across the project."
+    "QUEUE_MAX_CONCURRENT_DISPATCHES", default=1000, description="Model calls outstanding at once across the project."
 )
 QUEUE_MAX_ATTEMPTS = params.IntParam(
     "QUEUE_MAX_ATTEMPTS", default=3, description="Attempts per generation before the turn is marked failed."

@@ -34,6 +34,8 @@ class FakeExpressRepository implements ExpressDealmakerRepository {
   String? lastConversationId;
   /// When set, uploads wait for this completer before finishing.
   Completer<void>? uploadGate;
+  /// When set, replies wait for this completer before finishing.
+  Completer<void>? replyGate;
 
   DealReply reply = const DealReply(
     seeing: r'IKEA Kallax shelf · $180 · listed 9 days · "slight scuff"',
@@ -69,6 +71,8 @@ class FakeExpressRepository implements ExpressDealmakerRepository {
       conversationId: conversationId,
     ));
     lastConversationId = conversationId;
+    final gate = replyGate;
+    if (gate != null) await gate.future;
     // Like the backend: the first reply creates the conversation, later ones keep its id.
     final cid = conversationId ?? 'conv_1';
     if (failReply) {

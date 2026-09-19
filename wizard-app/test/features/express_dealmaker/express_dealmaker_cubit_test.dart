@@ -194,6 +194,30 @@ void main() {
       expect(cubit.state.phase, ExpressPhase.ready);
     });
 
+    test('retrying a reply shows the reading stage, not an error screen with no message',
+        () async {
+      repo.failReply = true;
+      await cubit.start(initialPaths: ['a.png']);
+      expect(cubit.state.phase, ExpressPhase.error);
+      expect(cubit.state.errorMessage, isNotNull);
+
+      repo.replyGate = Completer<void>();
+      final retrying = cubit.retry();
+      await pumpEventQueue();
+
+      // Mid-retry the error stage is gone, so its body cannot fall back to the configured
+      // "we couldn't read your screenshots" copy while the request runs.
+      expect(cubit.state.phase, ExpressPhase.uploading);
+      expect(cubit.state.replyLoading, isTrue);
+      expect(cubit.state.errorMessage, isNull);
+
+      repo.replyGate!.complete();
+      await retrying;
+
+      expect(cubit.state.phase, ExpressPhase.error);
+      expect(cubit.state.errorMessage, 'reply failed');
+    });
+
     test('nothing to retry with no screenshots falls back to pick', () async {
       await cubit.retry();
       expect(cubit.state.phase, ExpressPhase.pick);
@@ -234,6 +258,19 @@ void main() {
       expect(cubit.state.phase, ExpressPhase.ready);
       expect(repo.uploadedPaths, ['a.png', 'b.png']);
       expect(repo.replyRequests.last.ids, ['id_a.png', 'id_b.png']);
+    });
+
+    test('Get More keeps the results on screen while it loads', () async {
+      repo.replyGate = Completer<void>();
+      final pending = cubit.requestReply();
+      await pumpEventQueue();
+
+      expect(cubit.state.phase, ExpressPhase.ready, reason: 'only a retry leaves its stage');
+      expect(cubit.state.replyLoading, isTrue);
+
+      repo.replyGate!.complete();
+      await pending;
+      expect(cubit.state.phase, ExpressPhase.ready);
     });
 
     test('a failing Get More shows the error stage and Retry re-requests', () async {

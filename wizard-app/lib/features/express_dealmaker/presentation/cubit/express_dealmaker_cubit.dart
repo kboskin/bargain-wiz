@@ -240,7 +240,16 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
     final ids = state.uploadedIds;
     // A redo needs no ids: the screenshots are already on the server.
     if (state.replyLoading || (ids.isEmpty && state.conversationId == null)) return;
-    emit(state.copyWith(replyLoading: true, clearError: true));
+    // Retrying from the error stage: show the reading stage while the request runs. Staying on
+    // the error stage with the message cleared would fall back to the configured body ("we
+    // couldn't read your screenshots"), so the copy would change under the person for the
+    // length of the request and there would be no sign that anything is happening.
+    final fromError = state.phase == ExpressPhase.error;
+    emit(state.copyWith(
+      phase: fromError ? ExpressPhase.uploading : null,
+      replyLoading: true,
+      clearError: true,
+    ));
     final keyword = state.keyword.trim();
     final result = await _repository.getDealReply(
       uploadedIds: ids,
