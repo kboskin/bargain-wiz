@@ -36,7 +36,8 @@ So the app names almost no key: `RemoteConfigService.getProfileFields()` turns t
 [`ProfileField`]s — key, kind, options and every attribute the UI draws (label, colour, icon,
 subtext, emoji, savings, default) — and the profile services copy `{key: value}` pairs out of
 local storage. `ProfileFields` spells out four keys only, and says why: `referral_code` (its
-own wire section), `vibe`, `push` (chips and a meter instead of a settings row) and
+own wire section, and the one answer the Profile screen never re-opens —
+`ProfileFields.lockedKeys`), `vibe`, `push` (chips and a meter instead of a settings row) and
 `marketplace` (saved with a conversation).
 
 An answer that no function reads simply rides along and is ignored; a field the funnel stops
@@ -120,7 +121,9 @@ completion trace stays as recorded.
 `{key: value}` pairs with every `express_dealmaker` / `pro_deal_closer` request, plus the
 locale; `features/negotiation/domain/prompts.py` turns hurdles and deal frequency into coaching hints in the system
 prompt. The referral code is the one answer that stays out of `preferences`: it has a section
-of its own (`referral.code`, stamped with `entered_at`). The next step, once profiles are populated, is to let
+of its own (`referral.code`, stamped with `entered_at`), which the client keeps sending — the
+device cannot change it and the function keeps the first one, so a retried first push still
+credits it. The next step, once profiles are populated, is to let
 the functions read `users/{id}` themselves and drop the fields from the request body.
 
 ## Endpoint
@@ -128,6 +131,12 @@ the functions read `users/{id}` themselves and drop the fields from the request 
 `PATCH /profile` — body `{preferences?, onboarding?, referral?, app?}`.
 Partial update: nested maps merge, a `null` leaf deletes the field, `onboarding.completed:
 true` stamps `completed_at`. Returns the merged document. `identity` is server-managed.
+
+`referral.code` is **write-once** (`WRITE_ONCE` in `domain/profile.py`): the first code a
+profile is given stands, and a later PATCH carrying one is dropped and logged instead of
+re-attributing an install that is already credited. An explicit `null` still clears it, and
+the next code after that is treated as the first. The app hides the field (below), so this is
+what holds for an older or tampered client.
 
 `GET /profile` — the caller's document, 404 until the first PATCH.
 
@@ -153,9 +162,13 @@ Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUN
 The Profile screen edits the same answers onboarding collected, and it reads the list from the
 same place: `ProfileFields.fromScreens` walks the `onboarding_screens` templates and turns every
 screen that writes an answer into a row — `select` / `select_group` groups and both slider
-templates into a one-chip sheet, `multi_select` into tick rows, `referral_code` into a text
+templates into a one-chip sheet, `multi_select` into tick rows, a text screen into a text
 field. Screens that ask nothing are skipped, and so are the `vibe` and `push` answers, which
-keep their own vibe chips and push meter. A screen added to the funnel remotely
+keep their own vibe chips and push meter, and every key in `ProfileFields.lockedKeys` — today
+just `referral_code`. A referral code is an attribution, not a preference: it is asked for once
+during onboarding, so the screen offers no row for it and a profile push leaves it out of
+`preferences` (the function's write-once rule is what stops any client re-setting it). A screen
+added to the funnel remotely
 therefore becomes an editable row without an app release; one removed stops being offered, while
 an answer already stored still shows its raw value rather than disappearing.
 

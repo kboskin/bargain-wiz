@@ -58,6 +58,20 @@ void main() {
       ]);
     });
 
+    test('skips the answers onboarding locks, so the referral code cannot be re-set', () {
+      expect(ProfileFields.lockedKeys, contains('referral_code'));
+      final fields = ProfileFields.fromScreens(
+        screens,
+        skip: {'vibe', 'push', ...ProfileFields.lockedKeys},
+      );
+      expect(fields.map((f) => f.key), [
+        'hurdles',
+        'marketplace',
+        'deals_per_month',
+        'deal_size',
+      ]);
+    });
+
     test('kinds follow the screen template', () {
       final byKey = {for (final f in ProfileFields.fromScreens(screens)) f.key: f};
       expect(byKey['hurdles']!.kind, ProfileFieldKind.multi);

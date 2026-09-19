@@ -99,6 +99,21 @@ def test_patch_deletes_leaves_and_merges_nested_maps(store):
     assert doc["updated_at"] == NOW
 
 
+def test_referral_code_is_write_once(store):
+    ident = up.Identity(uid="u1")
+    up.apply_patch(store, ident, {"referral": {"code": "FRIEND-42"}})
+
+    # A later push carrying another code leaves the recorded one alone; the rest still lands.
+    doc = up.apply_patch(store, ident, {"referral": {"code": "SOMEONE-ELSE"}, "preferences": {"vibe": "friendly"}})
+    assert doc["referral"] == {"code": "FRIEND-42", "entered_at": NOW}
+    assert doc["preferences"] == {"vibe": "friendly"}
+
+    # Clearing it still works, and the next code is then the first one again.
+    up.apply_patch(store, ident, {"referral": {"code": None}})
+    doc = up.apply_patch(store, ident, {"referral": {"code": "LATER-7"}})
+    assert doc["referral"]["code"] == "LATER-7"
+
+
 def test_jsonable_formats_timestamps():
     assert jsonable({"t": NOW, "n": [1, {"u": NOW}]}) == {"t": "2026-09-17T12:00:00Z", "n": [1, {"u": "2026-09-17T12:00:00Z"}]}
 

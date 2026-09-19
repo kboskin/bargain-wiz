@@ -134,10 +134,11 @@ class ProfileSyncService {
     };
     final code = answers[ProfileFields.referralKey]?.toString().trim();
     return ProfilePatchRequest(
-      // Everything answered, minus the referral code: that has a section of its own.
+      // Everything answered, minus the keys onboarding locks: the referral code is not a
+      // preference, it has a section of its own and the function keeps the first one it gets.
       preferences: {
         for (final field in _profile.fields)
-          if (field.key != ProfileFields.referralKey && answers[field.key] != null)
+          if (!ProfileFields.lockedKeys.contains(field.key) && answers[field.key] != null)
             field.key: answers[field.key],
         'locale': _localeCode(),
       },
@@ -158,6 +159,8 @@ class ProfileSyncService {
               ]
             : null,
       ),
+      // Sent whenever the device has one: the code cannot change here (no screen edits it)
+      // and the function ignores a second code, so a retried first push still credits it.
       referral: code == null || code.isEmpty ? null : ProfileReferral(code: code),
       app: ProfileApp(
         platform: Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : Platform.operatingSystem),

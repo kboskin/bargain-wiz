@@ -137,6 +137,7 @@ def profile(req: https_fn.Request) -> dict:
     GET                 → the document, 404 when none exists yet.
     PATCH {preferences?, onboarding?, referral?, app?}
           → partial update (nested maps merge, null deletes a leaf); returns the document.
+            `referral.code` is write-once: a code sent over one already recorded is dropped.
     """
     auth = FirebaseAuthenticator().require(req)
     identity = Identity(uid=auth.uid, provider=auth.provider)

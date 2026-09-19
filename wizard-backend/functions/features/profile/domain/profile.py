@@ -16,7 +16,7 @@ Sections (all optional in a PATCH; nested maps merge, `null` deletes a leaf):
                   offered) — enough to interpret every answer without the config that
                   produced it. Experiment assignment itself is Firebase A/B Testing's job
                   (Analytics user properties), not stored here.
-    referral      code entered during onboarding
+    referral      code entered during onboarding, write-once ([WRITE_ONCE])
     app           last seen platform / version / flavor / locale
     identity      server-managed: uid, provider
 
@@ -38,6 +38,13 @@ SCHEMA_VERSION = 1
 
 
 SECTIONS = ("preferences", "onboarding", "referral", "app")
+
+# `(section, field)` pairs a client fills once and may never re-set. A referral code credits
+# whoever brought this person in: re-entering it would re-attribute an install that is already
+# credited, so a later PATCH carrying one is dropped. The Profile screen hides the field
+# (`ProfileFields.lockedKeys`), this is what makes it true for an older or tampered client.
+# An explicit null still deletes — forgetting a code has to stay possible.
+WRITE_ONCE = (("referral", "code"),)
 
 
 # Update markers (DELETE / SERVER_TIME) live in markers.py and are re-exported here.
@@ -284,12 +291,27 @@ class ProfileStore(Protocol):
     def merge(self, doc_id: str, patch: dict) -> None: ...
 
 
+def drop_write_once(patch: dict, current: dict | None) -> dict:
+    """Strips the [WRITE_ONCE] fields `current` already records, so the first value given
+    stands. The section goes with the field: what is left of it (`entered_at`) is the stamp
+    the server wrote for that first value."""
+    for section, field in WRITE_ONCE:
+        incoming = patch.get(section)
+        if not isinstance(incoming, dict) or incoming.get(field, DELETE) is DELETE:
+            continue  # nothing set, or an explicit delete
+        stored = (current or {}).get(section)
+        if isinstance(stored, dict) and stored.get(field):
+            logger.info("ignoring %s.%s: already set", section, field)
+            patch.pop(section)
+    return patch
+
+
 def apply_patch(store: ProfileStore, identity: Identity, body: dict) -> dict:
     """PATCH semantics: merge the validated body into `users/{uid}`, creating it on the first
     call. Returns the resulting document."""
     doc_id = identity.doc_id
     current = store.get(doc_id)
-    patch = build_patch(body, identity)
+    patch = drop_write_once(build_patch(body, identity), current)
     if current is None:
         patch["created_at"] = SERVER_TIME
     store.merge(doc_id, patch)

@@ -107,7 +107,8 @@ class ProfileField {
 /// Every screen that writes an answer becomes a field: `select` / `select_group` groups and
 /// the two slider templates are single-choice, `multi_select` is multi-choice, `referral_code`
 /// is text. Screens that ask nothing (engagement, permission, paywall, warmup, …) are skipped,
-/// as are the [skip] keys the Profile screen renders with a card of its own (vibe, push).
+/// as are the [skip] keys — the ones the Profile screen renders with a card of its own (vibe,
+/// push) and the [lockedKeys] onboarding fills once (the referral code).
 class ProfileFields {
   ProfileFields._();
 
@@ -120,6 +121,14 @@ class ProfileFields {
   /// The one answer key the client names, because the wire gives it a section of its own
   /// (`referral.code`) instead of carrying it with the preferences.
   static const String referralKey = 'referral_code';
+
+  /// Answers onboarding collects once and nothing may re-set afterwards. A referral code
+  /// credits whoever brought this person in, so re-entering it later would re-attribute an
+  /// install that is already credited: the Profile screen leaves these rows out and they
+  /// never travel in a patch's `preferences` (`ProfileSyncService.buildPatch`). The function
+  /// keeps the first code it is given, so an older client cannot overwrite one either —
+  /// see PROFILE_SYNC.md.
+  static const Set<String> lockedKeys = {referralKey};
 
   /// The answers the app draws itself instead of as a settings row — the tone the wizard
   /// writes in (chips in Express, Pro and Profile), how hard it pushes (a meter) and where

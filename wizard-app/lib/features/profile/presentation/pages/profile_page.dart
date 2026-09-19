@@ -40,7 +40,8 @@ import 'package:appwizard/features/subscription/domain/repositories/subscription
 ///
 /// The answer rows are built from the `onboarding_screens` templates ([ProfileFields]), so the
 /// screen offers exactly what onboarding asked — a screen added remotely shows up here too.
-/// Vibe and push keep their own cards and are left out of the rows.
+/// Vibe and push keep their own cards and are left out of the rows, and so are the answers
+/// onboarding locks ([ProfileFields.lockedKeys]): a referral code is entered once.
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
@@ -129,9 +130,13 @@ class _ProfilePageState extends State<ProfilePage> {
   /// Answers with a card of their own (chips and a meter), kept out of the settings rows.
   static const Set<String> _cardKeys = {ProfileFields.vibeKey, ProfileFields.pushKey};
 
-  /// Editable answers in onboarding order, minus the ones with a card.
+  /// Answers this screen never offers: the ones with a card of their own and the
+  /// [ProfileFields.lockedKeys] onboarding sets once (the referral code).
+  static const Set<String> _hiddenKeys = {..._cardKeys, ...ProfileFields.lockedKeys};
+
+  /// Editable answers in onboarding order, minus the hidden ones.
   List<ProfileField> _fields(List<OnboardingModel> screens) =>
-      ProfileFields.fromScreens(screens, skip: _cardKeys);
+      ProfileFields.fromScreens(screens, skip: _hiddenKeys);
 
   /// The options of the answer [key], as its screen offers them.
   List<ProfileOption> _optionsOf(String key) => _profile.fieldFor(key)?.options ?? const [];
