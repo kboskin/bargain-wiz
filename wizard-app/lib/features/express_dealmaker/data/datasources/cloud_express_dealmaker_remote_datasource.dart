@@ -71,8 +71,8 @@ class CloudExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteDat
     final String? vibe,
     final String? conversationId,
   }) async {
-    final profile = ConversationProfile(
-      _profile.payload(
+    final profile = ConversationProfile.of(
+      _profile.snapshot(
         overrides: vibe == null ? const {} : {ProfileFields.vibeKey: vibe},
         except: const {ProfileFields.referralKey},
       ),

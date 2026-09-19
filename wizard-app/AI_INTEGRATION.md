@@ -26,14 +26,21 @@ is present but invalid is rejected.
   "text": "optional listing/chat text (typed, or OCR'd on device)",
   "keyword": "scuff",
   "locale": "en", "vibe": "tactical", "push": 80, "marketplace": "ebay", "deal_size": 550,
-  "deals_per_month": "3_5", "hurdles": ["being_rude", "holding_ground"]
+  "deals_per_month": "3_5", "hurdles": ["being_rude", "holding_ground"],
+  "prompt": {
+    "vibe": {"tactical": "Tactical Strategist: uses logic, comparable prices and product flaws as leverage…"},
+    "hurdles": {"being_rude": "fears sounding rude: keep every line warm and polite…"}
+  }
 }
 ```
 → `{"seeing": "IKEA Kallax · $180 · slight scuff", "lines": [{"intent": "opener|counter|close", "text": "…", "why": "…"}], "model": "gemini-2.5-flash"}`
 
 Limits: ≤ 10 images, ≤ 4 MB each, ≤ 16 MB together (also across chat turns), JPEG/PNG/WebP;
 the byte caps are a backstop — the app compresses to a few hundred KB per shot before upload;
-`text` is kept whole, whatever its length; `images` or `text` required.
+`text` is kept whole, whatever its length; `images` or `text` required. The byte caps count
+only what the body actually carries: a screenshot already in Cloud Storage travels as a URI
+and costs nothing, while the ≤ 10 cap still applies because it bounds what the model is
+asked to look at.
 
 ### `pro_deal_closer` — chat coaching
 
@@ -43,7 +50,8 @@ the byte caps are a backstop — the app compresses to a few hundred KB per shot
                {"role": "wizard", "text": "Open at $140."}],
   "mode": "reply",            // or "options"
   "regenerate": false,
-  "locale": "en", "vibe": "friendly", "push": 60, "marketplace": "facebook", "deal_size": 550
+  "locale": "en", "vibe": "friendly", "push": 60, "marketplace": "facebook", "deal_size": 550,
+  "prompt": {"vibe": {"friendly": "Friendly Collaborator: warm and polite…"}}
 }
 ```
 → reply mode `{"reply": "…", "model": "…"}`; options mode `{"lines": [ … ], "model": "…"}`.
@@ -51,6 +59,20 @@ the byte caps are a backstop — the app compresses to a few hundred KB per shot
 never a server default. The newest `MAX_MESSAGES` turns are used (200, the same as the cap on a
 conversation, so the model normally sees the whole chat); screenshots are kept newest-first
 within the 6-image budget.
+
+### Screenshots: bytes once, then a URI
+
+The app sends screenshots as base64. The `conversations` function re-encodes them, stores
+them under `users/{uid}/conversations/{cid}/`, and from then on hands Gemini the object's
+**`gs://` URI** (`Part.from_uri`) rather than the bytes (`Part.from_bytes`). So a screenshot
+crosses the wire once, on the turn that adds it; every later turn in the same chat references
+it and Vertex fetches it from the bucket. Before this, the worker downloaded every image in
+the history on every turn and inlined them again.
+
+`StoredImage` is built by the backend only and is deliberately unreachable from any request
+body: a client able to name a URI could point Gemini at any object the runtime service
+account can read. A body describes images by their bytes, full stop — enforced in the
+`images` validators and pinned by `test_a_client_cannot_name_a_storage_uri`.
 
 ### Prompting
 
@@ -60,7 +82,45 @@ marketplace etiquette, typical deal size, deal frequency (`deals_per_month`), th
 known weak spots (`hurdles`, the money-leak ids, turned into coaching hints),
 and the output language from `locale`: the tag the app sends is handed to the model as the
 language to write in, so any language the model knows works and there is no list on the server
-to extend. It must look like a BCP-47 tag (`en`, `pt-BR`, `zh-Hant-TW`) — that value goes into
+to extend.
+
+**Where the sentences come from.** What an answer *means* to the coach is written next to the
+answer, in the app's own Remote Config template — `metadata.prompt` on an option, `prompt`
+on a slider stop — and the app forwards it with every request under that same name, shaped
+`{answer key: {option id: sentence}}`. So adding an option, or a whole new question, changes
+the prompt with **no deploy on either side**: publish the template and every client that has
+fetched it starts describing the new answer. `UserProfileService.snapshot()` resolves the
+values and their sentences in one pass, which is what makes the tone chip describe the tone
+actually being sent rather than the stored one.
+
+**The template writes the whole line; the backend renders it verbatim.** There is no
+server-side copy of the option list, no per-field label and no ordering sequence: `prompts.py`
+keeps the standing rules, the fence, and the task each endpoint asks for, and `buyer_block()`
+is a loop over what arrived. Line order is the order the app sent, which is onboarding screen
+order — so the template controls the buyer block's content *and* its shape.
+
+An answer the client does not describe contributes nothing and is logged
+(`undescribed onboarding answer field=… value=…`); a profile that describes none of itself
+produces a prompt with no buyer block at all. That warning is the drift signal at runtime,
+and `functions/tests/test_option_prompts.py` catches the same drift at review time by reading
+the app's bundled `remote_config_defaults.json` and asserting every option it offers
+describes itself — for every answer key the template writes, not a list kept on the server.
+
+Two consequences worth knowing. Reordering onboarding screens reorders the buyer block, so a
+funnel change is also a prompt change. And because the lines are whole, prompt *structure* is
+now the template's too — the fence still contains it, but nothing forces a sentence into a
+shape the server chose.
+
+**Trust boundary, stated on the record.** Prompt text now originates from the client. On the
+live path (`conversations`) that client holds at least an anonymous Firebase ID token and
+passes App Check when it is enabled, and the only output it can steer is its own. Sentences
+have their whitespace collapsed, so a sentence is one line and cannot forge a second, and a
+sentence only applies when its option id is the answer actually sent — a client may restate
+what it sends, never append to it. Nothing else is filtered and nothing is capped: the block
+is fenced and introduced as data, and the same client already sends unbounded `text` into
+the user parts, so scrubbing or truncating honest copy would cost more than it buys. When anything is
+present the buyer block is wrapped in `<buyer_profile>…</buyer_profile>` and introduced as
+data about a person, not instructions. It must look like a BCP-47 tag (`en`, `pt-BR`, `zh-Hant-TW`) — that value goes into
 the prompt, so anything else is answered in English. The same fields live in the Firestore profile
 (`PROFILE_SYNC.md`); the functions may read them from there in a later step. Lines are
 written as the buyer speaking to the seller, one message each, no placeholders, no invented
@@ -76,7 +136,10 @@ assigned by position, empty lines dropped).
 | `VERTEX_THINKING_BUDGET` | `0` | Gemini 2.5 thinking tokens; 0 = off (fastest, cheapest), -1 = do not send (models without thinking) |
 
 Requirements on the project: Vertex AI API enabled; the function's runtime service account
-needs **Vertex AI User** (`roles/aiplatform.user`). Memory 512 MB, timeout 60 s.
+needs **Vertex AI User** (`roles/aiplatform.user`). A stored screenshot is handed to Gemini
+as a `gs://` URI (below), so the object must be readable by whichever principal Vertex
+fetches it as — see `functions/README.md` for the one thing to confirm on the first real
+run. Memory 512 MB, timeout 60 s.
 
 ## App structure
 
@@ -104,6 +167,9 @@ collect (`vibe`, `push`, `marketplace`, `deal_size`, `deals_per_month`, `hurdles
 of local storage under the keys remote config gave them — the app has no mapping of its own,
 see `PROFILE_SYNC.md`. An unanswered screen contributes its configured default. The caller's
 explicit vibe (tone chip) overrides the stored one for that request; `locale` is the device's.
+`snapshot()` returns those values together with the `metadata.prompt` sentence behind each
+one (the `prompt` block); `payload()` is the fields half of the same resolution, so the two can never
+describe different options.
 
 ## Subscriptions without a backend
 

@@ -108,6 +108,9 @@ class InMemoryConversationStore:
     def get_image(self, path):
         return self.images.get(path)
 
+    def image_uri(self, path):
+        return f"gs://in-memory/{path}" if path in self.images else None
+
 
 def _deepcopy(value: Any) -> Any:
     if isinstance(value, dict):
@@ -221,3 +224,9 @@ class FirestoreConversationStore:
             return self._bucket_ref().blob(path).download_as_bytes()
         except exceptions.NotFound:
             return None
+
+    def image_uri(self, path):
+        """`gs://bucket/path`, for handing the screenshot to Vertex without reading it here.
+        Not checked for existence: a missing object costs one failed generation, while a
+        `blobs.exists()` per image per turn is the round-trip this exists to avoid."""
+        return f"gs://{self._bucket_ref().name}/{path}" if path else None

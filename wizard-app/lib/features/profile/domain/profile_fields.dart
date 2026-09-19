@@ -15,6 +15,7 @@ class ProfileOption {
     this.savingsLow,
     this.savingsHigh,
     this.shortLabel,
+    this.prompt,
   });
 
   final String value;
@@ -42,9 +43,33 @@ class ProfileOption {
   /// A shorter label for chips and inline copy (`metadata.short`); [label] when unset.
   final dynamic shortLabel;
 
+  /// This option's contribution to the system prompt: one English sentence telling the
+  /// model what picking it means (`metadata.prompt` on an option, `prompt` on a slider
+  /// stop). Forwarded with every AI request under that same name; when it is null the
+  /// backend falls back to its own table for this id. Never shown in the UI and never
+  /// localized — see AI_INTEGRATION.md.
+  final String? prompt;
+
   /// "$lo–hi", or null when the stop configures no savings.
   String? get savingsRange =>
       savingsLow != null && savingsHigh != null ? '\$$savingsLow–$savingsHigh' : null;
+}
+
+/// What one AI request carries about the buyer: the `{field: value}` answers the functions
+/// read, and — keyed the same way — the `prompt` sentence behind each answer, so the
+/// backend can render what the person actually picked instead of keeping its own copy of
+/// the option list. Both halves come out of one traversal ([UserProfileService.snapshot]),
+/// which is what stops a per-request override describing the wrong option.
+class ProfileSnapshot {
+  const ProfileSnapshot(this.fields, this.prompt);
+
+  /// `{answer key: value}` — exactly what [UserProfileService.payload] returns.
+  final Map<String, dynamic> fields;
+
+  /// `{answer key: {option id: sentence}}` for the answers in [fields] that describe
+  /// themselves, under the same name remote config gives it on the option. An option with
+  /// no `prompt` is simply absent; the backend falls back to its own table for that id.
+  final Map<String, Map<String, String>> prompt;
 }
 
 /// How an answer is edited: one chip, several chips, or a text field.
@@ -121,6 +146,10 @@ class ProfileFields {
   /// The one answer key the client names, because the wire gives it a section of its own
   /// (`referral.code`) instead of carrying it with the preferences.
   static const String referralKey = 'referral_code';
+
+  /// Reserved on the wire, next to the answers: the `prompt` sentences describing the
+  /// answers being sent (AI_INTEGRATION.md). No screen may name an `answer_key_name` after it.
+  static const String promptKey = 'prompt';
 
   /// Answers onboarding collects once and nothing may re-set afterwards. A referral code
   /// credits whoever brought this person in, so re-entering it later would re-attribute an
@@ -268,7 +297,10 @@ class ProfileFields {
             options: [
               for (final o in s.sortedOptions)
                 ProfileOption('${o.intValue}', o.label,
-                    subtext: o.subtext, savingsLow: o.savingsLow, savingsHigh: o.savingsHigh),
+                    subtext: o.subtext,
+                    savingsLow: o.savingsLow,
+                    savingsHigh: o.savingsHigh,
+                    prompt: o.prompt),
             ],
             defaultValue: s.sortedOptions.isEmpty ? null : s.sortedOptions[s.defaultIndex].intValue,
           ),
@@ -283,7 +315,7 @@ class ProfileFields {
             options: [
               for (final stop in s.stops)
                 ProfileOption('${stop.value}', stop.label,
-                    subtext: stop.subtext, emoji: stop.emoji, colorHex: stop.colorHex),
+                    subtext: stop.subtext, emoji: stop.emoji, colorHex: stop.colorHex, prompt: stop.prompt),
             ],
             defaultValue: s.defaultValue,
           ),
@@ -315,6 +347,7 @@ class ProfileFields {
             colorHex: o.colorHex,
             subtext: o.subtext,
             shortLabel: o.metadata?.raw?['short'],
+            prompt: o.prompt,
           ),
       ];
 

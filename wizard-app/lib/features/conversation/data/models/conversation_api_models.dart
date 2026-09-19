@@ -1,3 +1,4 @@
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/shared/data/models/ai/ai_api_models.dart';
 import 'package:json_annotation/json_annotation.dart';
 
@@ -11,7 +12,11 @@ part 'conversation_api_models.g.dart';
 /// remote config declares; the backend owns their meaning and ignores what its contract does
 /// not define (AI_INTEGRATION.md).
 class ConversationProfile {
-  const ConversationProfile(this.fields, {required this.locale});
+  const ConversationProfile(this.fields, {required this.locale, this.prompt = const {}});
+
+  /// The fields and their descriptions from one resolution, so the two cannot disagree.
+  factory ConversationProfile.of(ProfileSnapshot snapshot, {required String locale}) =>
+      ConversationProfile(snapshot.fields, locale: locale, prompt: snapshot.prompt);
 
   /// Profile fields as remote config maps them (`vibe`, `push`, `marketplace`, …).
   final Map<String, dynamic> fields;
@@ -19,10 +24,20 @@ class ConversationProfile {
   /// Language of the lines to generate; a device fact, not an answer.
   final String locale;
 
+  /// `{field: {option id: sentence}}` — what each answer above means to the model, under
+  /// the same name the option carries in remote config. The backend renders these and falls
+  /// back to its own table for an id that arrives undescribed. Omitted from the body when
+  /// empty, so an app whose config carries no `prompt` sends exactly what it does today.
+  final Map<String, Map<String, String>> prompt;
+
   /// One field of the profile, however remote config named the answer behind it.
   dynamic operator [](String field) => fields[field];
 
-  Map<String, dynamic> toJson() => {...fields, 'locale': locale};
+  Map<String, dynamic> toJson() => {
+        ...fields,
+        'locale': locale,
+        if (prompt.isNotEmpty) ProfileFields.promptKey: prompt,
+      };
 }
 
 /// `POST /conversations`: the first turn (text and/or screenshots) opens the conversation.

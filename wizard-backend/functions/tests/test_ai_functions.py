@@ -40,7 +40,17 @@ def _restore_main(monkeypatch):
 
 # The app always sends the buyer's tone and push level; `_post` adds them so each test can
 # say only what it is about.
-PROFILE = {"vibe": "friendly", "push": 60}
+# What each tone means is the template's to say, and the app forwards it with every request
+# (AI_INTEGRATION.md) — there is no server-side tone list any more, so a fixture that omitted
+# this would produce a prompt with no Tone line.
+VIBE_PROMPTS = {
+    "friendly": "Friendly Collaborator: warm and polite, still anchors below the asking price.",
+    "no_nonsense": "No-Nonsense Buyer: direct and brief, states numbers plainly.",
+    "tactical": "Tactical Strategist: uses comparable prices and flaws as leverage.",
+    "quiet_closer": "Quiet Closer: low-pressure, yet always moves the deal to a close.",
+}
+
+PROFILE = {"vibe": "friendly", "push": 60, "prompt": {"vibe": VIBE_PROMPTS}}
 
 
 def _install(result=None, error=None, auth=None):

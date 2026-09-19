@@ -29,7 +29,10 @@ class ConversationStore(Protocol):
 
     def put_image(self, uid: str, cid: str, image_id: str, data: bytes, mime_type: str) -> str: ...
 
-    def get_image(self, path: str) -> bytes | None: ...
+    def image_uri(self, path: str) -> str | None:
+        """`gs://bucket/path`, for handing a stored screenshot to Vertex. The service never
+        reads the bytes back — that is the point of the URI — so there is no `get_image`
+        here; the concrete stores keep one for tests that check what was written."""
 
 
 class Dispatcher(Protocol):

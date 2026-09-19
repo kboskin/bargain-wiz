@@ -48,11 +48,16 @@ def test_the_profile_must_come_from_the_client():
         requests.parse_express_request({"text": "no tone here"})
 
 
-def test_an_unknown_vibe_still_prompts_with_a_known_tone():
-    """The app's tone list is remote-configurable, so a new id must not break generation."""
+def test_an_unknown_vibe_does_not_break_generation():
+    """The app's tone list is remote-configurable, so a new id must not break generation. It
+    no longer falls back to a known tone either: with nothing describing it the prompt simply
+    carries no Tone line, and the miss is logged."""
     profile = parse_profile({"vibe": "Brand New Tone"})
     assert profile.vibe == "brand new tone"
-    assert "Tone: " in prompts.system_prompt(profile)
+    assert "<buyer_profile>" not in prompts.system_prompt(profile)
+
+    described = parse_profile({"vibe": "Brand New Tone", "prompt": {"vibe": {"brand new tone": "Tone: brand new, bold."}}})
+    assert "Tone: brand new, bold." in prompts.system_prompt(described)
 
 
 def test_parse_images_validates_type_encoding_and_size():
@@ -67,6 +72,33 @@ def test_parse_images_validates_type_encoding_and_size():
     big = base64.b64encode(b"0" * (config.MAX_IMAGE_BYTES.value + 1)).decode()
     with pytest.raises(BadRequest):
         requests.parse_images([{"mime_type": "image/jpeg", "data": big}])
+
+
+def test_a_client_cannot_name_a_storage_uri():
+    """`StoredImage` is built by this backend only. A body that could name a `gs://` URI
+    could point Gemini at any object the runtime service account can read, so the wire
+    carries base64 and nothing else."""
+    for body in ({"mime_type": "image/jpeg", "uri": "gs://someone-elses-bucket/secret.jpg"},
+                 {"mime_type": "image/jpeg", "uri": "gs://b/o.jpg", "data": None}):
+        with pytest.raises(BadRequest):
+            parse_express({"images": [body]})
+        with pytest.raises(BadRequest):
+            parse_pro({"messages": [{"role": "user", "text": "hi", "images": [body]}]})
+
+
+def test_a_stored_screenshot_reaches_the_model_as_a_uri_part():
+    stored = models.StoredImage(uri="gs://bucket/users/u1/conversations/c1/a.jpg", mime_type="image/jpeg")
+    req = models.ExpressRequest(vibe="friendly", push=60, images=[stored], text="Kallax $180")
+    parts = prompts.express_parts(req)
+    assert parts[0] == {"type": "image", "mime_type": "image/jpeg",
+                        "uri": "gs://bucket/users/u1/conversations/c1/a.jpg"}
+    # It costs the request body nothing, so it cannot trip the payload cap.
+    assert stored.payload_bytes == 0
+
+
+def test_a_stored_screenshot_must_be_a_gs_uri():
+    with pytest.raises(ValueError, match="gs://"):
+        models.StoredImage(uri="https://example.com/a.jpg", mime_type="image/jpeg")
 
 
 def test_express_request_needs_images_or_text():
@@ -84,10 +116,20 @@ def test_express_parts_put_images_first_and_mention_keyword():
 
 
 def test_system_prompt_reflects_profile():
-    prompt = prompts.system_prompt(models.Profile(vibe="no_nonsense", push=90, marketplace="ebay", deal_size=550, locale="es"))
-    assert "locale tag es" in prompt and "No-Nonsense" in prompt and "Hard bargainer" in prompt
-    assert "eBay" in prompt and "$550" in prompt
-    assert "weak spots" not in prompt
+    prompt = prompts.system_prompt(models.Profile(
+        vibe="no_nonsense", push=90, marketplace="ebay", deal_size=550, locale="es",
+        prompt={
+            "vibe": {"no_nonsense": "Tone: No-Nonsense Buyer — direct and brief."},
+            "push": {"90": "Push level: Hard bargainer — the lowest credible price or no deal."},
+            "marketplace": {"ebay": "Marketplace etiquette on eBay: shipping cost is a lever."},
+            "deal_size": {"550": "Typical deal of $100-1000 — real room to move."},
+        },
+    ))
+    assert "locale tag es" in prompt
+    for line in ("Tone: No-Nonsense Buyer", "Push level: Hard bargainer",
+                 "Marketplace etiquette on eBay", "Typical deal of $100-1000"):
+        assert line in prompt
+    assert "Weak spot" not in prompt  # no hurdles were sent
 
 
 def test_any_language_reaches_the_model_and_nothing_else_does():
@@ -103,10 +145,21 @@ def test_any_language_reaches_the_model_and_nothing_else_does():
 
 
 def test_hurdles_and_frequency_reach_the_prompt():
-    profile = parse_profile({"hurdles": ["Being_Rude", "unknown", "holding_ground"], "deals_per_month": "6_plus"})
+    profile = parse_profile({
+        "hurdles": ["Being_Rude", "unknown", "holding_ground"],
+        "deals_per_month": "6_plus",
+        "prompt": {
+            "hurdles": {
+                "being_rude": "Weak spot — fears sounding rude.",
+                "holding_ground": "Weak spot — holds the position.",
+            },
+            "deals_per_month": {"6_plus": "Deal frequency: a frequent buyer, be efficient."},
+        },
+    })
     assert profile.hurdles == ("being_rude", "unknown", "holding_ground")
     prompt = prompts.system_prompt(profile)
-    assert "fears sounding rude" in prompt and "holds the position" in prompt
+    # In the order they were picked, and the undescribed one contributes nothing.
+    assert "Weak spot — fears sounding rude.\nWeak spot — holds the position." in prompt
     assert "frequent buyer" in prompt
     with pytest.raises(BadRequest):
         parse_profile({"hurdles": "starting"})

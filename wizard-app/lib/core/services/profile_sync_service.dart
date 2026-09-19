@@ -50,6 +50,9 @@ class ProfileSyncService {
   final Duration retryDelay;
   final String Function() _localeCode;
 
+  /// The one `preferences` entry that is not an onboarding answer.
+  static const String _localeKey = 'locale';
+
   Timer? _timer;
   StreamSubscription<Object?>? _authSub;
   bool _started = false;
@@ -77,10 +80,9 @@ class ProfileSyncService {
     _timer = Timer(delay ?? debounce, () => unawaited(pushNow()));
   }
 
-  /// Onboarding just finished: push the completed answers with the screen trace (called by
-  /// the repository's `uploadUserData`, before the answers are persisted locally).
-  Future<void> pushOnboarding(OnboardingDataEntity data) =>
-      _push(buildPatch(data, completed: true, includeFlow: true));
+  /// Onboarding just finished: push the completed answers (called by the repository's
+  /// `uploadUserData`, before the answers are persisted locally).
+  Future<void> pushOnboarding(OnboardingDataEntity data) => _push(buildPatch(data, completed: true));
 
   /// Pushes the current local answers, if any.
   Future<void> pushNow() async {
@@ -106,9 +108,9 @@ class ProfileSyncService {
       await _profile.ensureLoaded();
       if (_profile.answers.isNotEmpty) return; // local answers already pushed and win
       final doc = await _remote.fetch();
-      final answers = doc?.onboarding?.answers;
-      if (answers == null || answers.isEmpty) return;
-      final entity = entityFromAnswers(answers, completed: doc!.onboarding!.completedAt != null);
+      final answers = {...?doc?.preferences}..remove(_localeKey); // a device fact, not an answer
+      if (answers.isEmpty) return;
+      final entity = entityFromAnswers(answers, completed: doc!.onboardingStatus?.completedAt != null);
       final saved = await _onboarding.saveOnboardingData(entity);
       await saved.fold(
         (f) async => _logger.w('Profile hydrate: could not save answers: ${f.message}'),
@@ -122,12 +124,15 @@ class ProfileSyncService {
     }
   }
 
-  /// The partial update for [data]: every answer the configured screens collected, keyed by
-  /// the `answer_key_name` that *is* the backend field name (plus the device locale), then
-  /// the raw answers and, at completion, the ordered trace of screens with the options they
-  /// offered ([includeFlow]). Only answers the person actually gave are sent — a screen's
-  /// default is for prompting, not something to record as a choice.
-  ProfilePatchRequest buildPatch(OnboardingDataEntity data, {required bool completed, bool includeFlow = false}) {
+  /// The partial update for [data]: every answer the screens collected, keyed by the
+  /// `answer_key_name` that *is* the backend field name, plus the device locale. Only
+  /// answers the person actually gave are sent — a screen's default is for prompting, not
+  /// something to record as a choice.
+  ///
+  /// `preferences` is the whole record: answers are not mirrored anywhere else, and a
+  /// question whose screen is no longer configured keeps the answer it already has. The
+  /// function types the fields it reads and stores the rest as sent.
+  ProfilePatchRequest buildPatch(OnboardingDataEntity data, {required bool completed}) {
     final answers = <String, dynamic>{
       for (final a in data.answers)
         if (a.answerKey != null) a.answerKey!: a.answer,
@@ -137,28 +142,11 @@ class ProfileSyncService {
       // Everything answered, minus the keys onboarding locks: the referral code is not a
       // preference, it has a section of its own and the function keeps the first one it gets.
       preferences: {
-        for (final field in _profile.fields)
-          if (!ProfileFields.lockedKeys.contains(field.key) && answers[field.key] != null)
-            field.key: answers[field.key],
-        'locale': _localeCode(),
+        for (final entry in answers.entries)
+          if (!ProfileFields.lockedKeys.contains(entry.key)) entry.key: entry.value,
+        _localeKey: _localeCode(),
       },
-      onboarding: ProfileOnboarding(
-        answers: answers,
-        completed: completed ? true : null,
-        flow: includeFlow
-            ? [
-                for (final a in data.answers)
-                  if (a.answerKey != null)
-                    ProfileFlowStep(
-                      index: a.screenIndex,
-                      key: a.answerKey,
-                      type: a.screenType.name,
-                      title: a.screenTitle,
-                      options: a.options,
-                    ),
-              ]
-            : null,
-      ),
+      onboardingStatus: completed ? const ProfileOnboardingStatus(completed: true) : null,
       // Sent whenever the device has one: the code cannot change here (no screen edits it)
       // and the function ignores a second code, so a retried first push still credits it.
       referral: code == null || code.isEmpty ? null : ProfileReferral(code: code),

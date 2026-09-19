@@ -19,14 +19,22 @@ class _SilentLogger implements AppLogger {
 /// Two screens, as remote config sends them: the answer key is the field name, and the tone
 /// screen's first option is its default.
 class _FakeRemoteConfig implements RemoteConfigService {
-  final List<OnboardingModel> screens = [
+  final List<OnboardingModel> screens = <OnboardingModel>[
     OnboardingModel.fromJson({
       'type': 'select',
       'title': {'en': 'Who negotiates for you?'},
       'answer_structure': {'answer_key_name': ProfileFields.vibeKey},
       'options': [
-        {'label': {'en': 'Friendly'}, 'value': 'friendly'},
-        {'label': {'en': 'Tactical'}, 'value': 'tactical'},
+        {
+          'label': {'en': 'Friendly'},
+          'value': 'friendly',
+          'metadata': {'prompt': 'warm and polite, still anchors low.'},
+        },
+        {
+          'label': {'en': 'Tactical'},
+          'value': 'tactical',
+          'metadata': {'prompt': 'uses comparables as leverage.'},
+        },
       ],
     }),
     OnboardingModel.fromJson({
@@ -34,10 +42,37 @@ class _FakeRemoteConfig implements RemoteConfigService {
       'title': {'en': 'Shoe size?'},
       'answer_structure': {'answer_key_name': 'shoe_size'},
       'options': [
+        // No `prompt`: an option that describes nothing contributes no sentence.
         {'label': {'en': '44'}, 'value': '44'},
       ],
     }),
   ];
+
+  /// A multi-select and a slider stop, so the note resolution is exercised on every carrier
+  /// of `prompt`. Opt-in: the tests above assert exact payloads.
+  void describeMoreScreens() => screens.addAll([
+        OnboardingModel.fromJson({
+          'type': 'multi_select',
+          'title': {'en': 'Where has your money slipped away?'},
+          'answer_structure': {'answer_key_name': 'hurdles', 'multi': true},
+          'options': [
+            {'label': {'en': 'Opening'}, 'value': 'starting', 'metadata': {'prompt': 'hesitates to open.'}},
+            {'label': {'en': 'Fair price'}, 'value': 'fair_price', 'metadata': {'prompt': 'cannot judge a price.'}},
+          ],
+        }),
+        OnboardingModel.fromJson({
+          'type': 'slider_lottie',
+          'title': {'en': 'How hard do you push?'},
+          'answer_structure': {'answer_key_name': ProfileFields.pushKey},
+          'metadata': {
+            'default_value': 60,
+            'options': [
+              {'value': 60, 'label': {'en': 'Balanced'}, 'prompt': 'a fair anchor, ready to walk away.'},
+              {'value': 100, 'label': {'en': 'Hard'}, 'prompt': 'the lowest credible price or no deal.'},
+            ],
+          },
+        }),
+      ]);
 
   @override
   List<OnboardingModel> getOnboardingScreens() => screens;
@@ -133,6 +168,82 @@ void main() {
       {ProfileFields.vibeKey: 'friendly', 'shoe_size': 44},
     );
     expect(service.payload(except: const {'shoe_size'}), {ProfileFields.vibeKey: 'tactical'});
+  });
+
+  group('snapshot: the answers and what they mean to the model', () {
+    setUp(() => remoteConfig.describeMoreScreens());
+
+    test('carries one sentence per described answer, keyed the way the answers are', () async {
+      repository.stored = OnboardingDataEntity(
+        answers: [
+          _answer(ProfileFields.vibeKey, 'tactical'),
+          _answer('shoe_size', 44),
+          _answer('hurdles', ['fair_price', 'starting']),
+        ],
+        isCompleted: true,
+      );
+
+      await service.ensureLoaded();
+      final snapshot = service.snapshot();
+
+      expect(snapshot.fields, {
+        ProfileFields.vibeKey: 'tactical',
+        'shoe_size': 44,
+        'hurdles': ['fair_price', 'starting'],
+        ProfileFields.pushKey: 60, // the slider's configured default
+      });
+      expect(snapshot.prompt, {
+        ProfileFields.vibeKey: {'tactical': 'uses comparables as leverage.'},
+        'hurdles': {'fair_price': 'cannot judge a price.', 'starting': 'hesitates to open.'},
+        ProfileFields.pushKey: {'60': 'a fair anchor, ready to walk away.'},
+      });
+      // `shoe_size` is answered but describes nothing: the field travels, the note does not.
+      expect(snapshot.prompt.containsKey('shoe_size'), isFalse);
+    });
+
+    test('an override describes the option actually being sent', () async {
+      repository.stored = OnboardingDataEntity(
+        answers: [_answer(ProfileFields.vibeKey, 'tactical')],
+        isCompleted: true,
+      );
+
+      await service.ensureLoaded();
+      final snapshot = service.snapshot(overrides: const {ProfileFields.vibeKey: 'friendly'});
+
+      expect(snapshot.fields[ProfileFields.vibeKey], 'friendly');
+      expect(snapshot.prompt[ProfileFields.vibeKey], {'friendly': 'warm and polite, still anchors low.'});
+    });
+
+    test('an answer the config no longer offers contributes no sentence', () async {
+      repository.stored = OnboardingDataEntity(
+        answers: [_answer(ProfileFields.vibeKey, 'retired_tone')],
+        isCompleted: true,
+      );
+
+      await service.ensureLoaded();
+      final snapshot = service.snapshot();
+
+      expect(snapshot.fields[ProfileFields.vibeKey], 'retired_tone');
+      expect(snapshot.prompt.containsKey(ProfileFields.vibeKey), isFalse);
+    });
+
+    test('except drops the field and its sentence together', () async {
+      repository.stored = OnboardingDataEntity(
+        answers: [_answer(ProfileFields.vibeKey, 'tactical')],
+        isCompleted: true,
+      );
+
+      await service.ensureLoaded();
+      final snapshot = service.snapshot(except: const {ProfileFields.vibeKey});
+
+      expect(snapshot.fields.containsKey(ProfileFields.vibeKey), isFalse);
+      expect(snapshot.prompt.containsKey(ProfileFields.vibeKey), isFalse);
+    });
+
+    test('payload is the fields half of the same resolution', () async {
+      await service.ensureLoaded();
+      expect(service.payload(), service.snapshot().fields);
+    });
   });
 
   test('a write stores locally first, then asks for a push, and keeps the screen trace', () async {

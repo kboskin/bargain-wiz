@@ -32,8 +32,10 @@ class JsonGenerator(Protocol):
 
 
 class VertexGenerator:
-    """`parts` items: `{"type": "text", "text": str}` or
-    `{"type": "image", "mime_type": str, "data": bytes}`."""
+    """`parts` items: `{"type": "text", "text": str}`, or an image as either
+    `{"type": "image", "mime_type": str, "data": bytes}` (bytes this request carried) or
+    `{"type": "image", "mime_type": str, "uri": "gs://…"}` (already in Cloud Storage —
+    Vertex fetches it, which is why it never travels through here twice)."""
 
     def __init__(self):
         """Client for the configured project / region / model (config.py). Construction is
@@ -90,6 +92,10 @@ class VertexGenerator:
         for part in parts:
             if part["type"] == "text":
                 contents.append(types.Part.from_text(text=part["text"]))
+            elif part.get("uri"):
+                # gs:// is a Vertex AI capability (the Developer API has no such thing); the
+                # bucket is read with this function's own credentials.
+                contents.append(types.Part.from_uri(file_uri=part["uri"], mime_type=part["mime_type"]))
             else:
                 contents.append(types.Part.from_bytes(data=part["data"], mime_type=part["mime_type"]))
         generate_config = types.GenerateContentConfig(

@@ -34,6 +34,10 @@ enum SideTextAlignment {
 dynamic _multilocaleFromJson(dynamic json) =>
     json != null ? MultilocaleText.fromJson(json) : null;
 
+/// A plain string or nothing. Used for `prompt`, which is deliberately unlocalized: a
+/// `{en, es}` map there is a config mistake that must lose the sentence, never fail the screen.
+String? _stringOrNull(dynamic json) => json is String && json.isNotEmpty ? json : null;
+
 /// Structured metadata for onboarding screens. Unknown keys are kept in [raw]
 /// so templates can read screen-specific settings (min_selected, savings_pill, …).
 @JsonSerializable()
@@ -133,6 +137,14 @@ class OnboardingMetadata {
   final Map<String, dynamic>? raw;
 
   Map<String, dynamic> toJson() => raw ?? _$OnboardingMetadataToJson(this);
+
+  /// This option's contribution to the system prompt: one English sentence describing what
+  /// picking it says about the buyer (`metadata.prompt`), forwarded with every AI request
+  /// under that same key (AI_INTEGRATION.md). Never localized: the prompt is English and the
+  /// language of the answer is `locale`. Read leniently — a `{en, es}` map here is a config
+  /// mistake, and losing the sentence (the backend then falls back to its own table) beats
+  /// failing the whole screen list.
+  String? get prompt => _stringOrNull(raw?['prompt']);
 
   /// Typed access to any raw metadata value.
   T? rawValue<T>(String key) {
@@ -440,6 +452,9 @@ class OnboardingOption extends ValidatableEntity {
 
   /// Secondary line under the label (MultilocaleText or null).
   dynamic get subtext => metadata?.subtext;
+
+  /// This option's contribution to the system prompt (`metadata.prompt`).
+  String? get prompt => metadata?.prompt;
 
   /// Stable value used as the stored answer (falls back to the raw label).
   String get storedValue {
@@ -776,6 +791,7 @@ class SliderOption {
     this.savingsLow,
     this.savingsHigh,
     this.scale,
+    this.prompt,
   });
 
   factory SliderOption.fromJson(Map<String, dynamic> json) => _$SliderOptionFromJson(json);
@@ -795,6 +811,11 @@ class SliderOption {
   final int? savingsHigh;
   /// Visual scale of the Lottie for this stop (0.7 / 0.9 / 1.1).
   final double? scale;
+
+  /// This stop's contribution to the system prompt; see [OnboardingMetadata.prompt]. A stop
+  /// has no metadata bag, so `prompt` sits beside `label` here.
+  @JsonKey(fromJson: _stringOrNull)
+  final String? prompt;
 
   /// Integer answer value (deal size buckets are ints: 50 / 550 / 5000).
   int get intValue => value.round();
@@ -1499,6 +1520,7 @@ class PushStopOption {
     this.subtext,
     this.emoji = '',
     this.colorHex,
+    this.prompt,
   });
 
   factory PushStopOption.fromJson(Map<String, dynamic> json) => PushStopOption(
@@ -1507,6 +1529,7 @@ class PushStopOption {
         subtext: json['subtext'] != null ? MultilocaleText.fromJson(json['subtext']) : null,
         emoji: json['emoji']?.toString() ?? '',
         colorHex: json['color']?.toString(),
+        prompt: _stringOrNull(json['prompt']),
       );
 
   final int value;
@@ -1514,6 +1537,9 @@ class PushStopOption {
   final MultilocaleText? subtext;
   final String emoji;
   final String? colorHex;
+
+  /// This stop's contribution to the system prompt; see [OnboardingMetadata.prompt].
+  final String? prompt;
 }
 
 /// Model for slider_lottie-type onboarding screens.

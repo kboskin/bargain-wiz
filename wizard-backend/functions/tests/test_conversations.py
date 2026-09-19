@@ -89,7 +89,17 @@ def _message(store, cid, mid):
 
 
 # Every write carries the buyer's profile, exactly as the app sends it.
-PROFILE = {"vibe": "friendly", "push": 60}
+# What each tone means is the template's to say, and the app forwards it with every request
+# (AI_INTEGRATION.md) — there is no server-side tone list any more, so a fixture that omitted
+# this would produce a prompt with no Tone line.
+VIBE_PROMPTS = {
+    "friendly": "Friendly Collaborator: warm and polite, still anchors below the asking price.",
+    "no_nonsense": "No-Nonsense Buyer: direct and brief, states numbers plainly.",
+    "tactical": "Tactical Strategist: uses comparable prices and flaws as leverage.",
+    "quiet_closer": "Quiet Closer: low-pressure, yet always moves the deal to a close.",
+}
+
+PROFILE = {"vibe": "friendly", "push": 60, "prompt": {"vibe": VIBE_PROMPTS}}
 
 
 def _call(method, path, body=None, profile=True):
@@ -137,7 +147,10 @@ def test_first_turn_stores_user_and_wizard_messages_and_the_screenshot(service, 
 
     call = gen.calls[0]
     assert "No-Nonsense" in call["system"] and call["schema"] is REPLY_SCHEMA
-    assert call["parts"][0]["type"] == "image" and call["parts"][0]["data"] == stored
+    # Vertex is handed the object's URI, not its bytes: the worker never downloads what it
+    # just uploaded, and a later turn re-references the same screenshot for free.
+    assert call["parts"][0] == {"type": "image", "mime_type": "image/jpeg",
+                                "uri": f"gs://in-memory/{ref['path']}"}
     assert "Buyer: They ask $180 for the Kallax (screenshot attached)" in call["parts"][-1]["text"]
 
 
@@ -451,6 +464,46 @@ def test_the_turn_is_queued_and_the_response_does_not_wait_for_the_model(monkeyp
     wizard = _message(store, cid, wizard["id"])
     assert wizard["status"] == "done" and wizard["text"] == "Open at $140."
     assert "active_turn" not in store.get_conversation("u1", cid)
+
+
+def test_a_later_turn_re_references_the_screenshot_without_downloading_it(service, store, gen):
+    """The point of handing Vertex a `gs://` URI: a long chat stops re-reading the same
+    screenshots out of the bucket on every turn."""
+    gen.queue({"reply": "Open at $140."})
+    _, body = _start_pro(images=[IMG])
+    cid = body["conversation_id"]
+    ref = store.list_messages("u1", cid)[0]["images"][0]
+
+    downloads = []
+    original = store.get_image
+    store.get_image = lambda path: (downloads.append(path), original(path))[1]
+
+    gen.queue({"reply": "Try $150."})
+    _call("POST", f"/conversations/{cid}/messages", {"text": "They said no"})
+
+    images = [p for p in gen.calls[-1]["parts"] if p["type"] == "image"]
+    assert images == [{"type": "image", "mime_type": "image/jpeg", "uri": f"gs://in-memory/{ref['path']}"}]
+    assert downloads == []  # the bytes never came back through this function
+
+
+def test_the_answer_descriptions_survive_the_queue_and_reach_the_prompt(monkeypatch, store, gen):
+    """The worker prompts from the task payload, so a `prompt` sentence the client sent has to
+    come back out of `model_dump(mode="json")` intact (wizard-app/AI_INTEGRATION.md)."""
+    queued: list[GenerationTask] = []
+
+    class Recorder:
+        def dispatch(self, task):
+            queued.append(task)
+
+    svc = _service(store, gen, Recorder(), monkeypatch=monkeypatch)
+    gen.queue({"reply": "Open at $140."})
+
+    _start_pro(prompt={"vibe": {"no_nonsense": "Bulldozer: never blinks."}})
+    task = queued[0]
+    assert task.profile.prompt == {"vibe": {"no_nonsense": "Bulldozer: never blinks."}}
+
+    svc.generate(task.model_dump(mode="json"))
+    assert "Bulldozer: never blinks." in gen.calls[0]["system"]
 
 
 def test_only_the_last_attempt_records_a_failure(monkeypatch, store, gen):

@@ -32,15 +32,34 @@ class _FakeProfile implements UserProfileService {
     ProfileFields.referralKey: 'FRIEND-42',
   };
 
+  /// The `metadata.prompt` sentence behind two of the answers above; the rest describe
+  /// nothing, so the backend falls back to its own table for them.
+  static const _prompts = <String, Map<String, String>>{
+    ProfileFields.vibeKey: {'friendly': 'Friendly Collaborator: warm and polite.'},
+    'hurdles': {'being_rude': 'fears sounding rude: keep every line warm and polite.'},
+  };
+
   @override
   Map<String, dynamic> payload({
     Map<String, dynamic> overrides = const {},
     Set<String> except = const {},
   }) =>
-      {
-        for (final e in _stored.entries)
-          if (!except.contains(e.key)) e.key: overrides[e.key] ?? e.value,
-      };
+      snapshot(overrides: overrides, except: except).fields;
+
+  @override
+  ProfileSnapshot snapshot({
+    Map<String, dynamic> overrides = const {},
+    Set<String> except = const {},
+  }) {
+    final fields = <String, dynamic>{
+      for (final e in _stored.entries)
+        if (!except.contains(e.key)) e.key: overrides[e.key] ?? e.value,
+    };
+    return ProfileSnapshot(fields, {
+      for (final e in _prompts.entries)
+        if (fields.containsKey(e.key)) e.key: e.value,
+    });
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;

@@ -127,8 +127,8 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
     }
   }
 
-  ConversationProfile _profileFields(String vibe, String locale) => ConversationProfile(
-        _profile.payload(
+  ConversationProfile _profileFields(String vibe, String locale) => ConversationProfile.of(
+        _profile.snapshot(
           overrides: {ProfileFields.vibeKey: vibe},
           except: const {ProfileFields.referralKey},
         ),

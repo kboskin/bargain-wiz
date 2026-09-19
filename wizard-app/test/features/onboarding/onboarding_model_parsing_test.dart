@@ -182,4 +182,79 @@ void main() {
     expect(upload['show_top_bar'], isFalse);
     expect(upload['show_next_button'], isFalse);
   });
+
+  group('metadata.prompt: what an option contributes to the system prompt', () {
+    test('parses on every carrier the templates use', () {
+      final vibe = screens[1] as SelectScreenModel;
+      expect(vibe.options[0].prompt, startsWith('Tone: Friendly Collaborator'));
+
+      final hurdles = screens[0] as MultiSelectScreenModel;
+      expect(hurdles.options[0].prompt, startsWith('Weak spot —'));
+
+      final push = screens[2] as SliderLottieScreenModel;
+      expect(push.stops[2].prompt, startsWith('Push level: Balanced'));
+
+      final dealSize = screens[4] as SliderScreenModel;
+      expect(dealSize.sortedOptions[1].prompt, startsWith('Typical deal'));
+
+      final marketplace = (screens[3] as SelectGroupScreenModel).groups[0];
+      expect(marketplace.options.last.storedValue, 'other');
+      expect(marketplace.options.last.prompt, startsWith('Marketplace etiquette'));
+    });
+
+    test('every option of every answered screen describes itself', () {
+      // The prompt falls back to a server-side table for an id with no sentence, so a
+      // missing one is silent in production. This is what makes it loud here.
+      for (final screen in screens) {
+        if (screen is SelectScreenModel || screen is MultiSelectScreenModel) {
+          final options = screen is SelectScreenModel
+              ? screen.options
+              : (screen as MultiSelectScreenModel).options;
+          for (final o in options) {
+            expect(o.prompt, isNotNull, reason: 'option ${o.storedValue} has no `prompt`');
+          }
+        }
+        if (screen is SelectGroupScreenModel) {
+          for (final group in screen.groups) {
+            for (final o in group.options) {
+              expect(o.prompt, isNotNull, reason: '${group.answerKeyName}.${o.storedValue} has no `prompt`');
+            }
+          }
+        }
+        if (screen is SliderLottieScreenModel) {
+          for (final stop in screen.stops) {
+            expect(stop.prompt, isNotNull, reason: 'push stop ${stop.value} has no `prompt`');
+          }
+        }
+        if (screen is SliderScreenModel) {
+          for (final stop in screen.sortedOptions) {
+            expect(stop.prompt, isNotNull, reason: 'slider stop ${stop.intValue} has no `prompt`');
+          }
+        }
+      }
+    });
+
+    test('a localized or non-string `prompt` is dropped, never thrown', () {
+      // `getOnboardingScreensFresh` fails the whole screen list on one parse error, so a
+      // config mistake here has to cost the sentence and nothing else.
+      for (final bad in [
+        {'en': 'warm', 'es': 'cálido'},
+        7,
+        '',
+      ]) {
+        final option = OnboardingOption.fromJson({
+          'label': {'en': 'Friendly'},
+          'value': 'friendly',
+          'metadata': {'prompt': bad},
+        });
+        expect(option.prompt, isNull, reason: 'prompt: $bad should be ignored');
+
+        final stop = PushStopOption.fromJson({'value': 60, 'label': {'en': 'Balanced'}, 'prompt': bad});
+        expect(stop.prompt, isNull, reason: 'push stop prompt: $bad should be ignored');
+
+        final slider = SliderOption.fromJson({'value': 550, 'label': 'mid', 'prompt': bad});
+        expect(slider.prompt, isNull, reason: 'slider stop prompt: $bad should be ignored');
+      }
+    });
+  });
 }

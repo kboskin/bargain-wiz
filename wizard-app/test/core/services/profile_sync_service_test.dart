@@ -140,41 +140,39 @@ void main() {
     isCompleted: true,
   );
 
-  test('buildPatch sends the declared fields and carries answers and the flow trace', () {
-    final patch = service.buildPatch(entity, completed: true, includeFlow: true).toJson();
+  test('buildPatch puts every answer in preferences, the referral code in its own section', () {
+    final patch = service.buildPatch(entity, completed: true).toJson();
 
+    // The whole record: no second copy of the answers anywhere in the body.
     expect(patch['preferences'], {
-      'vibe': 'tactical', 'push': 80, 'marketplace': 'ebay', 'deals_per_month': '3_5', 'deal_size': 550, 'locale': 'es',
       'hurdles': ['starting', 'fair_price'],
+      'vibe': 'tactical', 'push': 80, 'marketplace': 'ebay', 'deals_per_month': '3_5', 'deal_size': 550,
+      'locale': 'es',
     });
-    final ob = patch['onboarding'] as Map<String, dynamic>;
-    expect(ob['answers']['hurdles'], ['starting', 'fair_price']);
-    expect(ob['completed'], isTrue);
-    expect(ob.containsKey('variant'), isFalse);
-    expect((ob['flow'] as List).length, 7);
-    expect((ob['flow'] as List).first, {
-      'index': 0, 'key': 'hurdles', 'type': 'multiSelect', 'title': 'T:hurdles',
-      'options': ['starting', 'counter_offers', 'fair_price'],
-    });
-    expect(((ob['flow'] as List)[1] as Map).containsKey('options'), isFalse); // none recorded → omitted
+    expect((patch['preferences'] as Map).containsKey('referral_code'), isFalse);
+    expect(patch['onboarding_status'], {'completed': true});
     expect(patch['referral'], {'code': 'FRIEND-42'});
     expect((patch['app'] as Map)['flavor'], isNotNull);
     expect((patch['app'] as Map)['locale'], 'es');
   });
 
-  test('buildPatch sends only answered fields; edits after onboarding carry no flow', () {
+  test('an answer whose screen is no longer configured is still recorded', () {
+    final patch = service
+        .buildPatch(OnboardingDataEntity(answers: [_a('experience_level', 'pro')], isCompleted: false), completed: false)
+        .toJson();
+    expect(patch['preferences'], {'experience_level': 'pro', 'locale': 'es'});
+  });
+
+  test('buildPatch sends only answered fields; an unfinished funnel reports no status', () {
     final patch = service.buildPatch(const OnboardingDataEntity(answers: [], isCompleted: false), completed: false).toJson();
     expect(patch['preferences'], {'locale': 'es'}); // nothing answered yet
-    expect((patch['preferences'] as Map).containsKey('hurdles'), isFalse);
-    final ob = patch['onboarding'] as Map;
-    expect(ob.containsKey('completed'), isFalse);
-    expect(ob.containsKey('flow'), isFalse);
+    expect(patch.containsKey('onboarding_status'), isFalse);
     expect(patch.containsKey('referral'), isFalse);
   });
 
   test('pushOnboarding sends the completed answers; a failure schedules a retry silently', () async {
     await service.pushOnboarding(entity);
-    expect(remote.patches.single.onboarding!.completed, isTrue);
+    expect(remote.patches.single.onboardingStatus!.completed, isTrue);
 
     remote.fail = true;
     await service.pushOnboarding(entity); // must not throw
@@ -196,24 +194,23 @@ void main() {
   });
 
   test('onSignedIn hydrates an empty device from the account and refreshes the profile', () async {
-    remote.stored = ProfileDocument(
-      onboarding: const ProfileOnboarding(
-        answers: {'vibe': 'quiet_closer', 'push': 20},
-        completedAt: '2026-09-17T12:00:00Z',
-      ),
+    remote.stored = const ProfileDocument(
+      preferences: {'vibe': 'quiet_closer', 'push': 20, 'locale': 'en'},
+      onboardingStatus: ProfileOnboardingStatus(completedAt: '2026-09-17T12:00:00Z'),
     );
 
     await service.onSignedIn();
 
     expect(onboarding.saved, isNotNull);
     expect(onboarding.saved!.isCompleted, isTrue);
+    // `locale` is a device fact stored beside the answers, not one of them.
     expect(onboarding.saved!.answers.map((a) => a.answerKey), ['vibe', 'push']);
     expect(profile.refreshes, 1);
   });
 
   test('onSignedIn keeps local answers (they were pushed and win server-side)', () async {
     profile.entity = entity;
-    remote.stored = const ProfileDocument(onboarding: ProfileOnboarding(answers: {'vibe': 'friendly'}));
+    remote.stored = const ProfileDocument(preferences: {'vibe': 'friendly'});
 
     await service.onSignedIn();
 

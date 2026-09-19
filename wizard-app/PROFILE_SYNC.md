@@ -13,20 +13,27 @@ under `onboarding_data`), but every change is mirrored to a Firestore document t
 devices, and can be analysed. The client never talks to Firestore directly (Admin SDK only, so
 Firestore security rules can stay closed).
 
-## Why two shapes for the same answers
+## One shape for the answers
 
 Onboarding is a remote-configured template: screens, `answer_key_name`s and value types
-change whenever the funnel is edited. The schema therefore separates:
+change whenever the funnel is edited. **`preferences` is the whole record** — every answer
+the screens collect, under the key that names it. A screen fills one by naming its answer
+after the field: `answer_structure.answer_key_name` (a `select_group` group carries its own)
+**is** the field name, so there is no mapping to keep in step, and wiring a new question to
+the backend is a config edit, not a client release.
 
-- **`preferences`** — the fields the backend logic depends on. A screen fills one by naming
-  its answer after it: `answer_structure.answer_key_name` (a `select_group` group carries its
-  own) **is** the field name, so there is no mapping to keep in step — wiring a new question to
-  the backend is a config edit, not a client release.
-- **`onboarding`** — the raw answers exactly as collected, under the same keys, plus the
-  **`flow`**: an ordered trace of the screens shown with the options they offered. That makes
-  every answer interpretable without the config that produced it, which matters once several
-  funnel variants run at the same time. This is the analysis surface; it may hold keys the app
-  does not know about.
+The fields the functions read (`vibe`, `push`, `marketplace`, `deals_per_month`, `deal_size`,
+`hurdles`, `locale`) are typed and coerced; every other answer is stored as sent, so a
+question added in Remote Config is recorded without a backend deploy. Beside it sits
+**`onboarding_status`** — `completed_at`, stamped by the server when a client first reports
+the funnel finished.
+
+There used to be a second `onboarding` section holding the same answers again plus a `flow`
+trace of the screens shown. It was removed: the answers were a duplicate of `preferences`,
+nothing read the trace, and one record that can hold any key does the same job. Experiment
+assignment is Firebase A/B Testing's (Analytics user properties), not this document's — the
+cost of the removal is that an answer can no longer be interpreted without the template
+version that produced it, and the template is versioned in git.
 
 ```json
 {"type": "select", "answer_structure": {"answer_key_name": "vibe"}, "options": [ … ]}
@@ -44,8 +51,8 @@ An answer that no function reads simply rides along and is ignored; a field the 
 asking for stops being sent. Two consequences worth knowing: the AI functions **require**
 `vibe` and `push`, so keep screens asking for them (an unanswered screen falls back to its
 configured `default_value` / first option, never to a Dart constant), and **renaming a key
-orphans the answers already stored under the old one** — they stay in `onboarding.answers` and
-read as unanswered.
+orphans the answers already stored under the old one** — they stay in `preferences` under the
+old key and read as unanswered.
 
 Validation is deliberately loose: known preference fields are type-checked and clamped,
 answers accept any JSON leaf, unknown top-level sections are ignored (and logged), never
@@ -61,38 +68,25 @@ goes through the `profile` function, and the security rules deny client access t
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "identity": {
     "uid": "firebase-uid",                      // always present; the document's own id
     "provider": "google.com | apple.com"        // from the ID token, absent while anonymous
   },
-  "preferences": {                               // one entry per answer the screens collect
+  "preferences": {                               // every answer the screens collect; the
+                                                 // only record of them
     "vibe": "friendly | no_nonsense | tactical | quiet_closer",
     "push": 60,                                  // 0–100, from the push slider
     "marketplace": "ebay | amazon | facebook | olx | craigslist | other",
     "deals_per_month": "0_2 | 3_5 | 6_plus",
     "deal_size": 550,                            // USD midpoint of the chosen bucket
     "hurdles": ["starting", "fair_price"],       // ids of the money-leak screen
-    "locale": "en | es"                          // the device's, not an answer
+    "locale": "en | es",                         // the device's, not an answer
+    "experience_level": "pro"                    // a question added in Remote Config: stored
+                                                 // as sent, no backend change needed
   },
-  "onboarding": {
-    "answers": {                                 // raw, keyed by answer_key_name
-      "main_hurdle": ["starting", "fair_price"],
-      "negotiation_vibe": "tactical",
-      "risk_tolerance": 80,
-      "favorite_marketplace": "ebay",
-      "deals_per_month": "3_5",
-      "average_deal_size": 550,
-      "referral_code": "FRIEND-42"
-    },
-    "completed_at": "2026-09-17T12:00:00Z",      // server time, set when completed=true
-    "flow": [                                    // ordered trace, recorded at completion
-      {"index": 0, "key": "main_hurdle", "type": "multiSelect",
-       "title": "Where has your money slipped away?",
-       "options": ["starting", "counter_offers", "being_rude", "holding_ground", "fair_price"]},
-      {"index": 1, "key": "negotiation_vibe", "type": "select", "title": "Who negotiates for you?",
-       "options": ["friendly", "no_nonsense", "tactical", "quiet_closer"]}
-    ]
+  "onboarding_status": {
+    "completed_at": "2026-09-17T12:00:00Z"       // server time, set when completed=true
   },
   "referral": {"code": "FRIEND-42", "entered_at": "…"},
   "app": {"platform": "ios | android", "flavor": "dev | prod", "locale": "en", "version": "…"},
@@ -108,12 +102,9 @@ Timestamps are Firestore server timestamps, returned as ISO-8601 UTC strings.
 Onboarding experiments run in the Firebase console (A/B Testing on Remote Config): each arm
 serves its own `onboarding_screens`, and Firebase tracks the assignment through Analytics
 (`firebase_exp_<id>` user properties, exported to BigQuery). The profile does not duplicate
-that. What it adds is the `flow` trace: exactly which screens and options a user was served,
-so answers from different arms stay interpretable in Firestore on their own and can be joined
-to the experiment via the Analytics export (uid) when needed.
-
-Profile edits after onboarding push answers and preferences again but no `flow`; the
-completion trace stays as recorded.
+that, and no longer records which screens or options a user was served: join an answer to its
+arm through the Analytics export on uid, and to the question that produced it through the
+`onboarding_screens` template version in git.
 
 ## Preferences into the model
 
@@ -126,10 +117,20 @@ device cannot change it and the function keeps the first one, so a retried first
 credits it. The next step, once profiles are populated, is to let
 the functions read `users/{id}` themselves and drop the fields from the request body.
 
+Alongside those values each AI request carries `prompt` — `{answer key: {option id:
+sentence}}`, the `metadata.prompt` text remote config writes next to each option, which is what
+the prompt renders instead of the backend keeping its own copy of the option list
+(`AI_INTEGRATION.md`). It is **not** part of `preferences` and is never stored: it is copy
+belonging to a template version, it would go stale in the document the moment someone edits
+it, and the template version in git records which options a screen offered. Mechanically there
+is nothing to do — `ProfileSyncService.buildPatch` builds `preferences` from the configured
+fields and the stored answers, never from `payload()`/`snapshot()`. `prompt` is also a reserved
+wire key (`ProfileFields.promptKey`): no screen may use it as an `answer_key_name`.
+
 ## Endpoint
 
-`PATCH /profile` — body `{preferences?, onboarding?, referral?, app?}`.
-Partial update: nested maps merge, a `null` leaf deletes the field, `onboarding.completed:
+`PATCH /profile` — body `{preferences?, onboarding_status?, referral?, app?}`.
+Partial update: nested maps merge, a `null` leaf deletes the field, `onboarding_status.completed:
 true` stamps `completed_at`. Returns the merged document. `identity` is server-managed.
 
 `referral.code` is **write-once** (`WRITE_ONCE` in `domain/profile.py`): the first code a
@@ -152,7 +153,7 @@ Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUN
 
 | Trigger | What happens |
 |---|---|
-| Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `completed: true`. Best effort: onboarding finishes even if the backend is down. |
+| Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `onboarding_status.completed: true`. Best effort: onboarding finishes even if the backend is down. |
 | Profile screen edit | `UserProfileService` stores the answer, then calls `schedulePush`: a debounced (1.5 s) push of the full current state, which the server merges. |
 | Sign-in (`authStateChanges`) | Push once (server merges the anonymous profile), then if the device has no local answers, `GET` the account profile and save its answers locally (`saveOnboardingData` + `refresh`), so the profile follows the user. |
 | Failure | Logged, retried once after 30 s; every later change pushes the full state again. |
@@ -192,7 +193,7 @@ Files: `core/services/user_profile_service.dart`, `core/services/profile_sync_se
   validates. Keep Firestore rules at deny-all.
 - **Full-state pushes, partial-update endpoint.** The client sends everything it knows (a few
   hundred bytes); the endpoint still honours true partial bodies for other clients or tools.
-- **Deleting an answer**: send `{"onboarding": {"answers": {"key": null}}}`.
+- **Deleting an answer**: send `{"preferences": {"key": null}}`.
 - **Not stored**: names, emails, photos (they stay in Firebase Auth), purchases (store SDK),
   conversations (device only), screenshots.
 - **Later**: App Check on the function; a `deleted_at`/account-deletion path (GDPR/CCPA

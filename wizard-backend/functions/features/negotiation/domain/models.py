@@ -56,6 +56,53 @@ class Image(BaseModel):
             raise ValueError(f"each image must be under {config.MAX_IMAGE_BYTES.value // 1000} KB; downscale before sending")
         return data
 
+    @property
+    def payload_bytes(self) -> int:
+        """What this image costs the request body — the cap in [MAX_TOTAL_IMAGE_BYTES]."""
+        return len(self.data)
+
+
+class StoredImage(BaseModel):
+    """A screenshot already in Cloud Storage, handed to Gemini as a `gs://` URI so Vertex
+    reads it from the bucket instead of this function downloading it and sending the bytes
+    again on every turn (AI_INTEGRATION.md).
+
+    **Server-built only.** It is deliberately absent from every request model: a client that
+    could name a URI could point the model at any object this function's service account can
+    read, so the wire carries base64 and nothing else. `_images` below only lets an instance
+    through, never a dict.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    uri: str
+    mime_type: str
+
+    @field_validator("uri", mode="before")
+    @classmethod
+    def _uri(cls, value: object) -> str:
+        uri = str(value or "")
+        if not uri.startswith("gs://"):
+            raise ValueError("must be a gs:// URI")
+        return uri
+
+    @field_validator("mime_type", mode="before")
+    @classmethod
+    def _mime(cls, value: object) -> str:
+        mime = str(value or "").lower()
+        if mime not in SUPPORTED_MIME:
+            raise ValueError(f"unsupported image type {mime!r}; use JPEG, PNG or WebP")
+        return mime
+
+    @property
+    def payload_bytes(self) -> int:
+        """Nothing: the bytes never travel in the request, Vertex fetches them itself."""
+        return 0
+
+
+# What a turn can carry: bytes the client just sent, or a screenshot already in the bucket.
+Material = Image | StoredImage
+
 
 class Profile(BaseModel):
     """Buyer profile from onboarding, sent with every AI request (see PROFILE_SYNC.md).
@@ -70,6 +117,13 @@ class Profile(BaseModel):
     locale: str = "en"  # BCP-47; the language every user-facing text is written in
     hurdles: tuple[str, ...] = ()
     deals_per_month: str | None = None
+
+    # `{answer key: {option id: sentence}}` — each answer's contribution to the system
+    # prompt, under the same name the app's Remote Config template gives it: `prompt` on the
+    # option. The ids live in that template, so the sentence explaining an id travels with
+    # it and a new option needs no deploy here (AI_INTEGRATION.md). Absent for an older app,
+    # and for an option nobody has described: the tables in prompts.py answer then.
+    prompt: dict[str, dict[str, str]] = {}
 
     @field_validator("vibe", mode="before")
     @classmethod
@@ -115,6 +169,34 @@ class Profile(BaseModel):
             raise ValueError("must be a list of ids")
         return tuple(h.strip().lower() for h in value if isinstance(h, str) and h.strip())[:8]
 
+    @field_validator("prompt", mode="before")
+    @classmethod
+    def _prompt(cls, value: object) -> dict[str, dict[str, str]]:
+        """The shape is checked, the content is not: an answer key this function has never
+        heard of is kept — that is how a question added to the funnel reaches the prompt —
+        and the text is passed through as written, like the chat text in `trimmed`. Anything
+        that is not a description is dropped, so one bad entry costs that line and no more.
+
+        The only thing done to a sentence is collapsing its whitespace, which keeps it to
+        one prompt line; the block it lands in is fenced and introduced as data.
+        """
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("must be a map of answer key to {option id: description}")
+        described: dict[str, dict[str, str]] = {}
+        for field, table in value.items():
+            if not isinstance(field, str) or not isinstance(table, dict):
+                continue
+            sentences = {
+                option.strip().lower(): " ".join(text.split())
+                for option, text in table.items()
+                if isinstance(option, str) and option.strip() and isinstance(text, str) and text.split()
+            }
+            if field.strip() and sentences:
+                described[field.strip().lower()] = sentences
+        return described
+
 
 def _profile_of(model: Profile) -> Profile:
     return Profile(**{name: getattr(model, name) for name in Profile.model_fields})
@@ -123,20 +205,22 @@ def _profile_of(model: Profile) -> Profile:
 class ExpressRequest(Profile):
     """`express_dealmaker` body: screenshots and/or text plus the buyer profile."""
 
-    images: list[Image] = []
+    images: list[Material] = []
     text: str | None = None
     keyword: str | None = None
 
     @field_validator("images", mode="before")
     @classmethod
     def _images(cls, value: object) -> list:
+        """As on [ChatMessage]: a body describes images by their bytes, and only this
+        backend can hand over a [StoredImage]."""
         if value is None:
             return []
         if not isinstance(value, list):
             raise ValueError("must be a list")
         if len(value) > config.MAX_IMAGES.value:
             raise ValueError(f"at most {config.MAX_IMAGES.value} images per request")
-        return value
+        return [item if isinstance(item, StoredImage) else Image.model_validate(item) for item in value]
 
     @field_validator("text", mode="before")
     @classmethod
@@ -150,7 +234,7 @@ class ExpressRequest(Profile):
 
     @model_validator(mode="after")
     def _has_material(self) -> "ExpressRequest":
-        if sum(len(image.data) for image in self.images) > config.MAX_TOTAL_IMAGE_BYTES.value:
+        if sum(image.payload_bytes for image in self.images) > config.MAX_TOTAL_IMAGE_BYTES.value:
             raise ValueError(f"images together must be under {config.MAX_TOTAL_IMAGE_BYTES.value // 1_000_000} MB")
         if not self.images and not self.text:
             raise ValueError('provide "images" (screenshots) or "text" (listing / chat text)')
@@ -166,7 +250,7 @@ class ChatMessage(BaseModel):
 
     role: Literal["user", "wizard"] = "user"
     text: str = ""
-    images: list[Image] = []
+    images: list[Material] = []
 
     @field_validator("role", mode="before")
     @classmethod
@@ -181,13 +265,16 @@ class ChatMessage(BaseModel):
     @field_validator("images", mode="before")
     @classmethod
     def _images(cls, value: object) -> list:
+        """A request body may only describe images by their bytes. A [StoredImage] is
+        accepted as an already-built object, which only this backend can hand over — see the
+        note on that class."""
         if value is None:
             return []
         if not isinstance(value, list):
             raise ValueError("must be a list")
         if len(value) > config.MAX_IMAGES.value:
             raise ValueError(f"at most {config.MAX_IMAGES.value} images per message")
-        return value
+        return [item if isinstance(item, StoredImage) else Image.model_validate(item) for item in value]
 
 
 class ProRequest(Profile):
@@ -218,7 +305,7 @@ class ProRequest(Profile):
         for message in reversed(self.messages):
             images = message.images[:budget]
             budget -= len(images)
-            total += sum(len(image.data) for image in images)
+            total += sum(image.payload_bytes for image in images)
             if total > config.MAX_TOTAL_IMAGE_BYTES.value:
                 raise ValueError(f"images together must be under {config.MAX_TOTAL_IMAGE_BYTES.value // 1_000_000} MB")
             if not message.text and not images:

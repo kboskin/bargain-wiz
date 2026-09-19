@@ -189,6 +189,13 @@ read by the owner through Storage rules. Firestore holds only the path. Screensh
 out of Firestore because of the 1 MiB document limit and because Storage lifecycle rules make
 expiry trivial.
 
+**Generation reads them from the bucket, not from here.** The worker turns each stored path
+into a `gs://` URI and hands that to Vertex (`Part.from_uri`), so a screenshot crosses the
+wire once — on the turn that adds it — and every later turn in the chat just references it.
+The function itself no longer downloads what it uploaded. Storage rules do not apply to
+either side of that — the Admin SDK and Vertex both bypass them; access is IAM
+(`AI_INTEGRATION.md`).
+
 The Admin SDK bypasses Storage rules, so `storage.rules` never constrains the backend: the
 conversation prefix is `write: if false` and the function's own caps (`MAX_IMAGE_BYTES`,
 `MAX_TOTAL_IMAGE_BYTES`, the `IMAGE_MAX_SIDE` re-encode) are what bound a stored object.
@@ -218,7 +225,12 @@ in production). Bodies are pydantic models validated through `validation.validat
 buyer profile fields the AI functions already take (vibe, push, locale, marketplace, …) — the app
 sends every answer the onboarding screens collect, under the keys remote config gave them, plus
 the device locale, so the set follows the funnel rather than a client release
-(`PROFILE_SYNC.md`); a function ignores what its contract does not define.
+(`PROFILE_SYNC.md`); a function ignores what its contract does not define. It also carries
+`prompt`, `{answer key: {option id: sentence}}` — what each of those answers contributes to
+the system prompt, under the same name the option carries in remote config
+(`metadata.prompt`), so a new option reaches the prompt without a deploy
+(`AI_INTEGRATION.md`). `prompt` is reserved: no screen may
+use it as an `answer_key_name`.
 
 ### Lifecycle of a chat turn
 

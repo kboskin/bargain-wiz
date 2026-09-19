@@ -69,6 +69,12 @@ def conversation_service() -> ConversationService:
     return ConversationService(FirestoreConversationStore(), VertexGenerator(), _dispatcher())
 
 
+def _described(profile) -> int:
+    """How many answers the client described. Zero at steady state on a shipped app means
+    the Remote Config template lost its `prompt` keys (AI_INTEGRATION.md)."""
+    return sum(len(table) for table in profile.prompt.values())
+
+
 def _dispatcher() -> Dispatcher:
     """Cloud Tasks in the cloud. The Functions emulator only has a Cloud Tasks host when the
     tasks emulator runs; without it we generate inline so local development still works."""
@@ -109,7 +115,10 @@ def express_dealmaker(req: https_fn.Request) -> dict:
     request = parse_express_request(json_body(req))
     generator = VertexGenerator()
     raw = generator.generate_json(system=system_prompt(request.profile), parts=express_parts(request), schema=EXPRESS_SCHEMA)
-    logger.info("express_dealmaker uid=%s images=%d text=%s", auth and auth.uid, len(request.images), bool(request.text))
+    logger.info(
+        "express_dealmaker uid=%s images=%d text=%s prompts=%d",
+        auth and auth.uid, len(request.images), bool(request.text), _described(request),
+    )
     return {**express_result(raw), "model": generator.model}
 
 
@@ -123,7 +132,10 @@ def pro_deal_closer(req: https_fn.Request) -> dict:
     generator = VertexGenerator()
     schema = OPTIONS_SCHEMA if request.mode == "options" else REPLY_SCHEMA
     raw = generator.generate_json(system=system_prompt(request.profile), parts=pro_parts(request), schema=schema)
-    logger.info("pro_deal_closer uid=%s mode=%s messages=%d", auth and auth.uid, request.mode, len(request.messages))
+    logger.info(
+        "pro_deal_closer uid=%s mode=%s messages=%d prompts=%d",
+        auth and auth.uid, request.mode, len(request.messages), _described(request),
+    )
     result = options_result(raw) if request.mode == "options" else reply_result(raw)
     return {**result, "model": generator.model}
 
@@ -135,7 +147,7 @@ def profile(req: https_fn.Request) -> dict:
     (anonymous users included) — every install signs in before its first call.
 
     GET                 → the document, 404 when none exists yet.
-    PATCH {preferences?, onboarding?, referral?, app?}
+    PATCH {preferences?, onboarding_status?, referral?, app?}
           → partial update (nested maps merge, null deletes a leaf); returns the document.
             `referral.code` is write-once: a code sent over one already recorded is dropped.
     """

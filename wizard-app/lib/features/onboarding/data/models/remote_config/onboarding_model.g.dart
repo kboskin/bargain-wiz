@@ -298,6 +298,7 @@ SliderOption _$SliderOptionFromJson(Map<String, dynamic> json) => SliderOption(
   savingsLow: (json['savings_low'] as num?)?.toInt(),
   savingsHigh: (json['savings_high'] as num?)?.toInt(),
   scale: (json['scale'] as num?)?.toDouble(),
+  prompt: _stringOrNull(json['prompt']),
 );
 
 Map<String, dynamic> _$SliderOptionToJson(SliderOption instance) =>
@@ -311,6 +312,7 @@ Map<String, dynamic> _$SliderOptionToJson(SliderOption instance) =>
       'savings_low': instance.savingsLow,
       'savings_high': instance.savingsHigh,
       'scale': instance.scale,
+      'prompt': instance.prompt,
     };
 
 SliderScreenModel _$SliderScreenModelFromJson(Map<String, dynamic> json) =>

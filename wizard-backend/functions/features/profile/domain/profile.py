@@ -9,12 +9,15 @@ identity of its own — the ID token is the identity.
 
 Sections (all optional in a PATCH; nested maps merge, `null` deletes a leaf):
 
-    preferences   stable, typed fields the app logic depends on (vibe, push, marketplace,
-                  deals_per_month, deal_size, locale) — the client derives them from answers
-    onboarding    raw funnel answers keyed by the remote-config `answer_key_name`, plus
-                  `flow`: the ordered trace of screens shown (key, type, title, options
-                  offered) — enough to interpret every answer without the config that
-                  produced it. Experiment assignment itself is Firebase A/B Testing's job
+    preferences   every answer the funnel collects, under the remote-config
+                  `answer_key_name` that is also the field name. The ones this backend reads
+                  (vibe, push, marketplace, deals_per_month, deal_size, hurdles, locale) are
+                  typed and coerced; any other question the funnel adds rides along as a
+                  JSON leaf, so a new screen needs no change here. There is no second copy
+                  of the answers: `preferences` is the record.
+    onboarding_status
+                  `completed_at`, stamped by the server the first time a client reports the
+                  funnel finished. Experiment assignment is Firebase A/B Testing's job
                   (Analytics user properties), not stored here.
     referral      code entered during onboarding, write-once ([WRITE_ONCE])
     app           last seen platform / version / flavor / locale
@@ -25,7 +28,7 @@ Pure Python; `ProfileStore` abstracts Firestore so the logic is unit-testable.
 import logging
 from typing import Any, Protocol
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from core.errors import BadRequest, NotFound, Unauthorized
 from core.firestore import DELETE, SERVER_TIME
@@ -33,11 +36,11 @@ from core.validation import clip_text, validate_model
 
 logger = logging.getLogger("profile")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 
-SECTIONS = ("preferences", "onboarding", "referral", "app")
+SECTIONS = ("preferences", "onboarding_status", "referral", "app")
 
 # `(section, field)` pairs a client fills once and may never re-set. A referral code credits
 # whoever brought this person in: re-entering it would re-attribute an install that is already
@@ -110,6 +113,13 @@ class _Section(BaseModel):
 
 
 class PreferencesPatch(_Section):
+    """Every answer the funnel collected. The fields below are the ones the AI functions
+    read, so they are typed and coerced; anything else the screens collect is kept as sent
+    (`extra="allow"`), which is what lets a question added in Remote Config be recorded
+    without a deploy. An explicit null still deletes the answer."""
+
+    model_config = ConfigDict(extra="allow")
+
     vibe: str | None = None
     push: int | None = None
     marketplace: str | None = None
@@ -117,6 +127,19 @@ class PreferencesPatch(_Section):
     deal_size: float | None = None
     locale: str | None = None
     hurdles: list[str] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _clean_undeclared_answers(cls, data: object) -> object:
+        """Answers this backend does not model are stored as JSON leaves. Validated here
+        rather than in `to_patch` so an unstorable value is a 400, not a 500."""
+        if not isinstance(data, dict):
+            return data
+        declared = set(cls.model_fields)
+        return {
+            key: value if key in declared else _leaf(value, f"preferences.{key}")
+            for key, value in data.items()
+        }
 
     @field_validator("vibe", "marketplace", "deals_per_month", "locale", mode="before")
     @classmethod
@@ -153,73 +176,17 @@ class PreferencesPatch(_Section):
         return hurdles or None
 
 
-class FlowStep(_Section):
-    """One screen of the onboarding trace: what was asked and which options were offered."""
+class OnboardingStatusPatch(_Section):
+    """Whether the funnel is finished. The client reports the fact; the server stamps the
+    time, so a wrong device clock cannot date it. Only the first `true` matters — a later
+    one restamps, which is harmless, and `null` clears it."""
 
-    index: int | None = None
-    key: str | None = None
-    type: str | None = None
-    title: str | None = None
-    options: list[str] | None = None
-
-    @field_validator("index", mode="before")
-    @classmethod
-    def _index(cls, value: object) -> int | None:
-        return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-    @field_validator("key", "type", mode="before")
-    @classmethod
-    def _key(cls, value: object) -> str | None:
-        return (value.strip() or None) if isinstance(value, str) else None
-
-    @field_validator("title", mode="before")
-    @classmethod
-    def _title(cls, value: object) -> str | None:
-        return clip_text(value, 200, ellipsis=False) if isinstance(value, str) else None
-
-    @field_validator("options", mode="before")
-    @classmethod
-    def _options(cls, value: object) -> list[str] | None:
-        if not isinstance(value, list):
-            return None
-        return [str(o) for o in value if o is not None]
-
-    def to_dict(self) -> dict:
-        return {k: v for k, v in self.model_dump().items() if v is not None}
-
-
-class OnboardingPatch(_Section):
-    answers: dict[str, Any] | None = None
     completed: bool | None = None
-    flow: list[FlowStep] | None = None
-
-    @field_validator("answers", mode="before")
-    @classmethod
-    def _answers(cls, value: object) -> dict | None:
-        if value is None:
-            return None
-        if not isinstance(value, dict):
-            raise ValueError("must be an object")
-        return {str(k): _leaf(v, f"answers.{k}") for k, v in value.items()}
-
-    @field_validator("flow", mode="before")
-    @classmethod
-    def _flow(cls, value: object) -> list | None:
-        if value is None:
-            return None
-        if not isinstance(value, list):
-            raise ValueError("must be a list")
-        return [step for step in value if isinstance(step, dict)]
 
     def to_patch(self) -> dict:
-        patch: dict[str, Any] = {}
-        if self.answers is not None:
-            patch["answers"] = self.answers
-        if self.completed is True:
-            patch["completed_at"] = SERVER_TIME
-        if self.flow is not None:
-            patch["flow"] = [step.to_dict() for step in self.flow if step.to_dict()]
-        return patch
+        if "completed" not in self.model_fields_set:
+            return {}
+        return {"completed_at": SERVER_TIME if self.completed else DELETE}
 
 
 class ReferralPatch(_Section):
@@ -257,7 +224,7 @@ class ProfilePatchBody(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     preferences: PreferencesPatch | None = None
-    onboarding: OnboardingPatch | None = None
+    onboarding_status: OnboardingStatusPatch | None = None
     referral: ReferralPatch | None = None
     app: AppPatch | None = None
 

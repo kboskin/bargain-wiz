@@ -36,6 +36,7 @@ from features.negotiation.domain.models import (
     Image,
     Profile,
     ProRequest,
+    StoredImage,
 )
 from features.negotiation.domain.prompts import express_parts, pro_parts, system_prompt
 
@@ -239,7 +240,10 @@ class ConversationService:
         keyword = turn.keyword if kind == "express" else None
         mid, reply_id = self._store.begin_turn(uid, cid, user_message, wizard_message, patch)
         self._enqueue(uid, cid, reply_id, kind=kind, profile=turn, keyword=keyword)
-        logger.info("turn queued uid=%s cid=%s kind=%s images=%d", uid, cid, kind, len(refs))
+        logger.info(
+            "turn queued uid=%s cid=%s kind=%s images=%d prompts=%d",
+            uid, cid, kind, len(refs), sum(len(t) for t in turn.prompt.values()),
+        )
         return _ids(cid, mid, reply_id)
 
     def _enqueue(
@@ -374,17 +378,23 @@ class ConversationService:
     # -- prompt material -------------------------------------------------------
 
     def _material(self, history: list[dict]) -> list[ChatMessage]:
-        """The stored turns as chat messages, screenshots loaded newest-first within the budget."""
+        """The stored turns as chat messages, screenshots referenced newest-first within the
+        budget.
+
+        The bytes are not read here: Vertex is given the `gs://` URI and fetches the object
+        itself, so a long chat no longer re-downloads and re-uploads the same screenshots on
+        every turn. The budget still applies — it bounds what the model is asked to look at,
+        which was never about bandwidth."""
         budget = config.MAX_IMAGES.value
-        loaded: dict[str, list[Image]] = {}
+        loaded: dict[str, list[StoredImage]] = {}
         for message in reversed(history):
-            images: list[Image] = []
+            images: list[StoredImage] = []
             for ref in message.get("images") or []:
                 if budget == 0:
                     break
-                data = self._store.get_image(ref.get("path") or "")
-                if data:
-                    images.append(Image(mime_type=ref.get("mime_type") or "image/jpeg", data=data))
+                uri = self._store.image_uri(ref.get("path") or "")
+                if uri:
+                    images.append(StoredImage(uri=uri, mime_type=ref.get("mime_type") or "image/jpeg"))
                     budget -= 1
             loaded[message["id"]] = images
         return [ChatMessage(role=m.get("role") or "user", text=m.get("text") or "", images=loaded[m["id"]]) for m in history]

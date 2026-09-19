@@ -38,24 +38,22 @@ def _call(method, body=None, query="", auth: AuthInfo | None = None, invalid_tok
 def test_build_patch_validates_and_normalises_known_sections():
     patch = up.build_patch(
         {
-            "preferences": {"vibe": " Tactical ", "push": 140, "deal_size": 550, "marketplace": None, "bogus": 1,
-                            "hurdles": ["Starting", "", 3, "fair_price"]},
-            "onboarding": {"answers": {"main_hurdle": ["starting", "fair_price"], "risk_tolerance": 60, "gone": None},
-                           "completed": True,
-                           "flow": [{"index": 0, "key": "main_hurdle", "type": "multiSelect", "title": "Where…",
-                                     "options": ["starting", "counter_offers", None]}, "junk"]},
+            "preferences": {"vibe": " Tactical ", "push": 140, "deal_size": 550, "marketplace": None,
+                            "hurdles": ["Starting", "", 3, "fair_price"],
+                            "experience_level": "pro", "gone": None},
+            "onboarding_status": {"completed": True},
             "referral": {"code": " FRIEND-42 "},
             "app": {"platform": "android", "flavor": "dev"},
             "unknown_section": {"x": 1},
         },
         up.Identity(uid="u1"),
     )
+    # Fields this backend reads are coerced; a question it has never heard of rides along as
+    # sent, which is what lets a screen be added in Remote Config without a deploy.
     assert patch["preferences"] == {"vibe": "tactical", "push": 100, "deal_size": 550.0, "marketplace": DELETE,
-                                    "hurdles": ["starting", "fair_price"]}
-    assert patch["onboarding"]["answers"] == {"main_hurdle": ["starting", "fair_price"], "risk_tolerance": 60, "gone": DELETE}
-    assert patch["onboarding"]["completed_at"] is SERVER_TIME
-    assert patch["onboarding"]["flow"] == [{"index": 0, "key": "main_hurdle", "type": "multiSelect", "title": "Where…",
-                                            "options": ["starting", "counter_offers"]}]
+                                    "hurdles": ["starting", "fair_price"],
+                                    "experience_level": "pro", "gone": DELETE}
+    assert patch["onboarding_status"] == {"completed_at": SERVER_TIME}
     assert patch["referral"] == {"code": "FRIEND-42", "entered_at": SERVER_TIME}
     assert patch["app"] == {"platform": "android", "flavor": "dev"}
     assert patch["identity"] == {"uid": "u1"}
@@ -92,9 +90,9 @@ def test_patch_keys_by_uid(store):
 
 def test_patch_deletes_leaves_and_merges_nested_maps(store):
     ident = up.Identity(uid="u1")
-    up.apply_patch(store, ident, {"onboarding": {"answers": {"a": 1, "b": 2}}, "referral": {"code": "X"}})
-    doc = up.apply_patch(store, ident, {"onboarding": {"answers": {"b": None, "c": 3}}, "referral": {"code": None}})
-    assert doc["onboarding"]["answers"] == {"a": 1, "c": 3}
+    up.apply_patch(store, ident, {"preferences": {"a": 1, "b": 2}, "referral": {"code": "X"}})
+    doc = up.apply_patch(store, ident, {"preferences": {"b": None, "c": 3}, "referral": {"code": None}})
+    assert doc["preferences"] == {"a": 1, "c": 3}
     assert "code" not in doc["referral"]
     assert doc["updated_at"] == NOW
 

@@ -5,35 +5,20 @@ part 'profile_api_models.g.dart';
 /// Request/response models of the `profile` Cloud Function (Firestore `profiles/{id}`).
 /// See PROFILE_SYNC.md for the schema and merge rules.
 
-/// The `preferences` section is a plain `{field: value}` map: whatever the onboarding screens
-/// declare a `key` for (`vibe`, `push`, …) plus the device locale. The app copies the fields;
-/// the backend owns their meaning and ignores what its contract does not define.
+/// The `preferences` section is a plain `{field: value}` map and the only record of what the
+/// person answered: every screen that declares a `key` (`vibe`, `push`, …) writes one, plus
+/// the device locale. The app copies the fields; the backend types the ones it reads and
+/// keeps the rest as sent, so a question added in Remote Config is recorded without a deploy.
 
-/// One step of the onboarding trace: what was asked and which options were offered.
+/// Whether the funnel is finished. The client reports the fact and the server stamps the
+/// time, so a wrong device clock cannot date it. The answers themselves are `preferences`:
+/// there is no second copy of them (PROFILE_SYNC.md).
 @JsonSerializable(includeIfNull: false)
-class ProfileFlowStep {
-  const ProfileFlowStep({this.index, this.key, this.type, this.title, this.options});
+class ProfileOnboardingStatus {
+  const ProfileOnboardingStatus({this.completed, this.completedAt});
 
-  factory ProfileFlowStep.fromJson(Map<String, dynamic> json) => _$ProfileFlowStepFromJson(json);
-
-  final int? index;
-  final String? key;
-  final String? type;
-  final String? title;
-  final List<String>? options;
-
-  Map<String, dynamic> toJson() => _$ProfileFlowStepToJson(this);
-}
-
-/// Raw funnel answers keyed by the remote-config `answer_key_name`, plus the [flow] of
-/// screens that produced them (experiment assignment is tracked by Firebase A/B Testing).
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
-class ProfileOnboarding {
-  const ProfileOnboarding({this.answers, this.completed, this.completedAt, this.flow});
-
-  factory ProfileOnboarding.fromJson(Map<String, dynamic> json) => _$ProfileOnboardingFromJson(json);
-
-  final Map<String, dynamic>? answers;
+  factory ProfileOnboardingStatus.fromJson(Map<String, dynamic> json) =>
+      _$ProfileOnboardingStatusFromJson(json);
 
   /// Request only: `true` stamps `completed_at` on the server.
   final bool? completed;
@@ -42,9 +27,7 @@ class ProfileOnboarding {
   @JsonKey(name: 'completed_at')
   final String? completedAt;
 
-  final List<ProfileFlowStep>? flow;
-
-  Map<String, dynamic> toJson() => _$ProfileOnboardingToJson(this);
+  Map<String, dynamic> toJson() => _$ProfileOnboardingStatusToJson(this);
 }
 
 @JsonSerializable(includeIfNull: false)
@@ -90,12 +73,13 @@ class ProfileIdentity {
 /// Body of `PATCH /profile`: every section optional; nested maps merge, `null` deletes.
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class ProfilePatchRequest {
-  const ProfilePatchRequest({this.preferences, this.onboarding, this.referral, this.app});
+  const ProfilePatchRequest({this.preferences, this.onboardingStatus, this.referral, this.app});
 
   factory ProfilePatchRequest.fromJson(Map<String, dynamic> json) => _$ProfilePatchRequestFromJson(json);
 
   final Map<String, dynamic>? preferences;
-  final ProfileOnboarding? onboarding;
+  @JsonKey(name: 'onboarding_status')
+  final ProfileOnboardingStatus? onboardingStatus;
   final ProfileReferral? referral;
   final ProfileApp? app;
 
@@ -109,7 +93,7 @@ class ProfileDocument {
     this.schemaVersion,
     this.identity,
     this.preferences,
-    this.onboarding,
+    this.onboardingStatus,
     this.referral,
     this.app,
     this.createdAt,
@@ -122,7 +106,8 @@ class ProfileDocument {
   final int? schemaVersion;
   final ProfileIdentity? identity;
   final Map<String, dynamic>? preferences;
-  final ProfileOnboarding? onboarding;
+  @JsonKey(name: 'onboarding_status')
+  final ProfileOnboardingStatus? onboardingStatus;
   final ProfileReferral? referral;
   final ProfileApp? app;
   @JsonKey(name: 'created_at')

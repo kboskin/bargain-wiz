@@ -8,6 +8,7 @@ import 'package:appwizard/features/conversation/data/repositories/conversation_r
 import 'package:appwizard/features/conversation/domain/conversation_changes.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 import 'package:appwizard/features/conversation/domain/repositories/conversation_repository.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeAuth implements AuthService {
@@ -67,6 +68,41 @@ void main() {
   });
 
   tearDown(() => repo.dispose());
+
+  group('the profile on the wire', () {
+    test('carries the answers, the locale and — only when there are any — their descriptions', () {
+      expect(_profile.toJson(), {'vibe': 'friendly', 'push': 60, 'locale': 'en'});
+
+      const described = ConversationProfile(
+        {'vibe': 'friendly'},
+        locale: 'en',
+        prompt: {
+          'vibe': {'friendly': 'warm and polite.'},
+        },
+      );
+      expect(described.toJson(), {
+        'vibe': 'friendly',
+        'locale': 'en',
+        ProfileFields.promptKey: {
+          'vibe': {'friendly': 'warm and polite.'},
+        },
+      });
+    });
+
+    test('.of keeps the fields and the descriptions from one resolution together', () {
+      const snapshot = ProfileSnapshot(
+        {'vibe': 'tactical'},
+        {
+          'vibe': {'tactical': 'uses comparables as leverage.'},
+        },
+      );
+      final profile = ConversationProfile.of(snapshot, locale: 'es');
+
+      expect(profile.fields, snapshot.fields);
+      expect(profile.prompt, snapshot.prompt);
+      expect(profile.toJson()['locale'], 'es');
+    });
+  });
 
   Future<String> createDeal(String text) async {
     final response = await backend.create(CreateConversationRequest(

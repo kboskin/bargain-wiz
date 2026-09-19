@@ -2,6 +2,65 @@
 
 This document provides templates for each type of onboarding screen.
 
+## `prompt` — what an option contributes to the system prompt
+
+Every option of a screen that fills a profile answer carries **`prompt`**: one finished
+English line telling the negotiation coach what picking that option says about the buyer. It
+is never shown in the UI. The app forwards the lines for the answers it is sending with every
+AI request (under the same key, `prompt`), and the backend renders them **verbatim, in the
+order the screens ask the questions** — so **adding an option, or a whole new question,
+changes the prompt with no app release and no function deploy**. Omit it and that answer
+contributes *nothing* to the prompt — there is no server-side copy of the option list to fall
+back to — and the miss is logged as `undescribed onboarding answer`.
+
+You are writing the line the model reads, not a fragment slotted into one: the backend adds
+no label, no ordering and no grouping of its own.
+
+Where it goes, per screen type:
+
+| Screen type | Path |
+|---|---|
+| `select`, `multi_select` | `options[].metadata.prompt` |
+| `select_group` | `groups[].options[].metadata.prompt` |
+| `slider`, `slider_lottie` | `metadata.options[].prompt` (a stop has no metadata bag) |
+
+```json
+{"label": {"en": "I took the first counter-offer"}, "value": "holding_ground",
+ "metadata": {"color": "#7B5EA7",
+              "prompt": "Weak spot — tends to accept the first counter: include a line that holds the position."}}
+```
+
+which reaches the model as one line of the buyer block:
+
+```
+<buyer_profile>
+Weak spot — tends to accept the first counter: include a line that holds the position.
+Tone: Friendly Collaborator — warm and polite, builds rapport, asks nicely.
+Push level: Balanced — a fair anchor around 15-25% under asking, ready to walk away.
+</buyer_profile>
+```
+
+**Writing one:**
+
+- **English only, never a `{en, es}` map.** The prompt is written in English; the language the
+  buyer gets back is `locale`. A localized `prompt` is ignored and the sentence is lost.
+- **Describe the buyer, never address the model.** It is read as data about a person, not an
+  instruction. No "always", no "ignore the above".
+- **Make it stand on its own, and say which question it answers.** Nothing prefixes it, and a
+  buyer picks several hurdles, so `"Weak spot — fears sounding rude: …"` works where a bare
+  `"fears sounding rude"` would float. The shipped lines use `Tone: …`, `Push level: …`,
+  `Marketplace etiquette on X: …`, `Deal frequency: …`, `Weak spot — …`, `Typical deal …` —
+  follow them for a new option, and pick a comparable opener for a new question.
+- **One line.** Line breaks collapse to spaces. Keep it to a sentence — nothing truncates it, so length is your judgement, and a paragraph crowds the rest of the prompt.
+- **Treat a `prompt` edit as a prompt change, not a copy change.** `label` and `subtext` are
+  what the person reads; `prompt` is what the model reads, and a careless edit changes answer
+  quality.
+
+`functions/tests/test_option_prompts.py` fails if an option in this repo's bundled defaults
+has no `prompt`. Fixing a bad sentence is a Remote Config publish, no deploy — but stripping
+the key does not restore anything, it removes that answer from the prompt, so edit rather
+than delete.
+
 ## Engagement Screen
 
 Informational/warmup screens that display content with optional visual elements.
@@ -64,7 +123,9 @@ Multiple choice selection screen with predefined options.
 - `options` (required): Array of option objects
   - `label` (required): Display text for the option
   - `value` (optional): Value to store (defaults to label)
-  - `metadata` (optional): Additional metadata
+  - `metadata` (optional): Additional metadata, including `prompt` — the sentence the model
+    reads for this option (see "`prompt` — what an option contributes to the system prompt"
+    at the top)
 - `answer_structure` (required): Answer storage configuration
   - `answer_key_name` (required): Unique key for storing the answer
   - `answer_key_name` is also the field the answer is sent to the backend as, so name it after
