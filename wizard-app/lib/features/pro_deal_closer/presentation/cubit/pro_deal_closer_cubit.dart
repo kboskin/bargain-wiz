@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:appwizard/core/error/failures.dart';
-import 'package:appwizard/core/services/installation_id_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 import 'package:appwizard/features/conversation/domain/repositories/conversation_repository.dart';
@@ -15,18 +13,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 ///
 /// The server list (from [ProDealCloserRepository.watchMessages]) is the truth: a wizard
 /// message that is still `pending` is the typing indicator, `failed` renders with a Redo.
-/// A user bubble is shown immediately with its `request_id` and dropped once the server
-/// echoes a message with the same id.
+/// A user bubble is shown immediately and retired when the echo lands — [_send] and the
+/// server both allow one turn at a time, so the first new user message to arrive is
+/// necessarily the one in flight and no correlation id is needed to recognise it.
 class ProDealCloserCubit extends Cubit<ProDealCloserState> {
   ProDealCloserCubit({
     required ProDealCloserRepository repository,
     required ConversationRepository conversationRepository,
     required AppLogger logger,
-    String Function()? requestIdGenerator,
   })  : _repository = repository,
         _conversations = conversationRepository,
         _logger = logger,
-        _requestId = requestIdGenerator ?? _uuid,
         super(const ProDealCloserState());
 
   /// Pinned first wizard message (local only, never stored).
@@ -37,20 +34,28 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
   final ProDealCloserRepository _repository;
   final ConversationRepository _conversations;
   final AppLogger _logger;
-  final String Function() _requestId;
 
   StreamSubscription<List<ProDealCloserMessage>>? _subscription;
   List<ProDealCloserMessage> _server = const [];
-  /// Bubbles sent from this device that the server has not echoed yet, by request id.
-  final Map<String, ProChatMessage> _optimistic = {};
-  /// Local screenshot files per request id, so fresh attachments render without a download.
+  /// The turn this device has in flight, shown before the server echoes it. At most one:
+  /// [_send] bails while typing and the server answers 409 for a second one.
+  ProChatMessage? _inFlight;
+  /// User messages the server had when [_inFlight] was sent; a higher count means the echo
+  /// arrived and the local bubble can go.
+  int _serverUserCountAtSend = 0;
+  /// Sends that failed, kept on screen with a failed status until the chat is left.
+  final List<ProChatMessage> _failed = [];
+  /// Local screenshot files by server message id, so a just-sent attachment renders from
+  /// disk instead of being downloaded back from Storage.
   final Map<String, List<String>> _localPaths = {};
+  /// Ids whose options request is still in flight over HTTP; once the server has it, the
+  /// message's own `pendingOptions` keeps the spinner going.
   final Set<String> _optionsLoading = {};
+  /// Options failures already reported, so a toast fires once per failure.
+  final Set<String> _reportedOptionErrors = {};
   /// Messages that existed when a saved chat was reopened: no entrance animation, no actions.
   Set<String> _restoredIds = const {};
   bool _awaitingRestoreSnapshot = false;
-
-  static String _uuid() => InstallationIdService.generate(Random.secure());
 
   /// Starts a fresh chat or reopens [conversationId] from history.
   Future<void> start({
@@ -95,21 +100,18 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
   Future<void> _send({String text = '', List<String> paths = const []}) async {
     if (text.isEmpty && paths.isEmpty) return;
     if (state.isTyping) return; // the server takes one turn at a time (409 otherwise)
-    final requestId = _requestId();
     final local = ProChatMessage(
-      id: 'local_$requestId',
+      id: 'local_${DateTime.now().microsecondsSinceEpoch}',
       text: text,
       attachmentPaths: paths,
       isUploading: paths.isNotEmpty,
-      requestId: requestId,
     );
-    _optimistic[requestId] = local;
-    if (paths.isNotEmpty) _localPaths[requestId] = paths;
+    _inFlight = local;
+    _serverUserCountAtSend = _server.where((m) => m.isUser).length;
     _rebuild();
 
     final result = await _repository.send(
       conversationId: state.conversationId,
-      requestId: requestId,
       text: text.isEmpty ? null : text,
       attachmentPaths: paths,
       vibe: state.vibe,
@@ -118,13 +120,21 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
     if (isClosed) return;
     result.fold(
       (failure) {
-        _optimistic[requestId] = local.copyWith(isUploading: false, status: MessageStatus.failed);
+        _inFlight = null;
+        _failed.add(local.copyWith(isUploading: false, status: MessageStatus.failed));
         _fail(failure);
       },
       (sent) {
+        // The response names the stored turn, so the screenshots just picked can keep
+        // rendering from disk. When the echo wins the race the tile downloads once and this
+        // rebuild puts the local file back.
+        final messageId = sent.messageId;
+        if (paths.isNotEmpty && messageId != null) _localPaths[messageId] = paths;
         if (state.conversationId == null) {
           emit(state.copyWith(conversationId: sent.conversationId, createdAt: state.createdAt ?? DateTime.now()));
           _subscribe(sent.conversationId);
+        } else if (paths.isNotEmpty) {
+          _rebuild();
         }
       },
     );
@@ -139,17 +149,13 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
     final result = await _repository.requestOptions(
       conversationId: conversationId,
       messageId: messageId,
-      requestId: _requestId(),
       vibe: state.vibe,
       locale: state.locale,
     );
     if (isClosed) return;
+    // The server now owns the spinner (`pendingOptions`) and will write the lines.
     _optionsLoading.remove(messageId);
-    result.fold(_fail, (lines) {
-      // Apply right away; the listener confirms with the same lines.
-      _server = [for (final m in _server) m.id == messageId ? m.copyWith(options: lines) : m];
-      _rebuild();
-    });
+    result.fold(_fail, (_) => _rebuild());
   }
 
   /// "Redo": the server marks [messageId] pending (typing) and replaces its text.
@@ -159,7 +165,6 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
     final result = await _repository.redo(
       conversationId: conversationId,
       messageId: messageId,
-      requestId: _requestId(),
       vibe: state.vibe,
       locale: state.locale,
     );
@@ -204,39 +209,56 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
       _restoredIds = {for (final m in messages) m.id};
       _awaitingRestoreSnapshot = false;
     }
-    for (final m in messages) {
-      final requestId = m.requestId;
-      if (requestId != null) _optimistic.remove(requestId);
+    // One turn is outstanding at a time, so a user message the server did not have when we
+    // sent is that turn: the local bubble has been replaced and can go.
+    if (_inFlight != null && messages.where((m) => m.isUser).length > _serverUserCountAtSend) {
+      _inFlight = null;
     }
     _rebuild();
   }
 
   void _rebuild({Failure? failure}) {
+    failure ??= _newOptionsFailure();
     final rows = <ProChatMessage>[_greeting(restored: _restoredIds.isNotEmpty)];
     final lastWizardId = _server.where((m) => m.isWizard).lastOrNull?.id;
     for (final m in _server) {
-      final requestId = m.requestId;
+      // A pending wizard message is the placeholder the worker will fill: the typing bubble
+      // stands in for it, so rendering it too would show an empty bubble (and, on Redo, the
+      // answer being replaced).
+      if (m.isWizard && m.isPending) continue;
       final restored = _restoredIds.contains(m.id);
       rows.add(
         ProChatMessage.fromEntity(
           m,
           id: m.id,
           restored: restored,
-          localPaths: requestId == null ? null : _localPaths[requestId],
+          localPaths: _localPaths[m.id],
         ).copyWith(
           showActions: m.isWizard && m.id == lastWizardId && !m.isPending && !restored && m.options.isEmpty,
-          optionsLoading: _optionsLoading.contains(m.id),
+          optionsLoading: _optionsLoading.contains(m.id) || m.pendingOptions,
         ),
       );
     }
-    rows.addAll(_optimistic.values);
-    final typing = _server.any((m) => m.isWizard && m.isPending) || _optimistic.values.any((m) => !m.isFailed);
+    rows.addAll(_failed);
+    if (_inFlight case final pending?) rows.add(pending);
+    final typing = _server.any((m) => m.isWizard && m.isPending) || _inFlight != null;
     emit(state.copyWith(
       messages: rows,
       isTyping: typing,
       failure: failure,
       errorCount: failure == null ? state.errorCount : state.errorCount + 1,
     ));
+  }
+
+  /// An options request that failed on the server reaches us through the listener; report it
+  /// once, the same way a failed HTTP call is reported.
+  Failure? _newOptionsFailure() {
+    for (final message in _server) {
+      final error = message.optionsError;
+      if (error != null && _reportedOptionErrors.add(message.id)) return ServerFailure(error);
+      if (error == null) _reportedOptionErrors.remove(message.id);
+    }
+    return null;
   }
 
   void _fail(Failure failure) {

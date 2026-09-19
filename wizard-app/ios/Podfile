@@ -47,6 +47,20 @@ post_install do |installer|
     # Xcode 27 rejects deployment targets below 15.0; some pods still declare 9.0–13.0.
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+
+      next unless target.name == 'permission_handler_apple'
+
+      # permission_handler_apple compiles every permission OUT unless it is switched on here:
+      # PermissionHandlerEnums.h defaults each PERMISSION_* to 0, and the excluded strategies
+      # fall back to UnknownPermissionStrategy, which answers `permanentlyDenied` without ever
+      # showing the system prompt. List the permissions this app may ask for; leave the rest off
+      # so App Review does not see unused capabilities.
+      defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+      defs = [defs] unless defs.is_a?(Array)
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = (defs + [
+        'PERMISSION_PHOTOS=1',        # NSPhotoLibraryUsageDescription
+        'PERMISSION_NOTIFICATIONS=1', # trial reminder opt-in
+      ]).uniq
     end
   end
 end

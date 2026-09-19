@@ -6,9 +6,9 @@ import pytest
 from flask import Flask, request
 
 import main
-from auth import StaticAuthenticator
-from errors import UpstreamError
-from negotiation import EXPRESS_SCHEMA, OPTIONS_SCHEMA, REPLY_SCHEMA
+from core.auth.firebase import StaticAuthenticator
+from core.errors import UpstreamError
+from features.negotiation.domain.lines import EXPRESS_SCHEMA, OPTIONS_SCHEMA, REPLY_SCHEMA
 
 PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
 LINES = [
@@ -38,6 +38,11 @@ def _restore_main(monkeypatch):
     monkeypatch.setattr(main, "FirebaseAuthenticator", main.FirebaseAuthenticator)
 
 
+# The app always sends the buyer's tone and push level; `_post` adds them so each test can
+# say only what it is about.
+PROFILE = {"vibe": "friendly", "push": 60}
+
+
 def _install(result=None, error=None, auth=None):
     """Make the functions use a fake Gemini (and identity); returns the function map and the fake."""
     gen = FakeGenerator(result, error)
@@ -46,8 +51,10 @@ def _install(result=None, error=None, auth=None):
     return {"/express_dealmaker": main.express_dealmaker, "/pro_deal_closer": main.pro_deal_closer}, gen
 
 
-def _post(path, functions, body, method="POST", headers=None):
+def _post(path, functions, body, method="POST", headers=None, profile=True):
     app = Flask(__name__)
+    if profile and isinstance(body, dict):
+        body = {**PROFILE, **body}
     with app.test_request_context(path, method=method, json=body, headers=headers or {}):
         res = functions[path](request)
     return res.status_code, json.loads(res.get_data(as_text=True))
@@ -77,7 +84,7 @@ def test_express_accepts_text_only():
 
 def test_express_rejects_empty_and_non_post():
     c, _ = _install({"seeing": "", "lines": LINES})
-    status, body = _post("/express_dealmaker", c, {})
+    status, body = _post("/express_dealmaker", c, {}, profile=False)
     assert status == 400 and body["error"]["status"] == "INVALID_ARGUMENT"
     status, body = _post("/express_dealmaker", c, None, method="GET")
     assert status == 405 and body["error"]["status"] == "METHOD_NOT_ALLOWED"
@@ -127,6 +134,6 @@ def test_pro_validation():
 def test_express_accepts_json_without_content_type():
     _install({"seeing": "x", "lines": LINES})
     app = Flask(__name__)
-    with app.test_request_context("/", method="POST", data=json.dumps({"text": "bike $300"}), content_type="text/plain"):
+    with app.test_request_context("/", method="POST", data=json.dumps({**PROFILE, "text": "bike $300"}), content_type="text/plain"):
         res = main.express_dealmaker(request)
     assert res.status_code == 200

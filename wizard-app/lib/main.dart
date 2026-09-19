@@ -16,9 +16,10 @@ import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 
 /// Paints the first frame straight away and initializes behind the splash (see
-/// [AppBootstrap]): Firebase, the dependency container and the bundled Remote Config
-/// defaults. The Remote Config fetch, anonymous sign-in and profile sync run in the
-/// background, so nothing on the network can delay the launch.
+/// [AppBootstrap]): Firebase, the dependency container, the bundled Remote Config defaults
+/// and anonymous sign-in. Only sign-in touches the network before the app is shown — it has
+/// to, since every endpoint requires an ID token — and a failure keeps [BootSplash] up with
+/// tap-to-retry. The Remote Config fetch and profile sync stay in the background.
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const BargainWizApp());

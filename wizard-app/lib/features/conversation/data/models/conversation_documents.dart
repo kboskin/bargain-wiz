@@ -31,11 +31,13 @@ class ConversationDocuments {
       thumbnailStoragePath: thumbnail?.storagePath,
       messageCount: (data['message_count'] as num?)?.toInt() ?? 0,
       isTyping: data['active_turn'] != null,
+      errorMessage: string(_map(data['last_error'])?['message']),
     );
   }
 
   static ProDealCloserMessage message(String id, Map<String, dynamic> data) {
     final error = _map(data['error']);
+    final optionsError = _map(data['options_error']);
     return ProDealCloserMessage(
       id: id,
       text: string(data['text']) ?? '',
@@ -43,10 +45,11 @@ class ConversationDocuments {
       isWizard: data['role'] == 'wizard',
       options: lines(data['lines']),
       status: MessageStatus.fromString(string(data['status'])),
-      requestId: string(data['request_id']),
       revision: (data['revision'] as num?)?.toInt() ?? 0,
       seq: (data['seq'] as num?)?.toInt() ?? 0,
       errorMessage: string(error?['message']),
+      pendingOptions: data['pending_options'] == true,
+      optionsError: string(optionsError?['message']),
     );
   }
 

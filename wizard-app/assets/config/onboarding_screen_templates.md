@@ -67,6 +67,10 @@ Multiple choice selection screen with predefined options.
   - `metadata` (optional): Additional metadata
 - `answer_structure` (required): Answer storage configuration
   - `answer_key_name` (required): Unique key for storing the answer
+  - `answer_key_name` is also the field the answer is sent to the backend as, so name it after
+    the field the functions read — `vibe`, `push`, `marketplace`, `deals_per_month`,
+    `deal_size`, `hurdles`, `referral_code`. Any other key rides along and is ignored; keep
+    screens asking for `vibe` and `push`, which the AI functions require (`PROFILE_SYNC.md`)
 - `next_button_text` (optional): Custom button text
 - `show_top_bar` (optional): Controls visibility of progress bar and back button (defaults to `true`)
 
@@ -121,6 +125,10 @@ Slider with predefined labeled positions:
     - `animation` (optional): Lottie animation path for this option (displayed above the slider)
 - `answer_structure` (required): Answer storage configuration
   - `answer_key_name` (required): Unique key for storing the answer
+  - `answer_key_name` is also the field the answer is sent to the backend as, so name it after
+    the field the functions read — `vibe`, `push`, `marketplace`, `deals_per_month`,
+    `deal_size`, `hurdles`, `referral_code`. Any other key rides along and is ignored; keep
+    screens asking for `vibe` and `push`, which the AI functions require (`PROFILE_SYNC.md`)
 - `next_button_text` (optional): Custom button text
 - `show_top_bar` (optional): Controls visibility of progress bar and back button (defaults to `true`)
 
@@ -211,6 +219,9 @@ A complete onboarding flow with all three types:
   - When `false`, the top bar is completely hidden, including the progress indicator
 - For engagement screens, keywords in descriptions (bargain, deal, analysis, negotiate, smart, ai) are automatically highlighted
 - Answers are stored using the `answer_key_name` from `answer_structure`
+- The same key is what the answer is sent to the backend as (a `select_group` group carries
+  its own), so the app needs no mapping and no release when a question is renamed or replaced.
+  Renaming a key does orphan the answers already stored under the old one
 - Visual paths can be:
   - Lottie files: `"assets/lottie/filename.json"`
   - Remote URLs: `"https://example.com/animation.json"`

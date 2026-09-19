@@ -60,7 +60,7 @@ class ExpressDealmakerRequest {
   final String locale;
   final String vibe;
 
-  /// Push level 0–100 (onboarding `risk_tolerance`).
+  /// Push level 0–100 (the onboarding answer declaring the `push` field).
   final int push;
   final String? marketplace;
   @JsonKey(name: 'deal_size')
@@ -70,7 +70,7 @@ class ExpressDealmakerRequest {
   @JsonKey(name: 'deals_per_month')
   final String? dealsPerMonth;
 
-  /// Onboarding `main_hurdle` ids the coach should compensate for.
+  /// Ids of the money-leak answer (`hurdles`) the coach should compensate for.
   final List<String>? hurdles;
 
   Map<String, dynamic> toJson() => _$ExpressDealmakerRequestToJson(this);

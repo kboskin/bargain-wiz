@@ -13,11 +13,16 @@ class ExpressErrorStage extends StatelessWidget {
   const ExpressErrorStage({
     required this.copy,
     required this.onRetry,
+    this.message,
     super.key,
   });
 
   final ExpressCopy copy;
   final VoidCallback onRetry;
+
+  /// Shown instead of the configured body when the backend explained itself (for example a
+  /// rate limit telling the buyer when to come back).
+  final String? message;
 
   @override
   Widget build(final BuildContext context) {
@@ -35,7 +40,7 @@ class ExpressErrorStage extends StatelessWidget {
                   const SizedBox(height: WizSpacing.stackLg),
                   Text(copy.errorTitle, textAlign: TextAlign.center, style: WizType.titleSm),
                   const SizedBox(height: WizSpacing.stackLg),
-                  Text(copy.errorBody, textAlign: TextAlign.center, style: WizType.bodyMd),
+                  Text(message ?? copy.errorBody, textAlign: TextAlign.center, style: WizType.bodyMd),
                 ],
               ),
             ),

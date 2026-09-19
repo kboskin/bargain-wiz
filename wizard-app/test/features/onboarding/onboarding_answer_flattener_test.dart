@@ -20,18 +20,18 @@ void main() {
       0: ['starting', 'fair_price'], // multi_select
       1: 'tactical', // select (vibe)
       2: 60, // slider_lottie (push)
-      3: {'favorite_marketplace': 'ebay', 'deals_per_month': '3_5'}, // select_group
+      3: {'marketplace': 'ebay', 'deals_per_month': '3_5'}, // select_group
       4: 550, // slider (deal size)
       7: 'FRIEND-42', // referral_code
     });
     final byKey = {for (final a in answers) a.answerKey!: a};
 
-    expect(byKey['main_hurdle']!.options, ['starting', 'counter_offers', 'being_rude', 'holding_ground', 'fair_price']);
-    expect(byKey['negotiation_vibe']!.options, ['friendly', 'no_nonsense', 'tactical', 'quiet_closer']);
-    expect(byKey['risk_tolerance']!.options, ['20', '40', '60', '80', '100']);
-    expect(byKey['favorite_marketplace']!.options, ['ebay', 'amazon', 'facebook', 'olx', 'craigslist', 'other']);
+    expect(byKey['hurdles']!.options, ['starting', 'counter_offers', 'being_rude', 'holding_ground', 'fair_price']);
+    expect(byKey['vibe']!.options, ['friendly', 'no_nonsense', 'tactical', 'quiet_closer']);
+    expect(byKey['push']!.options, ['20', '40', '60', '80', '100']);
+    expect(byKey['marketplace']!.options, ['ebay', 'amazon', 'facebook', 'olx', 'craigslist', 'other']);
     expect(byKey['deals_per_month']!.options, ['0_2', '3_5', '6_plus']);
-    expect(byKey['average_deal_size']!.options, ['50', '550', '5000']);
+    expect(byKey['deal_size']!.options, ['50', '550', '5000']);
     expect(byKey['referral_code']!.options, isNull);
   });
 

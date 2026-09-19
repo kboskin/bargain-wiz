@@ -27,8 +27,10 @@ class AuthBloc extends BaseBloc<AuthEvent, AuthState> {
     on<SignOutRequested>(_onSignOutRequested);
     on<ResetPasswordRequested>(_onResetPasswordRequested);
 
-    // The current user is read synchronously (no screen waits on auth); the subscription
-    // keeps the state in sync and the anonymous sign-in runs in the background.
+    // The current user is read synchronously and the subscription keeps the state in sync.
+    // `AppBootstrap.run` has already awaited the anonymous sign-in by the time this bloc is
+    // built, so the call below is a no-op on a normal launch; it stays as the safety net for
+    // a bloc built outside that path (tests, a future entry point).
     add(const AuthCheckRequested());
     _userChanges = _authService.userChanges.listen((_) => add(const AuthCheckRequested()));
     unawaited(_authService.ensureSignedIn());

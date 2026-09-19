@@ -1,6 +1,5 @@
-import 'package:appwizard/core/config/wiz_catalog.dart';
-import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/icon_resolver.dart';
 import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
@@ -57,11 +56,9 @@ class _Group extends StatelessWidget {
   final String? value;
   final ValueChanged<String> onPick;
 
-  /// Remote `icon` first; marketplace chips fall back to the built-in brand glyphs.
-  IconData? _iconFor(OnboardingOption option) => WizCatalog.marketplaceIcon(
-        group.answerKeyName == UserProfileService.keyMarketplace ? option.storedValue : null,
-        iconRaw: option.hasIcon ? option.iconRaw : null,
-      );
+  /// The glyph the option configures (`icon: {code, font}`), nothing when it configures none.
+  IconData? _iconFor(OnboardingOption option) =>
+      option.hasIcon ? IconResolver.resolve(option.iconRaw).icon : null;
 
   @override
   Widget build(BuildContext context) => Column(

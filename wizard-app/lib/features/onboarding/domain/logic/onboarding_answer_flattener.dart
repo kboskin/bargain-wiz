@@ -7,7 +7,7 @@ import 'package:appwizard/features/onboarding/domain/entities/onboarding_data_en
 /// Single-key screens store their value directly. Multi-key screens
 /// (`select_group`) store a `Map<String, dynamic>` of `{answerKey: value}` which
 /// is expanded into one answer per key, so other features can read e.g.
-/// `favorite_marketplace` and `deals_per_month` via `UserProfileService.answer(key)`.
+/// each of a `select_group`'s answers via `UserProfileService.answer(key)`.
 class OnboardingAnswerFlattener {
   OnboardingAnswerFlattener._();
 

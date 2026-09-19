@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/core/services/auth_service.dart';
-import 'package:appwizard/core/services/installation_id_service.dart';
 import 'package:appwizard/core/services/profile_sync_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
@@ -10,6 +9,7 @@ import 'package:appwizard/features/onboarding/data/models/remote_config/onboardi
 import 'package:appwizard/features/onboarding/domain/entities/onboarding_data_entity.dart';
 import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/features/profile/data/datasources/profile_remote_datasource.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/profile/data/models/profile_api_models.dart';
 import 'package:dartz/dartz.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -36,6 +36,18 @@ class _FakeProfile implements UserProfileService {
   OnboardingDataEntity? entity;
   final listeners = <VoidCallback>[];
   int refreshes = 0;
+
+  /// The answers the configured screens collect, keyed as they are sent.
+  @override
+  List<ProfileField> get fields => const [
+        ProfileField(key: ProfileFields.vibeKey, label: 'Vibe', kind: ProfileFieldKind.single),
+        ProfileField(key: ProfileFields.pushKey, label: 'Push', kind: ProfileFieldKind.single),
+        ProfileField(key: ProfileFields.marketplaceKey, label: 'Marketplace', kind: ProfileFieldKind.single),
+        ProfileField(key: 'deals_per_month', label: 'Deals', kind: ProfileFieldKind.single),
+        ProfileField(key: 'deal_size', label: 'Deal size', kind: ProfileFieldKind.single),
+        ProfileField(key: 'hurdles', label: 'Leaks', kind: ProfileFieldKind.multi),
+        ProfileField(key: ProfileFields.referralKey, label: 'Code', kind: ProfileFieldKind.text),
+      ];
 
   @override
   OnboardingDataEntity? get data => entity;
@@ -67,7 +79,7 @@ class _FakeRemote implements ProfileRemoteDataSource {
   }
 
   @override
-  Future<ProfileDocument?> fetch({required String installationId}) async => stored;
+  Future<ProfileDocument?> fetch() async => stored;
 }
 
 class _FakeOnboardingRepo implements OnboardingRepository {
@@ -93,8 +105,7 @@ void main() {
   late ProfileSyncService service;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({'installation_id': '3fa85f64-5717-4562-b3fc-2c963f66afa6'});
-    final prefs = await SharedPreferences.getInstance();
+    SharedPreferences.setMockInitialValues({});
     profile = _FakeProfile();
     remote = _FakeRemote();
     auth = _FakeAuth();
@@ -102,7 +113,6 @@ void main() {
     service = ProfileSyncService(
       profile: profile,
       remote: remote,
-      installation: InstallationIdService(prefs),
       auth: auth,
       onboarding: onboarding,
       logger: _SilentLogger(),
@@ -119,32 +129,31 @@ void main() {
 
   final entity = OnboardingDataEntity(
     answers: [
-      _a('main_hurdle', ['starting', 'fair_price'], type: OnboardingScreenType.multiSelect, options: ['starting', 'counter_offers', 'fair_price']),
-      _a('negotiation_vibe', 'tactical'),
-      _a('risk_tolerance', 80),
-      _a('favorite_marketplace', 'ebay', type: OnboardingScreenType.selectGroup),
+      _a('hurdles', ['starting', 'fair_price'], type: OnboardingScreenType.multiSelect, options: ['starting', 'counter_offers', 'fair_price']),
+      _a('vibe', 'tactical'),
+      _a('push', 80),
+      _a('marketplace', 'ebay', type: OnboardingScreenType.selectGroup),
       _a('deals_per_month', '3_5', type: OnboardingScreenType.selectGroup),
-      _a('average_deal_size', 550),
+      _a('deal_size', 550),
       _a('referral_code', 'FRIEND-42'),
     ],
     isCompleted: true,
   );
 
-  test('buildPatch derives typed preferences and carries answers and the flow trace', () {
+  test('buildPatch sends the declared fields and carries answers and the flow trace', () {
     final patch = service.buildPatch(entity, completed: true, includeFlow: true).toJson();
 
-    expect(patch['installation_id'], '3fa85f64-5717-4562-b3fc-2c963f66afa6');
     expect(patch['preferences'], {
       'vibe': 'tactical', 'push': 80, 'marketplace': 'ebay', 'deals_per_month': '3_5', 'deal_size': 550, 'locale': 'es',
       'hurdles': ['starting', 'fair_price'],
     });
     final ob = patch['onboarding'] as Map<String, dynamic>;
-    expect(ob['answers']['main_hurdle'], ['starting', 'fair_price']);
+    expect(ob['answers']['hurdles'], ['starting', 'fair_price']);
     expect(ob['completed'], isTrue);
     expect(ob.containsKey('variant'), isFalse);
     expect((ob['flow'] as List).length, 7);
     expect((ob['flow'] as List).first, {
-      'index': 0, 'key': 'main_hurdle', 'type': 'multiSelect', 'title': 'T:main_hurdle',
+      'index': 0, 'key': 'hurdles', 'type': 'multiSelect', 'title': 'T:hurdles',
       'options': ['starting', 'counter_offers', 'fair_price'],
     });
     expect(((ob['flow'] as List)[1] as Map).containsKey('options'), isFalse); // none recorded → omitted
@@ -153,10 +162,9 @@ void main() {
     expect((patch['app'] as Map)['locale'], 'es');
   });
 
-  test('buildPatch falls back to catalog defaults; edits after onboarding carry no flow', () {
+  test('buildPatch sends only answered fields; edits after onboarding carry no flow', () {
     final patch = service.buildPatch(const OnboardingDataEntity(answers: [], isCompleted: false), completed: false).toJson();
-    expect((patch['preferences'] as Map)['vibe'], 'friendly');
-    expect((patch['preferences'] as Map)['push'], 60);
+    expect(patch['preferences'], {'locale': 'es'}); // nothing answered yet
     expect((patch['preferences'] as Map).containsKey('hurdles'), isFalse);
     final ob = patch['onboarding'] as Map;
     expect(ob.containsKey('completed'), isFalse);
@@ -173,13 +181,13 @@ void main() {
     expect(remote.patches.length, 1);
   });
 
-  test('profile changes are pushed (debounced) once started', () async {
+  test('a scheduled push sends the stored answers (debounced)', () async {
     service.start();
     profile.entity = entity;
-    for (final l in profile.listeners) l();
+    service.schedulePush();
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(remote.patches.length, 1);
-    expect(remote.patches.single.preferences!.vibe, 'tactical');
+    expect(remote.patches.single.preferences!['vibe'], 'tactical');
   });
 
   test('pushNow does nothing without local answers', () async {
@@ -190,7 +198,7 @@ void main() {
   test('onSignedIn hydrates an empty device from the account and refreshes the profile', () async {
     remote.stored = ProfileDocument(
       onboarding: const ProfileOnboarding(
-        answers: {'negotiation_vibe': 'quiet_closer', 'risk_tolerance': 20},
+        answers: {'vibe': 'quiet_closer', 'push': 20},
         completedAt: '2026-09-17T12:00:00Z',
       ),
     );
@@ -199,13 +207,13 @@ void main() {
 
     expect(onboarding.saved, isNotNull);
     expect(onboarding.saved!.isCompleted, isTrue);
-    expect(onboarding.saved!.answers.map((a) => a.answerKey), ['negotiation_vibe', 'risk_tolerance']);
+    expect(onboarding.saved!.answers.map((a) => a.answerKey), ['vibe', 'push']);
     expect(profile.refreshes, 1);
   });
 
   test('onSignedIn keeps local answers (they were pushed and win server-side)', () async {
     profile.entity = entity;
-    remote.stored = const ProfileDocument(onboarding: ProfileOnboarding(answers: {'negotiation_vibe': 'friendly'}));
+    remote.stored = const ProfileDocument(onboarding: ProfileOnboarding(answers: {'vibe': 'friendly'}));
 
     await service.onSignedIn();
 

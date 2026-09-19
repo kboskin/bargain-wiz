@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:appwizard/core/config/prefs_keys.dart';
-import 'package:appwizard/core/config/wiz_catalog.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 import 'package:appwizard/features/conversation/domain/repositories/conversation_repository.dart';
 import 'package:appwizard/features/express_dealmaker/domain/repositories/express_dealmaker_repository.dart';
@@ -18,7 +17,7 @@ export 'package:appwizard/features/express_dealmaker/presentation/cubit/express_
 /// `registerFactoryParam`).
 class ExpressDealmakerCubitParams {
   const ExpressDealmakerCubitParams({
-    this.vibeId = WizCatalog.defaultVibeId,
+    this.vibeId = '',
     this.locale = 'en',
     this.marketplace,
   });
@@ -38,7 +37,7 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
     required final ExpressDealmakerRepository repository,
     required final ConversationRepository conversationRepository,
     final SharedPreferences? prefs,
-    final String vibeId = WizCatalog.defaultVibeId,
+    final String vibeId = '',
     final String locale = 'en',
     final String? marketplace,
   })  : _repository = repository,
@@ -101,9 +100,19 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
     }
     _loaded = conversation;
     final lines = conversation.effectiveLines;
+    // No lines and a recorded failure is a deal that broke, not an empty one: show the error
+    // with Retry (which regenerates from the screenshots the server already has) instead of
+    // dropping the user into a bare picker.
+    final failed = lines.isEmpty && conversation.errorMessage != null;
     emit(state.copyWith(
       loadingConversation: false,
-      phase: lines.isNotEmpty ? ExpressPhase.ready : ExpressPhase.pick,
+      phase: lines.isNotEmpty
+          ? ExpressPhase.ready
+          : failed
+              ? ExpressPhase.error
+              : ExpressPhase.pick,
+      errorKind: failed ? ExpressErrorKind.reply : null,
+      errorMessage: failed ? conversation.errorMessage : null,
       screenshots: conversation.screenshotPaths
           .map((final p) => ScreenshotUploadItem(path: p, status: ScreenshotUploadStatus.success))
           .toList(),
@@ -112,7 +121,7 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
       keyword: conversation.keyword ?? '',
       vibeId: conversation.vibe ?? state.vibeId,
       requestId: lines.isNotEmpty ? 1 : 0,
-      clearError: true,
+      clearError: !failed,
     ));
   }
 
@@ -125,8 +134,13 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
     final existing = state.paths.toSet();
     final fresh = paths.where((final p) => p.isNotEmpty && existing.add(p)).toList();
     if (fresh.isEmpty) return;
+    // An express conversation takes no follow-up turns (the backend rejects `send`, and `redo`
+    // carries no images), so screenshots added to one that already exists on the server would
+    // be silently dropped. They start a new deal instead.
+    if (state.conversationId != null) _loaded = null;
     emit(state.copyWith(
       screenshots: [...state.screenshots, ...fresh.map((final p) => ScreenshotUploadItem(path: p))],
+      clearConversationId: state.conversationId != null,
     ));
     if (state.phase != ExpressPhase.pick) {
       unawaited(startUpload());
@@ -223,7 +237,8 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
   /// with the current keyword and tone.
   Future<void> requestReply() async {
     final ids = state.uploadedIds;
-    if (ids.isEmpty || state.replyLoading) return;
+    // A redo needs no ids: the screenshots are already on the server.
+    if (state.replyLoading || (ids.isEmpty && state.conversationId == null)) return;
     emit(state.copyWith(replyLoading: true, clearError: true));
     final keyword = state.keyword.trim();
     final result = await _repository.getDealReply(
@@ -235,10 +250,11 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
     );
     if (isClosed) return;
     result.fold(
-      (_) => emit(state.copyWith(
+      (final failure) => emit(state.copyWith(
         phase: ExpressPhase.error,
         replyLoading: false,
         errorKind: ExpressErrorKind.reply,
+        errorMessage: failure.message,
       )),
       (final reply) {
         emit(state.copyWith(

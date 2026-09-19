@@ -38,25 +38,25 @@ void main() {
   test('patch PATCHes /profile with the partial body and decodes the document', () async {
     final api = _FakeApi();
     final doc = await ProfileRemoteDataSourceImpl(api).patch(
-      const ProfilePatchRequest(installationId: 'abc', preferences: ProfilePreferences(vibe: 'tactical')),
+      const ProfilePatchRequest(preferences: {'vibe': 'tactical'}),
     );
     expect(api.lastPatchPath, '/profile');
-    expect(api.lastPatchBody, {'installation_id': 'abc', 'preferences': {'vibe': 'tactical'}});
+    expect(api.lastPatchBody, {'preferences': {'vibe': 'tactical'}});
     expect(doc.schemaVersion, 1);
-    expect(doc.preferences!.vibe, 'tactical');
+    expect(doc.preferences, {'vibe': 'tactical'});
   });
 
-  test('fetch GETs /profile with the installation id and maps NOT_FOUND to null', () async {
+  test('fetch GETs /profile (the token is the identity) and maps NOT_FOUND to null', () async {
     final api = _FakeApi(getResult: {'identity': {'uid': 'u1'}, 'onboarding': {'answers': {'x': 1}}});
-    final doc = await ProfileRemoteDataSourceImpl(api).fetch(installationId: 'ab cd');
-    expect(api.lastGetPath, '/profile?installation_id=ab+cd');
+    final doc = await ProfileRemoteDataSourceImpl(api).fetch();
+    expect(api.lastGetPath, '/profile');
     expect(doc!.identity!.uid, 'u1');
     expect(doc.onboarding!.answers, {'x': 1});
 
     final missing = _FakeApi(getError: const CloudFunctionException('NOT_FOUND', 'No profile yet', httpStatus: 404));
-    expect(await ProfileRemoteDataSourceImpl(missing).fetch(installationId: 'x'), isNull);
+    expect(await ProfileRemoteDataSourceImpl(missing).fetch(), isNull);
 
     final broken = _FakeApi(getError: const CloudFunctionException('INTERNAL', 'boom', httpStatus: 500));
-    expect(ProfileRemoteDataSourceImpl(broken).fetch(installationId: 'x'), throwsA(isA<CloudFunctionException>()));
+    expect(ProfileRemoteDataSourceImpl(broken).fetch(), throwsA(isA<CloudFunctionException>()));
   });
 }

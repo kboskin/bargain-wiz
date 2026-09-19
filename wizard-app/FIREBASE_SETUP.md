@@ -23,28 +23,28 @@ flutterfire configure
 
 This will:
 - Connect to your Firebase project
-- Generate `lib/core/services/firebase_options.dart` with your project configuration
-- Configure Android and iOS projects
+- Drop `google-services.json` into `android/app/`
+- Drop `GoogleService-Info.plist` into `ios/Runner/`
 
-## Step 3: Add Firebase Configuration Files
+**Delete the `lib/firebase_options.dart` it also generates.** The app calls
+`Firebase.initializeApp()` with no options, so each platform reads its own config file and
+there is nothing to keep in sync by hand:
 
-### Android
+- **Android** — the `com.google.gms.google-services` Gradle plugin compiles
+  `android/app/google-services.json` into string resources at build time.
+- **iOS** — `FirebaseApp.configure()` reads `GoogleService-Info.plist` out of the app bundle.
+  The file must be a member of the **Runner** target (Xcode › Runner › Build Phases › Copy
+  Bundle Resources); `flutterfire configure` usually adds it, but check after a project
+  regeneration — a missing plist fails at launch, not at build.
 
-The configuration will automatically add `google-services.json` to:
-- `android/app/google-services.json`
+## Step 3: Verify Setup
 
-### iOS
-
-The configuration will automatically add `GoogleService-Info.plist` to:
-- `ios/Runner/GoogleService-Info.plist`
-
-## Step 4: Verify Setup
-
-After running `flutterfire configure`, verify:
-
-1. ✅ `lib/core/services/firebase_options.dart` is generated with your project config
-2. ✅ `android/app/google-services.json` exists
-3. ✅ `ios/Runner/GoogleService-Info.plist` exists
+1. ✅ `android/app/google-services.json` exists and lists your `package_name`
+   (the `dev`/`local` flavors add the `.dev` suffix to `com.bargain.wiz`)
+2. ✅ `ios/Runner/GoogleService-Info.plist` exists and is in the Runner target's resources:
+   `grep GoogleService-Info ios/Runner.xcodeproj/project.pbxproj` should show a
+   `in Resources` entry
+3. ✅ No `firebase_options.dart` anywhere in `lib/`
 
 ## Firebase Services Included
 
@@ -133,7 +133,7 @@ For different Firebase projects per flavor:
 ## Troubleshooting
 
 ### Error: "Firebase options not configured"
-- Run `flutterfire configure` to generate `firebase_options.dart`
+- Run `flutterfire configure` to refresh `google-services.json` / `GoogleService-Info.plist`
 
 ### Error: "google-services.json not found"
 - Ensure `android/app/google-services.json` exists

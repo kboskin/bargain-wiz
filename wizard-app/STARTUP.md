@@ -1,14 +1,16 @@
 # Startup
 
-`main()` paints the first frame and initializes behind it. Nothing on the network is allowed
-on the launch path.
+`main()` paints the first frame and initializes behind it. Exactly one network call is
+allowed on the launch path — the anonymous sign-in — and everything else waits for a later
+frame.
 
 ```
 runApp(BargainWizApp)            first frame: AppSplash (gradient, static, no DI, no assets)
   └─ AppBootstrap.run()          starts only after that frame is rasterized
        ├─ FirebaseService.initialize()          ~1.4 s, platform thread
        ├─ di.init()                             SharedPreferences + registrations
-       └─ RemoteConfigService.loadDefaults()    bundled asset, no network
+       ├─ RemoteConfigService.loadDefaults()    bundled asset, no network
+       └─ AuthService.ensureSignedIn()          the one awaited network call
   └─ AppBootstrap.warmUp()       background, never awaited
        ├─ RemoteConfigService.refresh()         fetch + activate → notifies listeners
        └─ ProfileSyncService.start()
@@ -19,9 +21,13 @@ Rules that keep it fast:
 - **Never `await` a network call before `runApp`.** The Remote Config fetch has a 10 s timeout
   and was measured at 3.8 s on a cold iOS simulator; it now runs in `warmUp` and the tree
   rebuilds when values activate (`RemoteConfigService` is a `ChangeNotifier`).
-- **No screen waits on authentication.** `AuthBloc` reads `currentUser` synchronously, keeps
-  itself in sync through `AuthService.userChanges`, and starts the anonymous sign-in without
-  awaiting it. The home route decides from the onboarding flag in preferences.
+- **Anonymous sign-in is the one exception, and it blocks.** It happens behind the splash,
+  after the first frame, and the app is not shown until it succeeds: every endpoint requires
+  an ID token, so a launch without a uid can only produce 401s. On failure `run()` returns a
+  message and `BootSplash` stays up with tap-to-retry (`ensureSignedIn(force: true)` skips
+  the 5 s cooldown for it). `AuthBloc` still reads `currentUser` synchronously and keeps
+  itself in sync through `AuthService.userChanges`; the home route decides from the
+  onboarding flag in preferences.
 - **Initialize after the frame is on screen.** `AppBootstrap.firstFrameRendered()` waits for a
   real `FrameTiming`, because native Firebase initialization occupies the platform thread and
   would otherwise delay the first paint.

@@ -76,10 +76,11 @@ class ProDealCloserMessage extends Equatable {
     this.isWizard = false,
     this.options = const [],
     this.status = MessageStatus.done,
-    this.requestId,
     this.revision = 0,
     this.seq = 0,
     this.errorMessage,
+    this.pendingOptions = false,
+    this.optionsError,
   });
 
   /// Firestore document id; empty for a message that only exists on this device.
@@ -92,14 +93,16 @@ class ProDealCloserMessage extends Equatable {
   final bool isWizard;
   final List<DealLine> options;
   final MessageStatus status;
-  /// Client request id that produced this turn (matches optimistic bubbles to server echoes).
-  final String? requestId;
   /// Incremented by every "Redo".
   final int revision;
   /// Server-assigned order within the conversation.
   final int seq;
   /// User-safe error text when [status] is [MessageStatus.failed].
   final String? errorMessage;
+  /// "Give me options" is queued or running for this reply (survives an app restart).
+  final bool pendingOptions;
+  /// User-safe error text when the last options request failed.
+  final String? optionsError;
 
   /// Convenience inverse of [isWizard].
   bool get isUser => !isWizard;
@@ -119,10 +122,11 @@ class ProDealCloserMessage extends Equatable {
     bool? isWizard,
     List<DealLine>? options,
     MessageStatus? status,
-    String? requestId,
     int? revision,
     int? seq,
     String? errorMessage,
+    bool? pendingOptions,
+    String? optionsError,
   }) =>
       ProDealCloserMessage(
         id: id ?? this.id,
@@ -132,15 +136,16 @@ class ProDealCloserMessage extends Equatable {
         isWizard: isWizard ?? this.isWizard,
         options: options ?? this.options,
         status: status ?? this.status,
-        requestId: requestId ?? this.requestId,
         revision: revision ?? this.revision,
         seq: seq ?? this.seq,
         errorMessage: errorMessage ?? this.errorMessage,
+        pendingOptions: pendingOptions ?? this.pendingOptions,
+        optionsError: optionsError ?? this.optionsError,
       );
 
   @override
-  List<Object?> get props =>
-      [id, text, attachmentPaths, attachments, isWizard, options, status, requestId, revision, seq, errorMessage];
+  List<Object?> get props => [id, text, attachmentPaths, attachments, isWizard, options, status,
+        revision, seq, errorMessage, pendingOptions, optionsError];
 }
 
 /// Generic conversation; [type] segregates which fields are used.
@@ -168,6 +173,7 @@ class Conversation extends Equatable {
     this.thumbnailStoragePath,
     this.messageCount = 0,
     this.isTyping = false,
+    this.errorMessage,
   });
 
   final String id;
@@ -206,6 +212,10 @@ class Conversation extends Equatable {
   final int messageCount;
   /// A wizard reply is being generated right now (server `active_turn`).
   final bool isTyping;
+  /// User-safe text of the last generation failure (server `last_error`); cleared on the next
+  /// success. Express reads its outcome from this document, so without it a failed deal is
+  /// indistinguishable from an empty one.
+  final String? errorMessage;
 
   /// Effective reply lines: structured when available, else legacy strings.
   List<DealLine> get effectiveLines => replyLines.isNotEmpty
@@ -247,6 +257,7 @@ class Conversation extends Equatable {
     String? thumbnailStoragePath,
     int? messageCount,
     bool? isTyping,
+    String? errorMessage,
   }) =>
       Conversation(
         id: id ?? this.id,
@@ -269,6 +280,7 @@ class Conversation extends Equatable {
         thumbnailStoragePath: thumbnailStoragePath ?? this.thumbnailStoragePath,
         messageCount: messageCount ?? this.messageCount,
         isTyping: isTyping ?? this.isTyping,
+        errorMessage: errorMessage ?? this.errorMessage,
       );
 
   @override
@@ -293,5 +305,6 @@ class Conversation extends Equatable {
         thumbnailStoragePath,
         messageCount,
         isTyping,
+        errorMessage,
       ];
 }

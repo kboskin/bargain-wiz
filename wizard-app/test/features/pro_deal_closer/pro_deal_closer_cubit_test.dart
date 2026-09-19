@@ -10,17 +10,14 @@ void main() {
   late FakeProDealCloserRepository repo;
   late FakeConversationRepository conversations;
   late ProDealCloserCubit cubit;
-  var nextRequest = 0;
 
   setUp(() {
     repo = FakeProDealCloserRepository();
     conversations = FakeConversationRepository();
-    nextRequest = 0;
     cubit = ProDealCloserCubit(
       repository: repo,
       conversationRepository: conversations,
       logger: testLogger(),
-      requestIdGenerator: () => 'req-${++nextRequest}',
     );
   });
 
@@ -54,7 +51,7 @@ void main() {
         vibe: 'tactical',
       );
       repo.store['c1'] = const [
-        ProDealCloserMessage(id: 'm1', text: 'They ask 180', seq: 1, requestId: 'old-1'),
+        ProDealCloserMessage(id: 'm1', text: 'They ask 180', seq: 1),
         ProDealCloserMessage(
           id: 'm2',
           text: 'Reply',
@@ -86,7 +83,6 @@ void main() {
       final sending = cubit.sendText('  They ask 180  ');
       expect(messages().last.text, 'They ask 180');
       expect(messages().last.isUser, isTrue);
-      expect(messages().last.requestId, 'req-1');
       expect(cubit.state.isTyping, isTrue);
 
       await sending;
@@ -138,6 +134,25 @@ void main() {
       expect(cubit.state.conversationId, isNull);
       expect(messages().last.text, 'hello');
       expect(messages().last.isFailed, isTrue);
+    });
+
+    test('the pending placeholder is the typing bubble, not an empty message', () async {
+      await startFresh();
+      repo.autoReply = false;
+
+      await cubit.sendText('hello');
+      await pumpEventQueue();
+
+      // greeting + the user turn only: the wizard placeholder is still empty.
+      expect(messages().map((m) => m.text), [ProDealCloserCubit.greetingText, 'hello']);
+      expect(messages().every((m) => m.text.isNotEmpty), isTrue);
+      expect(cubit.state.isTyping, isTrue);
+
+      repo.completeReply('c1', text: 'Open at \$140.');
+      await pumpEventQueue();
+
+      expect(messages().last.text, 'Open at \$140.');
+      expect(cubit.state.isTyping, isFalse);
     });
 
     test('a failed wizard reply renders its error text with actions (Redo)', () async {
@@ -200,6 +215,23 @@ void main() {
       expect(messages().last.options, FakeProDealCloserRepository.options);
       expect(messages().last.optionsLoading, isFalse);
       expect(messages().last.showActions, isFalse);
+    });
+
+    test('redo hides the old reply while the wizard works, then replaces it', () async {
+      await startFresh();
+      await cubit.sendText('hello');
+      await pumpEventQueue();
+      final reply = messages().last;
+
+      repo.store['c1'] = [
+        for (final m in repo.store['c1']!)
+          if (m.id == reply.id) m.copyWith(status: MessageStatus.pending) else m,
+      ];
+      repo.emitFor('c1');
+      await pumpEventQueue();
+
+      expect(messages().map((m) => m.text), [ProDealCloserCubit.greetingText, 'hello']);
+      expect(cubit.state.isTyping, isTrue);
     });
 
     test('redo replaces the reply text in place', () async {

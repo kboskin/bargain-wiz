@@ -25,6 +25,8 @@ class FakeExpressRepository implements ExpressDealmakerRepository {
   bool failReply = false;
   final List<String> uploadedPaths = [];
   final List<ReplyRequest> replyRequests = [];
+  /// Conversation id the last reply was asked for: null = "create a new deal", set = redo.
+  String? lastConversationId;
   /// When set, uploads wait for this completer before finishing.
   Completer<void>? uploadGate;
 
@@ -55,6 +57,7 @@ class FakeExpressRepository implements ExpressDealmakerRepository {
     final String? conversationId,
   }) async {
     replyRequests.add(ReplyRequest(ids: uploadedIds, locale: locale, keyword: keyword, vibe: vibe));
+    lastConversationId = conversationId;
     if (failReply) return const Left(ServerFailure('reply failed'));
     // Like the backend: the first reply creates the conversation, later ones keep its id.
     return Right(DealReply(lines: reply.lines, seeing: reply.seeing, conversationId: conversationId ?? 'conv_1'));

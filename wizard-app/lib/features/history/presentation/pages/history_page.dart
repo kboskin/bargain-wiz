@@ -8,7 +8,9 @@ import 'package:go_router/go_router.dart';
 
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
+import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/wiz/fade_up.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_text_field.dart';
@@ -22,6 +24,7 @@ import 'package:appwizard/features/history/presentation/history_copy.dart';
 import 'package:appwizard/features/history/presentation/widgets/history_empty_state.dart';
 import 'package:appwizard/features/history/presentation/widgets/history_row.dart';
 import 'package:appwizard/features/history/presentation/widgets/history_status_sheet.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/pages/pro_deal_closer_page.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 
@@ -51,6 +54,16 @@ class _HistoryViewState extends State<HistoryView> {
 
   /// Cap the stagger so long lists do not keep late rows invisible.
   static const int _maxStaggerIndex = 10;
+
+  /// The label the onboarding option configures for a stored marketplace value, localized;
+  /// null when the config no longer offers it (the row then shows the raw value).
+  String? _marketplaceLabel(BuildContext context, String? value) {
+    final option = di
+        .sl<UserProfileService>()
+        .fieldFor(ProfileFields.marketplaceKey)
+        ?.optionFor(value);
+    return option == null ? null : TemplateText.textOf(context, option.label);
+  }
 
   @override
   void dispose() {
@@ -176,6 +189,7 @@ class _HistoryViewState extends State<HistoryView> {
             delay: WizMotion.historyStagger * math.min(index, _maxStaggerIndex),
             child: HistoryRow(
               conversation: c,
+              marketplaceLabel: _marketplaceLabel(context, c.marketplace),
               onTap: () => _open(c),
               onLongPress: () => _editStatus(c),
               onDismissed: () => _delete(c),

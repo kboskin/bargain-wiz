@@ -10,7 +10,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show appFlavor;
 
 import '../config/app_config.dart';
-import 'package:appwizard/core/services/firebase_options.dart';
 
 /// Firebase service for initializing and managing Firebase services
 class FirebaseService {
@@ -38,10 +37,12 @@ class FirebaseService {
     try {
       debugPrint('[INFO] Initializing Firebase...');
 
-      // Initialize Firebase Core
-      await Firebase.initializeApp(
-        options: _getFirebaseOptions(),
-      );
+      // Initialize Firebase Core from the platform config files that ship with the
+      // build — android/app/google-services.json (compiled into resources by the
+      // com.google.gms.google-services plugin) and ios/Runner/GoogleService-Info.plist.
+      // Passing no options keeps those files the single source of truth; a Dart copy of
+      // the same keys only goes stale.
+      await Firebase.initializeApp();
       debugPrint('[INFO] Firebase Core initialized');
 
       if (AppConfig.isLocal) await _useEmulators();
@@ -132,6 +133,7 @@ class FirebaseService {
     await FirebaseAuth.instance.useAuthEmulator(host, AppConfig.emulatorAuthPort);
     FirebaseFirestore.instance.useFirestoreEmulator(host, AppConfig.emulatorFirestorePort);
     await FirebaseStorage.instance.useStorageEmulator(host, AppConfig.emulatorStoragePort);
+    await _warnIfSessionForeignToTheEmulator();
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(false);
     await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(false);
     debugPrint('[INFO] Local flavor: Firebase emulators at $host '
@@ -139,13 +141,32 @@ class FirebaseService {
         'storage ${AppConfig.emulatorStoragePort}, functions ${AppConfig.emulatorFunctionsPort})');
   }
 
-  /// Get Firebase options based on flavor
-  static FirebaseOptions _getFirebaseOptions() {
-    // Currently using dev configuration
-    // TODO: When prod Firebase project is available, add flavor-specific options
-    // For now, both dev and prod use the dev Firebase project
-    // In production, you can check AppConfig.isDev and return different options
-    return DefaultFirebaseOptions.currentPlatform;
+  /// Local flavor only: say so, loudly, when the session on disk is one the Auth emulator
+  /// has never issued — the app cannot recover from it on its own.
+  ///
+  /// Firebase Auth persistence outlives both a flavor switch (`dev` and `local` share the
+  /// applicationId `com.bargain.wiz.dev`, so they share one session store) and an emulator
+  /// started without `--import`. The restored user still looks valid to
+  /// `AuthService.ensureSignedIn`, which short-circuits on a non-null `currentUser` and so
+  /// never mints a replacement, while every token refresh fails with `internal-error`. Calls
+  /// then go out with no `Authorization` header, and every endpoint answers
+  /// `UNAUTHENTICATED`.
+  ///
+  /// Recovering by signing out is deliberately *not* done here: it would mint a new uid on
+  /// every emulator wipe and strand the data written under the old one. Clearing the app
+  /// data is a decision for the person at the keyboard.
+  static Future<void> _warnIfSessionForeignToTheEmulator() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      await user.getIdToken(true);
+    } on Object catch (e) {
+      debugPrint('[ERROR] Local flavor: the Auth emulator does not know the session on this '
+          'device (uid ${user.uid}), so no request can carry an ID token: $e\n'
+          '        Start the emulators with "--import=.emulator-data --export-on-exit" so they '
+          'keep their users, and clear this install once:\n'
+          '          adb shell pm clear com.bargain.wiz.dev   # iOS simulator: uninstall the app');
+    }
   }
 }
 

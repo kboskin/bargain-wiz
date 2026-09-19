@@ -9,6 +9,17 @@ Function, not read from Remote Config by the app and not part of the subscriptio
 > refresh (`LinesThatLandRefreshRequested`). Content on screen is never replaced by a spinner;
 > a failed refresh keeps it and shows a toast. Repository: `cached()` + `refresh()`.
 
+> **2026-09-18 — the content is generated, not authored.** A scheduled function,
+> `refresh_lines`, asks Gemini for the categories every `LINES_REFRESH_INTERVAL_HOURS` using
+> structured output and the same generator as the chat, then stores them in Firestore at
+> `content/lines_that_land`. `GET /lines_that_land` serves that document, falling back to the
+> bundled categories until the first generation lands or if one fails, so the tab always has
+> content. The Remote Config key `lines_that_land_categories` is no longer read by anything;
+> the model writes the lines now. `source` in the response is `generated` or `fallback`.
+> The interval is used three times: it is the schedule (baked in at deploy time), the
+> `Cache-Control` max-age and the `refresh_interval_hours` the app uses for its own cache and
+> the "new lines every day" caption.
+
 ## Function
 
 `lines_that_land` — plain HTTPS Firebase Cloud Function (2nd gen, Python 3.12) in
@@ -39,46 +50,40 @@ Response:
   "locales": ["en", "es"],
   "updated_at": "2026-09-12T10:00:00Z",
   "refresh_interval_hours": 24,
-  "source": "remote_config"
+  "source": "generated"
 }
 ```
 
 - **Texts are multilocale.** Every category `name` and every tip is a `{"en": …, "es": …}`
   map, the same shape as all other remote-config copy in the app. The app resolves them per
   device locale with `TemplateText.textOf` (falls back to English, then to any language
-  present), so one cached payload covers a language switch without a refetch.
-- `locales` — languages present anywhere in the content.
+  present), so one cached payload covers a language switch without a refetch. Every generated
+  text carries every language the function asks for: the languages are the `LINES_LOCALES`
+  param (`en,es` today) and they are the required properties of each text in the response
+  schema Gemini is held to. The bundled fallback content is written in English and Spanish.
+- `locales` — the languages the payload actually carries, which is what the app should key
+  off rather than assuming `en`/`es`.
 - No query parameters: every locale is always returned and the app picks the language.
-- `updated_at` — when the content last changed (the Remote Config template's update time).
+- `updated_at` — when the content was generated (`generated_at` on the stored document).
 - `refresh_interval_hours` — **how often the content is refreshed.** One number, owned by
   the function (`LINES_REFRESH_INTERVAL_HOURS` in `functions/.env`, default 24). It drives
-  the function's in-process cache TTL, its `Cache-Control: max-age`, the app's on-device
+  the regeneration schedule, the response's `Cache-Control: max-age`, the app's on-device
   cache TTL, and the caption under the Lines tab title ("Updated today · new lines every day").
-- `source` — `remote_config` normally; `fallback` when the function could not reach Remote
-  Config and served its built-in defaults (retried after 5 minutes).
+- `source` — `generated` normally; `fallback` while no generation has landed yet, or when
+  the stored document cannot be read. The app shows the content either way.
 
-The function reads the `lines_that_land_categories` parameter from the **server** Remote
-Config template of its own project with the Firebase Admin SDK (runtime service account,
-needs the Firebase Remote Config Viewer role). Content is still edited in the Firebase
-console; the app never reads that key. Deploy and local run: `wizard-backend/functions/README.md`.
-
-### Authoring the Remote Config value
-
-In the Firebase console open Remote Config, switch the **Client/Server** selector at the
-top of the page to **Server**, and define `lines_that_land_categories` there as a JSON
-string (the old client-template copy is unused and can be deleted). `name` and each tip
-may be a plain string (treated as English) or a language map; mixing is fine. Missing
-Spanish falls back to English in the app, so partial translations are safe.
-
-```json
-{"categories": [
-  {"id": "opening", "name": {"en": "Opening lines", "es": "Frases de apertura"},
-   "tips": [
-     {"en": "Is there flexibility on the price?", "es": "¿Hay flexibilidad en el precio?"},
-     "What's the best you can do?"
-   ]}
-]}
-```
+The content comes from Gemini, not from a human: `refresh_lines` regenerates it on a schedule
+and the endpoint serves the stored document. There is nothing to author — no Remote Config
+parameter is read any more (`lines_that_land_categories` is dead), and the lines cannot be
+edited in the console. What is produced is configuration in `functions/.env`:
+`LINES_CATEGORY_IDS`, `LINES_PER_CATEGORY`, `LINES_LOCALES`, and the two prompts themselves
+(`LINES_SYSTEM_PROMPT`, `LINES_TASK_PROMPT`) — a prompt change is a redeploy, not a code
+change. The models behind them are in
+`wizard-backend/functions/features/lines_that_land/domain/`.
+That pydantic `GeneratedLines` model is the response schema Gemini is constrained to, so the
+payload above can only ever carry the configured ids and a full `{"en", "es"}` pair for every
+text. Deploy and local run:
+`wizard-backend/functions/README.md`.
 
 ## App behaviour
 

@@ -326,6 +326,8 @@ class AnswerStructure extends ValidatableEntity {
 
   factory AnswerStructure.fromJson(Map<String, dynamic> json) =>
       _$AnswerStructureFromJson(json);
+  /// The key the answer is stored under, and the field it is sent to the backend as
+  /// (`vibe`, `push`, …) — see PROFILE_SYNC.md.
   @JsonKey(name: 'answer_key_name')
   final String answerKeyName;
 
@@ -660,6 +662,7 @@ class SelectGroup extends ValidatableEntity {
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic label; // MultilocaleText
 
+  /// The key this group's answer is stored under, and the field it is sent as.
   @JsonKey(name: 'answer_key_name')
   final String answerKeyName;
 
@@ -683,7 +686,7 @@ class SelectGroup extends ValidatableEntity {
 }
 
 /// Model for select_group onboarding screens: several chip groups on one page,
-/// each writing its own answer key (e.g. favorite_marketplace + deals_per_month).
+/// each writing its own answer key (e.g. the marketplace + deals-per-month pair).
 /// Answer: `Map<String, dynamic>` of `{answer_key_name: value}`.
 @JsonSerializable(
   explicitToJson: true,
@@ -1514,7 +1517,7 @@ class PushStopOption {
 }
 
 /// Model for slider_lottie-type onboarding screens.
-/// User picks one of N stops (risk_tolerance 20/40/60/80/100) that fills a Lottie tube.
+/// User picks one of N stops (the push levels 20/40/60/80/100) that fills a Lottie tube.
 @JsonSerializable(
   explicitToJson: true,
   includeIfNull: false,

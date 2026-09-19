@@ -54,9 +54,9 @@ void main() {
     expect(m.reassuranceByCount.length, 3);
     expect(m.reassuranceFor(1)!.toJson()['en'], startsWith('One leak'));
     expect(m.reassuranceFor(7)!.toJson()['en'], startsWith("You've been the easiest"));
-    expect(m.answerStructure!.answerKeyName, 'main_hurdle');
+    expect(m.answerStructure!.answerKeyName, 'hurdles');
     expect(m.answerStructure!.multi, isTrue);
-    expect(m.answerKeys, ['main_hurdle']);
+    expect(m.answerKeys, ['hurdles']);
     expect((m.titleHighlights as Map)['slipped away'], '#C47A00');
     expect(m.effectiveHighlightColor, '#C47A00');
   });
@@ -89,10 +89,10 @@ void main() {
     }
   });
 
-  test('select_group: two groups writing favorite_marketplace and deals_per_month', () {
+  test('select_group: two groups writing one answer each', () {
     final m = screens[3] as SelectGroupScreenModel;
     expect(m.groups.length, 2);
-    expect(m.answerKeys, ['favorite_marketplace', 'deals_per_month']);
+    expect(m.answerKeys, ['marketplace', 'deals_per_month']);
     expect(m.groups[0].options.map((o) => o.storedValue), ['ebay', 'amazon', 'facebook', 'olx', 'craigslist', 'other']);
     expect(m.groups[1].options.map((o) => o.storedValue), ['0_2', '3_5', '6_plus']);
     expect(m.answerStructure, isNull);
@@ -117,7 +117,7 @@ void main() {
     expect(m.summaryChipsFor('en'), [
       '{vibe} wizard',
       '{push_emoji} {push}',
-      '{platform}',
+      '{marketplace}',
       '{leak_count} money leaks → plugged',
     ]);
     expect(m.summaryChipsFor('es').first, 'Mago {vibe}');
@@ -177,7 +177,7 @@ void main() {
     expect(multi['options'], isA<List>());
     final group = screens[3].toJson();
     expect((group['groups'] as List).length, 2);
-    expect(((group['groups'] as List).first as Map)['answer_key_name'], 'favorite_marketplace');
+    expect(((group['groups'] as List).first as Map)['answer_key_name'], 'marketplace');
     final upload = screens[9].toJson();
     expect(upload['show_top_bar'], isFalse);
     expect(upload['show_next_button'], isFalse);

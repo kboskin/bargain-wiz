@@ -31,8 +31,9 @@ is present but invalid is rejected.
 ```
 → `{"seeing": "IKEA Kallax · $180 · slight scuff", "lines": [{"intent": "opener|counter|close", "text": "…", "why": "…"}], "model": "gemini-2.5-flash"}`
 
-Limits: ≤ 6 images, ≤ 1.5 MB each, ≤ 6 MB together (also across chat turns), JPEG/PNG/WebP;
-`text` is truncated at 8000 chars; `images` or `text` required.
+Limits: ≤ 10 images, ≤ 4 MB each, ≤ 16 MB together (also across chat turns), JPEG/PNG/WebP;
+the byte caps are a backstop — the app compresses to a few hundred KB per shot before upload;
+`text` is kept whole, whatever its length; `images` or `text` required.
 
 ### `pro_deal_closer` — chat coaching
 
@@ -46,15 +47,21 @@ Limits: ≤ 6 images, ≤ 1.5 MB each, ≤ 6 MB together (also across chat turns
 }
 ```
 → reply mode `{"reply": "…", "model": "…"}`; options mode `{"lines": [ … ], "model": "…"}`.
-The newest 40 messages are used; screenshots are kept newest-first within the 6-image budget.
+`vibe` and `push` are required: the buyer's tone and how hard to push are the app's to decide,
+never a server default. The newest `MAX_MESSAGES` turns are used (200, the same as the cap on a
+conversation, so the model normally sees the whole chat); screenshots are kept newest-first
+within the 6-image budget.
 
 ### Prompting
 
-`negotiation.py` builds the system prompt from the buyer profile: tone from `vibe`
+`features/negotiation/domain/prompts.py` builds the system prompt from the buyer profile: tone from `vibe`
 (the four onboarding presets), anchor aggressiveness from `push` (0–100, five bands),
 marketplace etiquette, typical deal size, deal frequency (`deals_per_month`), the buyer's
-known weak spots (`hurdles`, the onboarding `main_hurdle` ids, turned into coaching hints),
-and the output language from `locale`. The same fields live in the Firestore profile
+known weak spots (`hurdles`, the money-leak ids, turned into coaching hints),
+and the output language from `locale`: the tag the app sends is handed to the model as the
+language to write in, so any language the model knows works and there is no list on the server
+to extend. It must look like a BCP-47 tag (`en`, `pt-BR`, `zh-Hant-TW`) — that value goes into
+the prompt, so anything else is answered in English. The same fields live in the Firestore profile
 (`PROFILE_SYNC.md`); the functions may read them from there in a later step. Lines are
 written as the buyer speaking to the seller, one message each, no placeholders, no invented
 facts. Output is constrained with a JSON response schema and normalised (missing intents are
@@ -76,10 +83,12 @@ needs **Vertex AI User** (`roles/aiplatform.user`). Memory 512 MB, timeout 60 s.
 - `core/network/cloud_functions_client.dart` — `CloudFunctionsApi.get` / `.post` against the
   remotely configured `api_url`; attaches the Firebase ID token when signed in;
   error bodies → `CloudFunctionException`.
-- `core/utils/screenshot_encoder.dart` — applies EXIF orientation and downscales to ≤ 1280 px
-  JPEG (q80) off the UI thread; ~150–300 KB per image, so a 6-shot request stays well under
-  the limits. The gallery picker asks the OS for JPEG (`maxWidth`/`imageQuality`), since iOS
-  otherwise hands over HEIC which the pure-Dart decoder cannot read.
+- `core/utils/screenshot_encoder.dart` — the upload pipeline: native JPEG compression
+  (flutter_image_compress) to a 720 px shorter side at q80, EXIF rotation applied then
+  stripped, re-run with less quality and then a smaller side until the image is under
+  `AttachmentLimits.maxImageBytes`. ~150–400 KB per screenshot, so staying inside the
+  function's caps is the client's job and they never surface as an error. The gallery picker
+  still asks the OS for JPEG (`maxWidth`/`imageQuality`).
 - `features/shared/data/models/ai/ai_api_models.dart` — json_serializable request/response
   models for both functions.
 - `features/express_dealmaker/data/datasources/cloud_express_dealmaker_remote_datasource.dart`
@@ -90,8 +99,11 @@ needs **Vertex AI User** (`roles/aiplatform.user`). Memory 512 MB, timeout 60 s.
 - `--dart-define=MOCK_AI=true` keeps the canned mock data sources for UI work without a
   deployed backend (`AppConfig.useMockAi`).
 
-Profile values come from `UserProfileService` (onboarding answers): vibe, push, marketplace,
-deal size; the caller's explicit vibe (tone chip) wins.
+Profile values come from `UserProfileService`, which copies the answers the onboarding screens
+collect (`vibe`, `push`, `marketplace`, `deal_size`, `deals_per_month`, `hurdles`) straight out
+of local storage under the keys remote config gave them — the app has no mapping of its own,
+see `PROFILE_SYNC.md`. An unanswered screen contributes its configured default. The caller's
+explicit vibe (tone chip) overrides the stored one for that request; `locale` is the device's.
 
 ## Subscriptions without a backend
 

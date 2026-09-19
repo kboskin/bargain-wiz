@@ -8,12 +8,14 @@ import pytest
 from flask import Flask, request
 from PIL import Image as PilImage
 
-import conversation_store as cs
-import conversations as cv
 import main
-from auth import AuthInfo, FirebaseAuthenticator, StaticAuthenticator
-from errors import Unauthorized, UpstreamError
-from negotiation import EXPRESS_SCHEMA, OPTIONS_SCHEMA, REPLY_SCHEMA
+from core.auth.firebase import AuthInfo, FirebaseAuthenticator, StaticAuthenticator
+from core.errors import Unauthorized, UpstreamError
+from features.conversations.data.dispatchers import InlineDispatcher
+from features.conversations.data.store import InMemoryConversationStore
+from features.conversations.domain.models import GenerationTask
+from features.conversations.domain.service import ConversationService
+from features.negotiation.domain.lines import EXPRESS_SCHEMA, OPTIONS_SCHEMA, REPLY_SCHEMA
 
 NOW = datetime(2026, 9, 17, 12, tzinfo=UTC)
 LINES = [
@@ -54,7 +56,7 @@ class FakeGenerator:
 
 @pytest.fixture
 def store():
-    return cs.InMemoryConversationStore(clock=lambda: NOW)
+    return InMemoryConversationStore(clock=lambda: NOW)
 
 
 @pytest.fixture
@@ -65,28 +67,41 @@ def gen():
 U1 = AuthInfo(uid="u1", provider="anonymous")
 
 
+def _service(store, gen, dispatcher=None, monkeypatch=None):
+    """A service the `conversations` function will use. The default dispatcher runs the
+    worker inline, so a test can assert the finished state in one call."""
+    holder: dict = {}
+    svc = ConversationService(store, gen, dispatcher or InlineDispatcher(lambda: holder["svc"]))
+    holder["svc"] = svc
+    if monkeypatch is not None:
+        monkeypatch.setattr(main, "conversation_service", lambda: svc)
+        monkeypatch.setattr(main, "FirebaseAuthenticator", lambda: StaticAuthenticator(U1))
+    return svc
+
+
 @pytest.fixture
 def service(monkeypatch, store, gen):
-    """The function builds its service from these fakes (store, Gemini, identity)."""
-    monkeypatch.setattr(main, "FirestoreConversationStore", lambda: store)
-    monkeypatch.setattr(main, "VertexGenerator", lambda: gen)
-    monkeypatch.setattr(main, "FirebaseAuthenticator", lambda: StaticAuthenticator(U1))
-    monkeypatch.setattr(main, "ConversationService", lambda s, g: cv.ConversationService(s, g, clock=lambda: NOW))
-    return cv.ConversationService(store, gen, clock=lambda: NOW)
+    return _service(store, gen, monkeypatch=monkeypatch)
 
 
 def _message(store, cid, mid):
     return next(m for m in store.list_messages("u1", cid) if m["id"] == mid)
 
 
-def _call(method, path, body=None):
+# Every write carries the buyer's profile, exactly as the app sends it.
+PROFILE = {"vibe": "friendly", "push": 60}
+
+
+def _call(method, path, body=None, profile=True):
+    if profile and isinstance(body, dict):
+        body = {**PROFILE, **body}
     with Flask(__name__).test_request_context(path, method=method, json=body):
         res = main.conversations(request)
     return res.status_code, json.loads(res.get_data(as_text=True))
 
 
-def _start_pro(text="They ask $180 for the Kallax", images=None, request_id="req-00000001", **profile):
-    return _call("POST", "/conversations", {"type": "pro", "request_id": request_id, "text": text, "images": images or [],
+def _start_pro(text="They ask $180 for the Kallax", images=None, **profile):
+    return _call("POST", "/conversations", {"type": "pro", "text": text, "images": images or [],
                                            "vibe": "no_nonsense", "locale": "en", **profile})
 
 
@@ -106,12 +121,12 @@ def test_first_turn_stores_user_and_wizard_messages_and_the_screenshot(service, 
     assert conv["title"] == "They ask $180 for the Kallax"
     assert conv["preview"] == "Open at $140, pickup today."
     assert conv["thumbnail"]["path"].startswith(f"users/u1/conversations/{cid}/")
-    assert conv["expires_at"] > NOW and conv["created_at"] == NOW
+    assert conv["created_at"] == NOW and conv["last_message_at"] == NOW
 
     user, wizard = store.list_messages("u1", cid)
     assert (user["id"], wizard["id"]) == (mid, rid)
     assert user["role"] == "user" and user["seq"] == 1 and user["status"] == "done"
-    assert user["request_id"] == "req-00000001" and user["reply_id"] == rid
+    assert user["reply_id"] == rid
     ref = user["images"][0]
     assert ref["mime_type"] == "image/jpeg" and ref["width"] == 40 and ref["height"] == 30
     stored = store.get_image(ref["path"])
@@ -132,7 +147,7 @@ def test_follow_up_sends_only_the_new_message_and_uses_stored_history(service, s
     cid = first["conversation_id"]
 
     status, body = _call("POST", f"/conversations/{cid}/messages",
-                         {"request_id": "req-00000002", "text": "Seller says $170 is final", "vibe": "tactical"})
+                         {"text": "Seller says $170 is final", "vibe": "tactical"})
 
     assert status == 200 and body["conversation_id"] == cid
     messages = store.list_messages("u1", cid)
@@ -145,24 +160,26 @@ def test_follow_up_sends_only_the_new_message_and_uses_stored_history(service, s
     assert store.get_conversation("u1", cid)["vibe"] == "tactical"
 
 
-def test_replaying_the_same_request_id_is_idempotent(service, store, gen):
+def test_a_second_options_request_while_one_is_pending_does_not_queue_another(service, store, gen):
+    """No client key dedupes writes any more: `pending_options` on the message is the guard,
+    and it survives an app restart in a way a per-process id never did."""
     gen.queue({"reply": "Open at $140."})
     _, first = _start_pro()
-    cid = first["conversation_id"]
+    cid, rid = first["conversation_id"], first["reply_id"]
+    store.set_message("u1", cid, rid, {"pending_options": True}, merge=True)
 
-    status, again = _call("POST", f"/conversations/{cid}/messages",
-                          {"request_id": "req-00000001", "text": "They ask $180 for the Kallax"})
+    status, body = _call("POST", f"/conversations/{cid}/options", {})
 
-    assert status == 200 and again == first
-    assert len(gen.calls) == 1 and store.get_conversation("u1", cid)["message_count"] == 2
+    assert status == 200 and body["message_id"] == rid
+    assert len(gen.calls) == 1  # still just the reply
 
 
 def test_sending_while_the_wizard_is_typing_is_rejected(service, store, gen):
     _, first = _start_pro()
     cid = first["conversation_id"]
-    store.set_conversation("u1", cid, {"active_turn": {"message_id": "x", "request_id": "y"}}, merge=True)
+    store.set_conversation("u1", cid, {"active_turn": {"message_id": "x"}}, merge=True)
 
-    status, body = _call("POST", f"/conversations/{cid}/messages", {"request_id": "req-00000009", "text": "hi"})
+    status, body = _call("POST", f"/conversations/{cid}/messages", {"text": "hi"})
 
     assert status == 409 and body["error"]["status"] == "TURN_IN_PROGRESS"
 
@@ -170,15 +187,16 @@ def test_sending_while_the_wizard_is_typing_is_rejected(service, store, gen):
 def test_model_failure_marks_the_reply_failed_and_frees_the_conversation(service, store, gen):
     gen.queue(UpstreamError("boom"), {"reply": "Recovered."})
     status, body = _start_pro()
-    assert status == 502 and body["error"]["status"] == "UPSTREAM_ERROR"
+    # The turn was accepted; the failure reaches the app through the listener, not the response.
+    assert status == 200
 
-    cid = next(iter(store.users["u1"]))
+    cid = body["conversation_id"]
     conv = store.get_conversation("u1", cid)
     assert "active_turn" not in conv
     wizard = store.list_messages("u1", cid)[1]
     assert wizard["status"] == "failed" and wizard["error"]["code"] == "UPSTREAM_ERROR"
 
-    status, _ = _call("POST", f"/conversations/{cid}/messages", {"request_id": "req-00000002", "text": "retry"})
+    status, _ = _call("POST", f"/conversations/{cid}/messages", {"text": "retry"})
     assert status == 200
     assert store.list_messages("u1", cid)[-1]["text"] == "Recovered."
 
@@ -188,25 +206,22 @@ def test_options_attach_lines_to_the_wizard_reply(service, store, gen):
     _, first = _start_pro()
     cid, rid = first["conversation_id"], first["reply_id"]
 
-    status, body = _call("POST", f"/conversations/{cid}/options", {"request_id": "req-00000003", "vibe": "friendly"})
+    status, body = _call("POST", f"/conversations/{cid}/options", {"vibe": "friendly"})
 
     assert status == 200 and body["message_id"] == rid
-    assert [line["intent"] for line in body["lines"]] == ["opener", "counter", "close"]
     wizard = _message(store, cid, rid)
-    assert wizard["lines"] == body["lines"] and wizard["options_request_id"] == "req-00000003"
+    assert [line["intent"] for line in wizard["lines"]] == ["opener", "counter", "close"]
+    assert "pending_options" not in wizard  # the spinner is cleared when the lines land
     assert gen.calls[1]["schema"] is OPTIONS_SCHEMA
-
-    status, again = _call("POST", f"/conversations/{cid}/options", {"request_id": "req-00000003"})
-    assert status == 200 and again["lines"] == body["lines"] and len(gen.calls) == 2
 
 
 def test_redo_regenerates_in_place_and_clears_options(service, store, gen):
     gen.queue({"reply": "Open at $140."}, {"lines": LINES}, {"reply": "Try $135 with pickup tonight."})
     _, first = _start_pro()
     cid, rid = first["conversation_id"], first["reply_id"]
-    _call("POST", f"/conversations/{cid}/options", {"request_id": "req-00000003"})
+    _call("POST", f"/conversations/{cid}/options", {})
 
-    status, body = _call("POST", f"/conversations/{cid}/redo", {"request_id": "req-00000004", "vibe": "quiet_closer"})
+    status, body = _call("POST", f"/conversations/{cid}/redo", {"vibe": "quiet_closer"})
 
     assert status == 200 and body["message_id"] == rid
     wizard = _message(store, cid, rid)
@@ -225,37 +240,39 @@ def test_express_conversation_returns_and_stores_seeing_and_lines(service, store
     gen.queue({"seeing": "IKEA Kallax · $180 · slight scuff", "lines": LINES})
 
     status, body = _call("POST", "/conversations", {
-        "type": "express", "request_id": "req-00000010", "keyword": "scuff", "vibe": "tactical", "locale": "es",
+        "type": "express", "keyword": "scuff", "vibe": "tactical", "locale": "es",
         "images": [IMG, IMG],
     })
 
     assert status == 200
-    assert body["express"]["seeing"] == "IKEA Kallax · $180 · slight scuff"
-    assert [line["intent"] for line in body["express"]["lines"]] == ["opener", "counter", "close"]
+    assert set(body) == {"conversation_id", "message_id", "reply_id"}  # the result arrives via the listener
     cid = body["conversation_id"]
     conv = store.get_conversation("u1", cid)
+    assert conv["express"]["seeing"] == "IKEA Kallax · $180 · slight scuff"
+    assert [line["intent"] for line in conv["express"]["lines"]] == ["opener", "counter", "close"]
     assert conv["type"] == "express" and conv["keyword"] == "scuff"
     assert conv["title"] == "IKEA Kallax · $180 · slight scuff"
-    assert conv["express"]["lines"] == body["express"]["lines"] and conv["express"]["keyword"] == "scuff"
+    assert conv["express"]["keyword"] == "scuff"
     assert [ref["path"] for ref in conv["express"]["images"]] == [ref["path"] for ref in store.list_messages("u1", cid)[0]["images"]]
     user, wizard = store.list_messages("u1", cid)
     assert len(user["images"]) == 2 and wizard["seeing"] == conv["express"]["seeing"] and wizard["lines"] == LINES
     call = gen.calls[0]
-    assert call["schema"] is EXPRESS_SCHEMA and "Spanish" in call["system"]
+    assert call["schema"] is EXPRESS_SCHEMA and "locale tag es" in call["system"]
     assert sum(1 for p in call["parts"] if p["type"] == "image") == 2
     assert "focus on: scuff" in call["parts"][-1]["text"]
 
 
 def test_express_redo_regenerates_with_the_new_tone_and_keyword(service, store, gen):
     gen.queue({"seeing": "Kallax", "lines": LINES}, {"seeing": "Kallax", "lines": LINES[:2]})
-    _, first = _call("POST", "/conversations", {"type": "express", "request_id": "req-00000010", "images": [IMG]})
+    _, first = _call("POST", "/conversations", {"type": "express", "images": [IMG]})
     cid = first["conversation_id"]
 
-    status, body = _call("POST", f"/conversations/{cid}/redo",
-                         {"request_id": "req-00000011", "vibe": "friendly", "keyword": "pickup"})
+    status, _ = _call("POST", f"/conversations/{cid}/redo",
+                      {"vibe": "friendly", "keyword": "pickup"})
 
-    assert status == 200 and len(body["express"]["lines"]) == 2
+    assert status == 200
     conv = store.get_conversation("u1", cid)
+    assert len(conv["express"]["lines"]) == 2
     assert conv["vibe"] == "friendly" and conv["keyword"] == "pickup" and conv["express"]["keyword"] == "pickup"
     assert "Friendly" in gen.calls[1]["system"] and "focus on: pickup" in gen.calls[1]["parts"][-1]["text"]
     assert store.list_messages("u1", cid)[1]["revision"] == 1
@@ -263,8 +280,8 @@ def test_express_redo_regenerates_with_the_new_tone_and_keyword(service, store, 
 
 def test_express_conversations_take_no_follow_up_messages(service, gen):
     gen.queue({"seeing": "Kallax", "lines": LINES})
-    _, first = _call("POST", "/conversations", {"type": "express", "request_id": "req-00000010", "text": "Kallax $180"})
-    status, body = _call("POST", f"/conversations/{first['conversation_id']}/messages", {"request_id": "req-00000012", "text": "hi"})
+    _, first = _call("POST", "/conversations", {"type": "express", "text": "Kallax $180"})
+    status, body = _call("POST", f"/conversations/{first['conversation_id']}/messages", {"text": "hi"})
     assert status == 400 and "redo" in body["error"]["message"]
 
 
@@ -300,7 +317,7 @@ def test_get_and_list_return_the_documents_with_iso_dates(service, gen):
 def test_delete_archives_instead_of_removing(service, store, gen):
     _, first = _start_pro(images=[IMG])
     cid = first["conversation_id"]
-    _start_pro(request_id="req-00000002")
+    _start_pro()
 
     status, body = _call("DELETE", f"/conversations/{cid}")
 
@@ -311,7 +328,7 @@ def test_delete_archives_instead_of_removing(service, store, gen):
     assert [c["id"] for c in _call("GET", "/conversations")[1]["conversations"]] != [cid]
     assert cid not in [c["id"] for c in store.list_conversations("u1")]
     # archived conversations are gone for the app: writes and reads answer 404
-    assert _call("POST", f"/conversations/{cid}/messages", {"request_id": "req-00000003", "text": "hi"})[0] == 404
+    assert _call("POST", f"/conversations/{cid}/messages", {"text": "hi"})[0] == 404
     assert _call("GET", f"/conversations/{cid}")[0] == 404
     assert _call("PATCH", f"/conversations/{cid}", {"status": "won"})[0] == 404
     # archiving twice is a no-op, unknown ids are 404
@@ -329,7 +346,7 @@ def test_other_users_conversations_are_invisible(service, store, gen):
         ("GET", "/conversations/theirs", None),
         ("PATCH", "/conversations/theirs", {"status": "won"}),
         ("DELETE", "/conversations/theirs", None),
-        ("POST", "/conversations/theirs/messages", {"request_id": "req-00000001", "text": "hi"}),
+        ("POST", "/conversations/theirs/messages", {"text": "hi"}),
     ]:
         status, body = _call(method, path, body)
         assert status == 404, (method, path)
@@ -338,14 +355,14 @@ def test_other_users_conversations_are_invisible(service, store, gen):
 
 def test_requires_a_firebase_id_token(monkeypatch, service, store):
     monkeypatch.setattr(main, "FirebaseAuthenticator", lambda: StaticAuthenticator(None))
-    status, body = _call("POST", "/conversations", {"type": "pro", "request_id": "req-00000001"})
+    status, body = _call("POST", "/conversations", {"type": "pro"})
     assert status == 401 and body["error"]["status"] == "UNAUTHENTICATED"
     assert not store.users
 
 
 def test_app_check_is_enforced_when_switched_on(monkeypatch, service):
     monkeypatch.setattr(main, "FirebaseAuthenticator", lambda: StaticAuthenticator(U1, app_check_ok=False))
-    status, body = _call("POST", "/conversations", {"type": "pro", "request_id": "req-00000001"})
+    status, body = _call("POST", "/conversations", {"type": "pro"})
     assert status == 401 and "App Check" in body["error"]["message"]
 
 
@@ -364,14 +381,13 @@ def test_firebase_app_check_requires_the_header_when_enabled(monkeypatch):
 
 def test_bad_bodies_are_400(service, gen):
     cases = [
-        {"type": "pro", "request_id": "short", "text": "hi"},
-        {"type": "express", "request_id": "req-00000001"},
-        {"type": "pro", "request_id": "req-00000001", "text": "", "images": []},
-        {"type": "pro", "request_id": "req-00000001", "images": [{"mime_type": "image/png", "data": "!!"}]},
-        {"type": "pro", "request_id": "req-00000001", "images": [{"mime_type": "image/png", "data": base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()}]},
+        {"type": "express"},
+        {"type": "pro", "text": "", "images": []},
+        {"type": "pro", "images": [{"mime_type": "image/png", "data": "!!"}]},
+        {"type": "pro", "images": [{"mime_type": "image/png", "data": base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()}]},
     ]
     for body in cases:
-        status, response = _call("POST", "/conversations", body)
+        status, response = _call("POST", "/conversations", body, profile=False)
         assert status == 400, body
         assert response["error"]["status"] == "INVALID_ARGUMENT"
     assert not gen.calls
@@ -385,16 +401,81 @@ def test_unknown_routes_and_methods(service):
     assert _call("GET", "/conversations/abc/messages")[0] == 404
 
 
-def test_daily_turn_quota(monkeypatch, service):
-    monkeypatch.setenv("MAX_TURNS_PER_DAY", "2")
-    assert _start_pro(request_id="req-00000001")[0] == 200
-    assert _start_pro(request_id="req-00000002")[0] == 200
-    status, body = _start_pro(request_id="req-00000003")
-    assert status == 429 and body["error"]["status"] == "RESOURCE_EXHAUSTED"
+def test_the_turn_is_queued_and_the_response_does_not_wait_for_the_model(monkeypatch, store, gen):
+    queued: list[GenerationTask] = []
+
+    class Recorder:
+        def dispatch(self, task):
+            queued.append(task)
+
+    svc = _service(store, gen, Recorder(), monkeypatch=monkeypatch)
+    gen.queue({"reply": "Open at $140."})
+
+    status, body = _start_pro()
+
+    assert status == 200 and set(body) == {"conversation_id", "message_id", "reply_id"}
+    assert gen.calls == []  # the HTTP request never touched the model
+    cid = body["conversation_id"]
+    wizard = _message(store, cid, body["reply_id"])
+    assert wizard["status"] == "pending"
+    assert store.get_conversation("u1", cid)["active_turn"]["message_id"] == wizard["id"]
+
+    task = queued[0]
+    assert (task.uid, task.conversation_id, task.message_id) == ("u1", cid, wizard["id"])
+    assert (task.action, task.kind, task.profile.vibe) == ("reply", "pro", "no_nonsense")
+
+    svc.generate(task.model_dump(mode="json"))
+
+    wizard = _message(store, cid, wizard["id"])
+    assert wizard["status"] == "done" and wizard["text"] == "Open at $140."
+    assert "active_turn" not in store.get_conversation("u1", cid)
+
+
+def test_only_the_last_attempt_records_a_failure(monkeypatch, store, gen):
+    queued: list[GenerationTask] = []
+
+    class Recorder:
+        def dispatch(self, task):
+            queued.append(task)
+
+    svc = _service(store, gen, Recorder(), monkeypatch=monkeypatch)
+    gen.queue(UpstreamError("boom"), UpstreamError("boom"), {"reply": "Third time lucky."})
+    _start_pro()
+    payload = queued[0].model_dump(mode="json")
+    cid, mid = queued[0].conversation_id, queued[0].message_id
+
+    with pytest.raises(UpstreamError):
+        svc.generate(payload, attempt=0)  # the queue will retry: nothing is shown to the user
+    assert _message(store, cid, mid)["status"] == "pending"
+    assert store.get_conversation("u1", cid)["active_turn"]
+
+    with pytest.raises(UpstreamError):
+        svc.generate(payload, attempt=2)  # last attempt
+    failed = _message(store, cid, mid)
+    assert failed["status"] == "failed" and failed["error"]["code"] == "UPSTREAM_ERROR"
+    assert "active_turn" not in store.get_conversation("u1", cid)
+
+
+def test_generation_for_a_deleted_conversation_is_dropped(monkeypatch, store, gen):
+    queued: list[GenerationTask] = []
+
+    class Recorder:
+        def dispatch(self, task):
+            queued.append(task)
+
+    svc = _service(store, gen, Recorder(), monkeypatch=monkeypatch)
+    _start_pro()
+    payload = queued[0].model_dump(mode="json")
+    store.users["u1"].clear()
+
+    svc.generate(payload)  # no exception, no retry storm
+
+    assert gen.calls == []
+
 
 def test_the_first_turn_opens_the_conversation(service, store, gen):
     gen.queue({"reply": "Open at $140."})
-    status, body = _call("POST", "/conversations", {"type": "pro", "request_id": "req-00000001", "images": [IMG], "vibe": "friendly"})
+    status, body = _call("POST", "/conversations", {"type": "pro", "images": [IMG], "vibe": "friendly"})
     assert status == 200 and set(body) == {"conversation_id", "message_id", "reply_id"}
     conv = store.get_conversation("u1", body["conversation_id"])
     assert conv["message_count"] == 2 and conv["title"] == "Screenshot deal" and conv["preview"] == "Open at $140."

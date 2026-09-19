@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +16,7 @@ import 'package:appwizard/core/widgets/wiz/fade_up.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
+import 'package:appwizard/features/conversation/domain/conversation_changes.dart';
 import 'package:appwizard/features/conversation/domain/repositories/conversation_repository.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/pages/express_dealmaker_page.dart';
 import 'package:appwizard/features/home/data/models/main_page_config.dart';
@@ -46,6 +49,9 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   late final ConversationRepository _repo = di.sl<ConversationRepository>();
+  /// Fires on every conversation snapshot, so a deal created seconds ago shows up here
+  /// without waiting for the next tab switch.
+  final ConversationChanges _conversationChanges = ConversationChanges.instance;
   late final FeatureGateService _gate = di.sl<FeatureGateService>();
   late final SharedPreferences _prefs = di.sl<SharedPreferences>();
   MainShellController? _shell;
@@ -61,6 +67,7 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _gate.addListener(_refreshTier);
+    _conversationChanges.addListener(_onConversationsChanged);
     _refreshTier();
     _reload();
   }
@@ -79,8 +86,13 @@ class _HomeTabState extends State<HomeTab> {
   @override
   void dispose() {
     _gate.removeListener(_refreshTier);
+    _conversationChanges.removeListener(_onConversationsChanged);
     _shell?.removeListener(_onShellChanged);
     super.dispose();
+  }
+
+  void _onConversationsChanged() {
+    if (mounted) unawaited(_reload());
   }
 
   void _onShellChanged() {

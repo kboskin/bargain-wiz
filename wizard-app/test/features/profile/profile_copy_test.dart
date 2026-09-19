@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:appwizard/features/profile/domain/profile_identity.dart';
-import 'package:appwizard/features/profile/domain/profile_options.dart';
 import 'package:appwizard/features/profile/domain/profile_plan_copy.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
@@ -109,75 +108,6 @@ void main() {
       expect(ProfilePlanCopy.cta(SubscriptionTier.free), 'Upgrade');
       expect(ProfilePlanCopy.cta(SubscriptionTier.basic), 'Manage');
       expect(ProfilePlanCopy.cta(SubscriptionTier.premium), 'Manage');
-    });
-  });
-
-  group('ProfileOptions.parse', () {
-    const screens = [
-      {
-        'type': 'select',
-        'answer_structure': {'answer_key_name': 'negotiation_vibe'},
-        'options': [
-          {'label': 'Friendly Collaborator', 'value': 'friendly'},
-        ],
-      },
-      {
-        'type': 'select_group',
-        'groups': [
-          {
-            'answer_key_name': 'favorite_marketplace',
-            'options': [
-              {
-                'label': 'eBay',
-                'value': 'ebay',
-                'icon': {'code': '0xf4f4', 'font': 'brands'},
-              },
-              {
-                'label': {'en': 'Other', 'es': 'Otro'},
-                'value': 'other',
-              },
-            ],
-          },
-          {
-            'answer_key_name': 'deals_per_month',
-            'options': [
-              {'label': '0–2', 'value': '0_2'},
-            ],
-          },
-        ],
-      },
-    ];
-
-    test('reads group options for marketplace and deals per month', () {
-      final markets = ProfileOptions.parse(screens, 'favorite_marketplace')!;
-      expect(markets.map((o) => o.value), ['ebay', 'other']);
-      expect(markets.last.label, {'en': 'Other', 'es': 'Otro'});
-      expect(markets.first.iconRaw, {'code': '0xf4f4', 'font': 'brands'});
-      expect(markets.last.iconRaw, isNull);
-      expect(ProfileOptions.parse(screens, 'deals_per_month')!.single.value, '0_2');
-    });
-
-    test('reads top-level select options', () {
-      expect(ProfileOptions.parse(screens, 'negotiation_vibe')!.single.value, 'friendly');
-    });
-
-    test('returns null for unknown keys or malformed input', () {
-      expect(ProfileOptions.parse(screens, 'missing'), isNull);
-      expect(ProfileOptions.parse('nope', 'favorite_marketplace'), isNull);
-    });
-
-    test('labelFor resolves labels and falls back to the raw value', () {
-      String resolve(dynamic v) => v is Map ? v['en'].toString() : v.toString();
-      expect(
-        ProfileOptions.labelFor(ProfileOptions.marketplaceFallback, 'facebook', resolve, fallback: '—'),
-        'Facebook Marketplace',
-      );
-      expect(
-        ProfileOptions.labelFor(ProfileOptions.marketplaceFallback, 'other', resolve, fallback: '—'),
-        'Other',
-      );
-      expect(ProfileOptions.labelFor(ProfileOptions.marketplaceFallback, null, resolve, fallback: '—'), '—');
-      expect(ProfileOptions.labelFor(ProfileOptions.marketplaceFallback, 'zzz', resolve, fallback: '—'), 'zzz');
     });
   });
 

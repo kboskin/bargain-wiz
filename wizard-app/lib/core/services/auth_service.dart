@@ -7,10 +7,12 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../utils/app_logger.dart';
 
-/// Firebase Auth for an app that never forces sign-in (see CONVERSATIONS.md §2).
+/// Firebase Auth for an app that never forces *account* sign-in (see CONVERSATIONS.md §2).
 ///
-/// Every install is signed in **anonymously** on first use, so there is always a uid for the
-/// backend and for Firestore rules. Signing in with Google / Apple / email *links* that
+/// Every install is signed in **anonymously** before the first screen — `AppBootstrap.run`
+/// awaits it and shows a blocking failure screen when it does not happen — so there is
+/// always a uid for the backend and for Firestore rules, and no request ever leaves
+/// unauthenticated. Signing in with Google / Apple / email *links* that
 /// credential to the anonymous user, keeping the uid and everything stored under it. When the
 /// credential already belongs to another account we switch to that account instead (the
 /// anonymous history stays behind until the server-side merge ships). Signing out signs in
@@ -57,13 +59,20 @@ class AuthService {
   static bool isAccount(User? user) => user != null && !user.isAnonymous;
 
   /// Signs in anonymously when there is no user yet. Cheap to call often; concurrent calls
-  /// share one request. Returns null when Firebase is unreachable (offline first launch):
-  /// callers carry on without a uid and try again on the next call.
-  Future<User?> ensureSignedIn() {
+  /// share one request. Returns null when Firebase is unreachable (offline first launch).
+  ///
+  /// [force] skips [retryCooldown] — for a sign-in the person is waiting on, such as the
+  /// blocking one in `AppBootstrap.run` and the retry behind its failure screen. The
+  /// cooldown exists to stop background callers from spinning, not to make someone who just
+  /// tapped "try again" wait.
+  Future<User?> ensureSignedIn({bool force = false}) {
     final current = _auth.currentUser;
     if (current != null) return Future.value(current);
     final notBefore = _retryNotBefore;
-    if (notBefore != null && DateTime.now().isBefore(notBefore)) return Future.value(null);
+    if (!force && notBefore != null && DateTime.now().isBefore(notBefore)) {
+      return Future.value(null);
+    }
+    if (force) _retryNotBefore = null;
     return _signingIn ??= _signInAnonymously().whenComplete(() => _signingIn = null);
   }
 

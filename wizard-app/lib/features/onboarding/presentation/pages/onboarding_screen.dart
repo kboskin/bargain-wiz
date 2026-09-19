@@ -1,7 +1,6 @@
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
-import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/configurable_gradient_background.dart';
@@ -374,12 +373,11 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
           .uploadUserData(OnboardingBloc.buildEntity(state))
           .then((r) => r.fold((f) => throw Exception(f.message), (_) => null));
     }
-    final catalog = di.sl.isRegistered<UserProfileService>()
-        ? di.sl<UserProfileService>().catalog
-        : null;
+    final remoteConfig =
+        di.sl.isRegistered<RemoteConfigService>() ? di.sl<RemoteConfigService>() : null;
     final snapshot = OnboardingProfileSnapshot(
       answers: state.answersByKey,
-      catalog: catalog ?? OnboardingProfileSnapshot(answers: const {}).catalog,
+      fields: remoteConfig?.getProfileFields() ?? const [],
       languageCode: Localizations.localeOf(context).languageCode,
     );
     return DataUploadScreenWidget(

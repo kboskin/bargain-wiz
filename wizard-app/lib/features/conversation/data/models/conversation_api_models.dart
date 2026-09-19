@@ -6,32 +6,23 @@ part 'conversation_api_models.g.dart';
 /// Request/response models of the `conversations` Cloud Function (CONVERSATIONS.md).
 /// Requests carry the buyer profile flat at the top level, like the AI functions do.
 
-/// Buyer profile fields sent with every write (they drive the prompt).
-@JsonSerializable(includeIfNull: false)
+/// Buyer profile sent with every write (it drives the prompt): the `{field: value}` pairs the
+/// onboarding screens declare a `key` for, plus the device locale. The app copies the fields
+/// remote config declares; the backend owns their meaning and ignores what its contract does
+/// not define (AI_INTEGRATION.md).
 class ConversationProfile {
-  const ConversationProfile({
-    required this.vibe,
-    required this.push,
-    required this.locale,
-    this.marketplace,
-    this.dealSize,
-    this.dealsPerMonth,
-    this.hurdles,
-  });
+  const ConversationProfile(this.fields, {required this.locale});
 
-  factory ConversationProfile.fromJson(Map<String, dynamic> json) => _$ConversationProfileFromJson(json);
+  /// Profile fields as remote config maps them (`vibe`, `push`, `marketplace`, …).
+  final Map<String, dynamic> fields;
 
-  final String vibe;
-  final int push;
+  /// Language of the lines to generate; a device fact, not an answer.
   final String locale;
-  final String? marketplace;
-  @JsonKey(name: 'deal_size')
-  final num? dealSize;
-  @JsonKey(name: 'deals_per_month')
-  final String? dealsPerMonth;
-  final List<String>? hurdles;
 
-  Map<String, dynamic> toJson() => _$ConversationProfileToJson(this);
+  /// One field of the profile, however remote config named the answer behind it.
+  dynamic operator [](String field) => fields[field];
+
+  Map<String, dynamic> toJson() => {...fields, 'locale': locale};
 }
 
 /// `POST /conversations`: the first turn (text and/or screenshots) opens the conversation.
@@ -39,7 +30,6 @@ class ConversationProfile {
 class CreateConversationRequest {
   const CreateConversationRequest({
     required this.type,
-    required this.requestId,
     required this.profile,
     this.text,
     this.images,
@@ -48,8 +38,6 @@ class CreateConversationRequest {
 
   /// "pro" | "express"
   final String type;
-  @JsonKey(name: 'request_id')
-  final String requestId;
   final String? text;
   final List<AiImagePayload>? images;
   /// Express only: what the buyer wants to focus on.
@@ -63,10 +51,8 @@ class CreateConversationRequest {
 /// `POST /conversations/{cid}/messages`.
 @JsonSerializable(createFactory: false, explicitToJson: true, includeIfNull: false)
 class SendMessageRequest {
-  const SendMessageRequest({required this.requestId, required this.profile, this.text, this.images});
+  const SendMessageRequest({required this.profile, this.text, this.images});
 
-  @JsonKey(name: 'request_id')
-  final String requestId;
   final String? text;
   final List<AiImagePayload>? images;
   @JsonKey(includeToJson: false)
@@ -78,10 +64,8 @@ class SendMessageRequest {
 /// `POST /conversations/{cid}/options` and `POST /conversations/{cid}/redo`.
 @JsonSerializable(createFactory: false, includeIfNull: false)
 class ConversationActionRequest {
-  const ConversationActionRequest({required this.requestId, required this.profile, this.messageId, this.keyword});
+  const ConversationActionRequest({required this.profile, this.messageId, this.keyword});
 
-  @JsonKey(name: 'request_id')
-  final String requestId;
   /// Target wizard message; the latest one when omitted.
   @JsonKey(name: 'message_id')
   final String? messageId;
@@ -118,29 +102,11 @@ class ConversationPatchRequest {
   Map<String, dynamic> toJson() => _$ConversationPatchRequestToJson(this);
 }
 
-/// Express result echoed inline so the results screen can render before the listener catches up.
-@JsonSerializable(createToJson: false)
-class ExpressResultPayload {
-  const ExpressResultPayload({required this.seeing, required this.lines});
-
-  factory ExpressResultPayload.fromJson(Map<String, dynamic> json) => _$ExpressResultPayloadFromJson(json);
-
-  @JsonKey(defaultValue: '')
-  final String seeing;
-  @JsonKey(defaultValue: <AiDealLine>[])
-  final List<AiDealLine> lines;
-}
-
-/// Response of every write: ids to subscribe with, plus the express result or option lines.
+/// Response of every write: just the ids to subscribe with. The backend queues the model
+/// call, so results (reply text, express lines, option lines) arrive through the listener.
 @JsonSerializable(createToJson: false)
 class ConversationWriteResponse {
-  const ConversationWriteResponse({
-    required this.conversationId,
-    this.messageId,
-    this.replyId,
-    this.express,
-    this.lines,
-  });
+  const ConversationWriteResponse({required this.conversationId, this.messageId, this.replyId});
 
   factory ConversationWriteResponse.fromJson(Map<String, dynamic> json) => _$ConversationWriteResponseFromJson(json);
 
@@ -148,8 +114,8 @@ class ConversationWriteResponse {
   final String conversationId;
   @JsonKey(name: 'message_id')
   final String? messageId;
+
+  /// The wizard message that will hold the answer.
   @JsonKey(name: 'reply_id')
   final String? replyId;
-  final ExpressResultPayload? express;
-  final List<AiDealLine>? lines;
 }

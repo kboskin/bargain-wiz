@@ -24,11 +24,19 @@ void main() {
             'label': 'Primary platform',
             'answer_key_name': 'favorite_marketplace',
             'options': [
-              {'label': 'eBay', 'value': 'ebay'},
-              {'label': 'Amazon', 'value': 'amazon'},
-              {'label': 'Facebook Marketplace', 'value': 'facebook'},
-              {'label': 'OLX', 'value': 'olx', if (olxIcon != null) 'icon': olxIcon},
-              {'label': 'Craigslist', 'value': 'craigslist'},
+              {'label': 'eBay', 'value': 'ebay', 'icon': {'code': '0xf4f4', 'font': 'brands'}},
+              {'label': 'Amazon', 'value': 'amazon', 'icon': {'code': '0xf270', 'font': 'brands'}},
+              {
+                'label': 'Facebook Marketplace',
+                'value': 'facebook',
+                'icon': {'code': '0xf09a', 'font': 'brands'},
+              },
+              {
+                'label': 'OLX',
+                'value': 'olx',
+                'icon': olxIcon ?? {'code': '0xf54e', 'font': 'solid'},
+              },
+              {'label': 'Craigslist', 'value': 'craigslist'}, // no icon configured
               {
                 'label': {'en': 'Other', 'es': 'Otro'},
                 'value': 'other',
@@ -48,17 +56,16 @@ void main() {
 
   Iterable<Icon> icons(WidgetTester tester) => tester.widgetList<Icon>(find.byType(Icon));
 
-  group('SelectGroupScreenWidget marketplace icons', () {
-    testWidgets('marketplace chips get built-in glyphs; brands use the Font Awesome brands font', (tester) async {
+  group('SelectGroupScreenWidget option icons', () {
+    testWidgets('chips draw the glyph each option configures, and nothing else', (tester) async {
       await tester.pumpWidget(host(SelectGroupScreenWidget(model: model(), onChanged: (_) {})));
 
       final all = icons(tester).toList();
-      // 6 marketplace options → 6 icons; the deals_per_month group has none.
-      expect(all.length, 6);
+      // 4 of the 6 marketplace options configure an icon; the deals_per_month group has none.
+      expect(all.length, 4);
       final brands = all.where((i) => i.icon?.fontFamily == 'FontAwesomeBrands').map((i) => i.icon!.codePoint);
       expect(brands, unorderedEquals([0xf4f4, 0xf270, 0xf09a])); // ebay, amazon, facebook
-      expect(all.where((i) => i.icon?.fontFamily == 'FontAwesomeSolid').length, 2); // olx, craigslist
-      expect(all.where((i) => i.icon == Icons.auto_awesome).length, 1); // other
+      expect(all.where((i) => i.icon?.fontFamily == 'FontAwesomeSolid').length, 1); // olx
     });
 
     testWidgets('a remote icon config overrides the built-in glyph', (tester) async {

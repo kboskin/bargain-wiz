@@ -11,21 +11,22 @@ abstract class ProDealCloserRepository {
   Stream<List<ProDealCloserMessage>> watchMessages(String conversationId);
 
   /// Sends one user turn. Without [conversationId] a new conversation is created. The wizard
-  /// reply arrives through [watchMessages]; [requestId] makes retries idempotent.
+  /// reply arrives through [watchMessages]. The server refuses a second turn while one is in
+  /// flight (409), so a turn needs no client key to tell it apart from another.
   Future<Either<Failure, ChatSendResult>> send({
     String? conversationId,
-    required String requestId,
     String? text,
     List<String> attachmentPaths = const [],
     required String vibe,
     required String locale,
   });
 
-  /// Three lines (opener / counter / close) for the wizard reply [messageId].
-  Future<Either<Failure, List<DealLine>>> requestOptions({
+  /// Asks for three lines (opener / counter / close) on the wizard reply [messageId]. The
+  /// backend queues the work; the lines arrive through [watchMessages], and the message
+  /// carries `pendingOptions` while they are on the way.
+  Future<Either<Failure, void>> requestOptions({
     required String conversationId,
     required String messageId,
-    required String requestId,
     required String vibe,
     required String locale,
   });
@@ -34,7 +35,6 @@ abstract class ProDealCloserRepository {
   Future<Either<Failure, void>> redo({
     required String conversationId,
     required String messageId,
-    required String requestId,
     required String vibe,
     required String locale,
   });

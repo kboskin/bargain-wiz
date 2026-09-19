@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
 import 'package:appwizard/core/services/analytics_service.dart';
 import 'package:appwizard/core/services/feature_gate_service.dart';
+import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
@@ -195,12 +195,13 @@ class _PaywallPageState extends State<PaywallPage> {
   Future<void> _continueStep(PaywallStepConfig step) async {
     if (_advancing) return;
     setState(() => _advancing = true);
-    if (step.id == 'reminder') {
-      // Notification permission is requested from the reminder step (handoff decision).
-      try {
-        await Permission.notification.request();
-      } catch (e) {
-        _logger.w('PaywallPage: notification permission request failed: $e');
+    if (step.asksNotificationPermission) {
+      // The reminder step is where we ask for push (handoff decision). Same call the
+      // onboarding permission screen makes, so both opt-ins register FCM the one way;
+      // it never throws and returns null when messaging is unavailable.
+      final settings = await FirebaseService.requestNotificationPermission();
+      if (settings == null) {
+        _logger.w('PaywallPage: notification permission could not be requested');
       }
     }
     if (!mounted) return;

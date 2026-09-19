@@ -6,30 +6,6 @@ part of 'profile_api_models.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-ProfilePreferences _$ProfilePreferencesFromJson(Map<String, dynamic> json) =>
-    ProfilePreferences(
-      vibe: json['vibe'] as String?,
-      push: (json['push'] as num?)?.toInt(),
-      marketplace: json['marketplace'] as String?,
-      dealsPerMonth: json['deals_per_month'] as String?,
-      dealSize: json['deal_size'] as num?,
-      locale: json['locale'] as String?,
-      hurdles: (json['hurdles'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-    );
-
-Map<String, dynamic> _$ProfilePreferencesToJson(ProfilePreferences instance) =>
-    <String, dynamic>{
-      'vibe': ?instance.vibe,
-      'push': ?instance.push,
-      'marketplace': ?instance.marketplace,
-      'deals_per_month': ?instance.dealsPerMonth,
-      'deal_size': ?instance.dealSize,
-      'locale': ?instance.locale,
-      'hurdles': ?instance.hurdles,
-    };
-
 ProfileFlowStep _$ProfileFlowStepFromJson(Map<String, dynamic> json) =>
     ProfileFlowStep(
       index: (json['index'] as num?)?.toInt(),
@@ -99,32 +75,14 @@ ProfileIdentity _$ProfileIdentityFromJson(Map<String, dynamic> json) =>
     ProfileIdentity(
       uid: json['uid'] as String?,
       provider: json['provider'] as String?,
-      installationIds: (json['installation_ids'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-      mergedFrom: (json['merged_from'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-      mergedInto: json['merged_into'] as String?,
     );
 
 Map<String, dynamic> _$ProfileIdentityToJson(ProfileIdentity instance) =>
-    <String, dynamic>{
-      'uid': ?instance.uid,
-      'provider': ?instance.provider,
-      'installation_ids': ?instance.installationIds,
-      'merged_from': ?instance.mergedFrom,
-      'merged_into': ?instance.mergedInto,
-    };
+    <String, dynamic>{'uid': ?instance.uid, 'provider': ?instance.provider};
 
 ProfilePatchRequest _$ProfilePatchRequestFromJson(Map<String, dynamic> json) =>
     ProfilePatchRequest(
-      installationId: json['installation_id'] as String,
-      preferences: json['preferences'] == null
-          ? null
-          : ProfilePreferences.fromJson(
-              json['preferences'] as Map<String, dynamic>,
-            ),
+      preferences: json['preferences'] as Map<String, dynamic>?,
       onboarding: json['onboarding'] == null
           ? null
           : ProfileOnboarding.fromJson(
@@ -141,8 +99,7 @@ ProfilePatchRequest _$ProfilePatchRequestFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$ProfilePatchRequestToJson(
   ProfilePatchRequest instance,
 ) => <String, dynamic>{
-  'installation_id': instance.installationId,
-  'preferences': ?instance.preferences?.toJson(),
+  'preferences': ?instance.preferences,
   'onboarding': ?instance.onboarding?.toJson(),
   'referral': ?instance.referral?.toJson(),
   'app': ?instance.app?.toJson(),
@@ -154,11 +111,7 @@ ProfileDocument _$ProfileDocumentFromJson(Map<String, dynamic> json) =>
       identity: json['identity'] == null
           ? null
           : ProfileIdentity.fromJson(json['identity'] as Map<String, dynamic>),
-      preferences: json['preferences'] == null
-          ? null
-          : ProfilePreferences.fromJson(
-              json['preferences'] as Map<String, dynamic>,
-            ),
+      preferences: json['preferences'] as Map<String, dynamic>?,
       onboarding: json['onboarding'] == null
           ? null
           : ProfileOnboarding.fromJson(
@@ -178,7 +131,7 @@ Map<String, dynamic> _$ProfileDocumentToJson(ProfileDocument instance) =>
     <String, dynamic>{
       'schema_version': ?instance.schemaVersion,
       'identity': ?instance.identity?.toJson(),
-      'preferences': ?instance.preferences?.toJson(),
+      'preferences': ?instance.preferences,
       'onboarding': ?instance.onboarding?.toJson(),
       'referral': ?instance.referral?.toJson(),
       'app': ?instance.app?.toJson(),

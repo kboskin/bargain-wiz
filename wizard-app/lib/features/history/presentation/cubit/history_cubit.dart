@@ -9,14 +9,22 @@ import 'package:appwizard/features/history/presentation/cubit/history_state.dart
 /// Bargains History: load / search / filter / delete / update status.
 /// Reloads automatically when [ConversationChanges] fires (a deal was saved elsewhere).
 class HistoryCubit extends Cubit<HistoryState> {
-  HistoryCubit(this._repository, {Listenable? changes})
-      : _changes = changes ?? ConversationChanges.instance,
+  /// [marketplaceLabels] maps a stored marketplace value to the labels its onboarding option
+  /// configures, so search matches what the person saw; read at load time, since remote
+  /// config can change under a running app.
+  HistoryCubit(
+    this._repository, {
+    Listenable? changes,
+    Map<String, String> Function()? marketplaceLabels,
+  })  : _changes = changes ?? ConversationChanges.instance,
+        _marketplaceLabels = marketplaceLabels ?? (() => const {}),
         super(const HistoryState()) {
     _changes.addListener(_onChanged);
   }
 
   final ConversationRepository _repository;
   final Listenable _changes;
+  final Map<String, String> Function() _marketplaceLabels;
 
   Future<void> load() async {
     emit(state.copyWith(loadStatus: HistoryLoadStatus.loading, clearError: true));
@@ -30,6 +38,7 @@ class HistoryCubit extends Cubit<HistoryState> {
       (list) => emit(state.copyWith(
         loadStatus: HistoryLoadStatus.ready,
         conversations: sortNewestFirst(list),
+        marketplaceLabels: _marketplaceLabels(),
       )),
     );
   }

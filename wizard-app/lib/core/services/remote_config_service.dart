@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/gradient_background_config.dart';
@@ -154,6 +155,42 @@ class RemoteConfigService extends ChangeNotifier {
       return [];
     }
   }
+
+  /// Onboarding screens parsed from the value in hand — remote when a fetch has activated,
+  /// the bundled defaults otherwise — and memoised until new values activate. The sync
+  /// counterpart of [getOnboardingScreensFresh], for screens that are read during a build
+  /// (the Profile answer rows). A screen that fails to parse is skipped, so one bad entry
+  /// cannot empty the list.
+  List<OnboardingModel> getOnboardingScreens() =>
+      _memo<List<OnboardingModel>>('onboarding_screens:parsed', () {
+        final raw = getString('onboarding_screens');
+        if (raw.isEmpty) return const [];
+        try {
+          final json = jsonDecode(raw);
+          if (json is! List) return const [];
+          final screens = <OnboardingModel>[];
+          for (final item in json.whereType<Map>()) {
+            try {
+              screens.add(OnboardingModel.fromJson(Map<String, dynamic>.from(item)));
+            } on Object catch (e) {
+              _logger.w('Skipping malformed onboarding screen: $e');
+            }
+          }
+          return screens;
+        } on Object catch (e, stackTrace) {
+          _logger.e('Error parsing onboarding_screens', e, stackTrace);
+          return const [];
+        }
+      }) ??
+      const [];
+
+  /// The configured answers as fields — key, kind, options and every attribute the UI draws
+  /// (label, colour, icon, subtext, emoji, savings). Built straight from the typed screen
+  /// models, so nothing about a tone or a push level is described in Dart. Memoised until
+  /// new values activate.
+  List<ProfileField> getProfileFields() =>
+      _memo<List<ProfileField>>('profile_fields', () => ProfileFields.fromScreens(getOnboardingScreens())) ??
+      const [];
 
   /// Get a boolean value from Remote Config
   bool getBool(String key, {bool defaultValue = false}) {

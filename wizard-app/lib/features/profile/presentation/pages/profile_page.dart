@@ -2,11 +2,11 @@ import 'package:dartz/dartz.dart' show Right;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:appwizard/core/config/wiz_catalog.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/feature_gate_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
+import 'package:appwizard/core/theme/option_style.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/utils/template_text.dart';
@@ -15,12 +15,14 @@ import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_event.dart';
 import 'package:appwizard/features/auth/presentation/pages/sign_in_modal.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
 import 'package:appwizard/features/paywall/domain/paywall_copy.dart';
 import 'package:appwizard/features/paywall/presentation/paywall_launcher.dart';
-import 'package:appwizard/features/profile/domain/profile_options.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/profile/domain/profile_plan_copy.dart';
 import 'package:appwizard/features/profile/presentation/widgets/profile_account_card.dart';
+import 'package:appwizard/features/profile/presentation/widgets/profile_answer_sheets.dart';
 import 'package:appwizard/features/profile/presentation/widgets/profile_developer_card.dart';
 import 'package:appwizard/features/profile/presentation/widgets/profile_plan_card.dart';
 import 'package:appwizard/features/profile/presentation/widgets/profile_push_card.dart';
@@ -32,8 +34,13 @@ import 'package:appwizard/features/subscription/domain/entities/subscription_tie
 import 'package:appwizard/features/subscription/domain/repositories/subscription_repository.dart';
 
 /// Profile tab body (design handoff §8): account · plan · negotiation vibe · push level ·
-/// settings (· developer tier override). Rendered inside the main shell as a tab body, so it
-/// is a plain scrollable that leaves [WizSpacing.tabBarContentPadding] at the bottom.
+/// every other onboarding answer · settings (· developer tier override). Rendered inside the
+/// main shell as a tab body, so it is a plain scrollable that leaves
+/// [WizSpacing.tabBarContentPadding] at the bottom.
+///
+/// The answer rows are built from the `onboarding_screens` templates ([ProfileFields]), so the
+/// screen offers exactly what onboarding asked — a screen added remotely shows up here too.
+/// Vibe and push keep their own cards and are left out of the rows.
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
@@ -119,13 +126,15 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  String get _onboardingScreensRaw {
-    try {
-      return _remoteConfig.getString('onboarding_screens');
-    } catch (_) {
-      return '';
-    }
-  }
+  /// Answers with a card of their own (chips and a meter), kept out of the settings rows.
+  static const Set<String> _cardKeys = {ProfileFields.vibeKey, ProfileFields.pushKey};
+
+  /// Editable answers in onboarding order, minus the ones with a card.
+  List<ProfileField> _fields(List<OnboardingModel> screens) =>
+      ProfileFields.fromScreens(screens, skip: _cardKeys);
+
+  /// The options of the answer [key], as its screen offers them.
+  List<ProfileOption> _optionsOf(String key) => _profile.fieldFor(key)?.options ?? const [];
 
   Future<void> _openPaywall() async {
     await PaywallLauncher.open(context, entry: PaywallEntry.profile);
@@ -150,26 +159,43 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // ── settings ─────────────────────────────────────────────────────────────
 
-  void _pickMarketplace() {
-    showProfileOptionSheet(
-      context,
-      title: 'Primary marketplace',
-      options: ProfileOptions.marketplaces(_onboardingScreensRaw),
-      selected: _profile.marketplace,
-      onPick: _profile.setMarketplace,
-      iconFor: (o) => WizCatalog.marketplaceIcon(o.value, iconRaw: o.iconRaw),
-    );
+  /// Opens the sheet that fits the answer: chips, tick rows or a text field.
+  void _edit(ProfileField field) {
+    final answer = _profile.answer(field.key);
+    final title = TemplateText.textOf(context, field.label, fallback: field.key);
+    switch (field.kind) {
+      case ProfileFieldKind.single:
+        showProfileOptionSheet(
+          context,
+          title: title,
+          options: field.options,
+          selected: answer?.toString(),
+          onPick: (value) => _profile.setAnswer(field.key, ProfileFields.storedValue(field, value)),
+          iconFor: OptionStyle.iconOf,
+        );
+      case ProfileFieldKind.multi:
+        showProfileMultiSelectSheet(
+          context,
+          title: title,
+          options: field.options,
+          selected: ProfileFields.valuesOf(answer),
+          minSelected: field.minSelected,
+          onSave: (values) => _profile.setAnswer(field.key, values),
+        );
+      case ProfileFieldKind.text:
+        final hint = TemplateText.textOf(context, field.placeholder);
+        showProfileTextSheet(
+          context,
+          title: title,
+          value: answer?.toString(),
+          hintText: hint.isEmpty ? null : hint,
+          uppercase: field.uppercase,
+          onSave: (text) => _profile.setAnswer(field.key, text),
+        );
+    }
   }
 
-  void _pickDealsPerMonth() {
-    showProfileOptionSheet(
-      context,
-      title: 'Deals per month',
-      options: ProfileOptions.dealsPerMonth(_onboardingScreensRaw),
-      selected: _profile.dealsPerMonth,
-      onPick: _profile.setDealsPerMonth,
-    );
-  }
+  /// Chip glyph: whatever the option configures, nothing when it configures none.
 
   static String localeName(Locale locale) {
     switch (locale.languageCode) {
@@ -188,7 +214,6 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) => ListenableBuilder(
         listenable: Listenable.merge([_profile, _gate]),
         builder: (context, _) {
-          final catalog = _profile.catalog;
           final planOption = _optionFor(_tier);
           final planName = ProfilePlanCopy.planName(
             _tier,
@@ -207,6 +232,13 @@ class _ProfilePageState extends State<ProfilePage> {
           );
           final locale = Localizations.maybeLocaleOf(context) ?? const Locale('en');
           String resolve(dynamic v) => TemplateText.textOf(context, v);
+          final screens = _remoteConfig.getOnboardingScreens();
+          final fields = _fields(screens);
+          String cardTitle(String key, String fallback) => TemplateText.textOf(
+                context,
+                ProfileFields.labelForKey(screens, key),
+                fallback: fallback,
+              );
 
           return SafeArea(
             bottom: false,
@@ -228,37 +260,29 @@ class _ProfilePageState extends State<ProfilePage> {
                   onCta: _openPaywall,
                 ),
                 ProfileVibeCard(
-                  vibes: catalog.vibes,
-                  selectedId: _profile.vibeId,
-                  onSelect: _profile.setVibe,
+                  title: cardTitle(ProfileFields.vibeKey, 'Negotiation vibe'),
+                  options: _optionsOf(ProfileFields.vibeKey),
+                  selectedValue: _profile.valueOf(ProfileFields.vibeKey)?.toString(),
+                  onSelect: (value) => _profile.setAnswer(ProfileFields.vibeKey, value),
                 ),
                 ProfilePushCard(
-                  levels: catalog.pushLevels,
-                  current: _profile.push,
-                  onSelect: _profile.setPush,
+                  title: cardTitle(ProfileFields.pushKey, 'How hard you push'),
+                  options: _optionsOf(ProfileFields.pushKey),
+                  selectedValue: _profile.valueOf(ProfileFields.pushKey)?.toString(),
+                  onSelect: (value) => _profile.setAnswer(ProfileFields.pushKey, value),
                 ),
                 ProfileSettingsCard(
                   rows: [
-                    ProfileSettingsRow(
-                      label: 'Primary marketplace',
-                      value: ProfileOptions.labelFor(
-                        ProfileOptions.marketplaces(_onboardingScreensRaw),
-                        _profile.marketplace,
-                        resolve,
-                        fallback: WizCatalog.marketplaceLabel(_profile.marketplace),
+                    for (final field in fields)
+                      ProfileSettingsRow(
+                        label: TemplateText.textOf(context, field.label, fallback: field.key),
+                        value: ProfileFields.displayValue(
+                          field,
+                          _profile.answer(field.key),
+                          resolve,
+                        ),
+                        onTap: () => _edit(field),
                       ),
-                      onTap: _pickMarketplace,
-                    ),
-                    ProfileSettingsRow(
-                      label: 'Deals per month',
-                      value: ProfileOptions.labelFor(
-                        ProfileOptions.dealsPerMonth(_onboardingScreensRaw),
-                        _profile.dealsPerMonth,
-                        resolve,
-                        fallback: WizCatalog.dealsPerMonthLabel(_profile.dealsPerMonth),
-                      ),
-                      onTap: _pickDealsPerMonth,
-                    ),
                     ProfileSettingsRow(
                       label: 'Language',
                       value: '${localeName(locale)} · System',

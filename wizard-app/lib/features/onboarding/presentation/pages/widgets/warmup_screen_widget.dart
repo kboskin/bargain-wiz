@@ -1,6 +1,6 @@
-import 'package:appwizard/core/config/wiz_catalog.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
-import 'package:appwizard/core/services/user_profile_service.dart';
+import 'package:appwizard/core/services/remote_config_service.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
@@ -19,29 +19,28 @@ class WarmupScreenWidget extends StatelessWidget {
     super.key,
     this.answersByKey = const {},
     this.textColor = WizColors.ink,
-    this.catalog,
+    this.fields,
   });
 
   final WarmupScreenModel model;
   final Map<String, dynamic> answersByKey;
   final Color textColor;
-  /// Catalog override (tests / previews); defaults to the DI [UserProfileService] catalog.
-  final WizCatalog? catalog;
+  /// Field override (tests / previews); defaults to the configured onboarding screens.
+  final List<ProfileField>? fields;
 
-  WizCatalog _catalog() {
-    if (catalog != null) return catalog!;
-    if (di.sl.isRegistered<UserProfileService>()) return di.sl<UserProfileService>().catalog;
-    return const WizCatalog();
-  }
+  RemoteConfigService? get _remoteConfig =>
+      di.sl.isRegistered<RemoteConfigService>() ? di.sl<RemoteConfigService>() : null;
+
+  List<ProfileField> _fields() => fields ?? _remoteConfig?.getProfileFields() ?? const [];
 
   @override
   Widget build(BuildContext context) {
     final lang = Localizations.localeOf(context).languageCode;
     final snapshot = OnboardingProfileSnapshot(
       answers: answersByKey,
-      catalog: _catalog(),
+      fields: _fields(),
       languageCode: lang,
-      dealsMultiplierOverride: model.dealsMultiplier,
+      dealsMultiplier: model.dealsMultiplier,
     );
     final chips = snapshot.chips(model.summaryChipsFor(lang));
     final metadata = model.metadata;

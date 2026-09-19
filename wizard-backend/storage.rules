@@ -1,11 +1,37 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Screenshots uploaded through the `conversations` function; owner may read, nobody writes.
+    // Screenshots the `conversations` function stored. The Admin SDK bypasses these rules
+    // entirely, so nothing here constrains the backend — the owner reads, no client writes.
     match /users/{uid}/conversations/{cid}/{file} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
     }
+
+    // Client-writable staging area. Nothing writes here yet: screenshots still travel base64
+    // in the turn body, and the function re-encodes them (`images.prepare_image`). The caps
+    // are the outermost layer of the ceiling the other two already enforce —
+    //   app 1.5 MB (AttachmentLimits.maxImageBytes)
+    //     < function 4 MB per image (MAX_IMAGE_BYTES), 16 MB per request
+    //       < 5 MB here
+    // — deliberately looser than the function so a legitimate upload is never rejected by two
+    // different limits, and tight enough that a stolen ID token cannot park a large file.
+    // The content types are the three `images.sniff_mime` accepts, not `image/.*`: that would
+    // admit SVG and TIFF, which the backend rejects on arrival anyway.
+    // Top-level, not `users/{uid}/uploads/`: a GCS lifecycle rule matches a literal prefix
+    // and cannot glob the uid segment, so staging needs its own root to be collectable.
+    match /uploads/{uid}/{file} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      // Split from `write` on purpose: `request.resource` is null on a delete, so a single
+      // `allow write` carrying a size check denies every delete and the owner can never
+      // clean up after themselves.
+      allow create, update: if request.auth != null
+                            && request.auth.uid == uid
+                            && request.resource.size < 5 * 1024 * 1024
+                            && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

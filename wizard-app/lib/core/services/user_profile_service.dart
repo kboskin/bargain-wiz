@@ -1,66 +1,45 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 
-import 'package:appwizard/core/config/wiz_catalog.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
 import 'package:appwizard/features/onboarding/domain/entities/onboarding_data_entity.dart';
+import 'package:appwizard/features/onboarding/domain/logic/onboarding_answer_flattener.dart';
 import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 
-/// Read/write access to the user's onboarding answers (vibe, push level,
-/// marketplace, deals per month, deal size, hurdles, referral code) after
-/// onboarding. Backed by [OnboardingRepository]; notifies listeners on change.
+/// The user's onboarding answers: local storage is the source of truth, the backend gets a
+/// copy of every change (PROFILE_SYNC.md).
 ///
-/// Answer keys (see remote `onboarding_screens[].answer_structure.answer_key_name`):
-/// `negotiation_vibe`, `risk_tolerance`, `favorite_marketplace`, `deals_per_month`,
-/// `average_deal_size`, `main_hurdle` (list), `referral_code`.
+/// Deliberately dumb — it knows no answer. Remote Config names everything: a screen's
+/// `answer_structure.answer_key_name` is both the key the answer is stored under and the field
+/// it is sent as, so wiring a new question to the backend is a config edit, not a release.
+/// Read answers by key ([answer], [answers], [valueOf], [payload]) or as the configured
+/// fields behind them ([fields], [fieldFor], [optionFor]); write with [setAnswer] /
+/// [setAnswers]: they persist locally first, then hand the new state to the backend.
+///
+/// Notifies listeners after every load and every write.
 class UserProfileService extends ChangeNotifier {
-  UserProfileService(this._repository, this._remoteConfig, this._logger);
-
-  static const String keyVibe = 'negotiation_vibe';
-  static const String keyPush = 'risk_tolerance';
-  static const String keyMarketplace = 'favorite_marketplace';
-  static const String keyDealsPerMonth = 'deals_per_month';
-  static const String keyDealSize = 'average_deal_size';
-  static const String keyHurdles = 'main_hurdle';
-  static const String keyReferral = 'referral_code';
+  /// [pushToBackend] sends the stored answers to the `profile` function; resolved lazily by
+  /// the DI container to `ProfileSyncService.schedulePush` (debounced and retried there), so
+  /// this service never talks to the network itself.
+  UserProfileService(
+    this._repository,
+    this._remoteConfig,
+    this._logger, {
+    void Function()? pushToBackend,
+  }) : _pushToBackend = pushToBackend;
 
   final OnboardingRepository _repository;
   final RemoteConfigService _remoteConfig;
   final AppLogger _logger;
+  final void Function()? _pushToBackend;
 
   OnboardingDataEntity? _data;
   bool _loaded = false;
-  WizCatalog? _catalog;
 
-  /// Catalog of vibes / push levels / deal sizes, with remote onboarding options applied.
-  WizCatalog get catalog => _catalog ??= _buildCatalog();
-
-  WizCatalog _buildCatalog() {
-    try {
-      final raw = _remoteConfig.getString('onboarding_screens');
-      if (raw.isEmpty) return const WizCatalog();
-      final json = jsonDecode(raw);
-      if (json is! List) return const WizCatalog();
-      final byKey = <String, List<Map<String, dynamic>>>{};
-      for (final screen in json.whereType<Map>()) {
-        final key = (screen['answer_structure'] as Map?)?['answer_key_name']?.toString();
-        if (key == null) continue;
-        final opts = screen['options'] ?? (screen['metadata'] as Map?)?['options'];
-        if (opts is List) {
-          byKey[key] = opts.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-        }
-      }
-      return const WizCatalog().withRemoteOptions(byKey);
-    } catch (e, st) {
-      _logger.e('UserProfileService: catalog parse failed', e, st);
-      return const WizCatalog();
-    }
-  }
-
-  /// Loads answers once (cached). Call `refresh()` to reload from storage.
+  /// Loads answers once (cached). Call [refresh] to reload from storage.
   Future<void> ensureLoaded() async {
     if (_loaded) return;
     await refresh();
@@ -70,25 +49,20 @@ class UserProfileService extends ChangeNotifier {
     final result = await _repository.getOnboardingData();
     _data = result.fold((_) => null, (d) => d);
     _loaded = true;
-    _catalog = null;
     notifyListeners();
   }
-
-  bool get isOnboardingCompleted => _data?.isCompleted ?? false;
 
   /// The stored onboarding entity (null before [ensureLoaded] or when nothing is saved).
   OnboardingDataEntity? get data => _data;
 
-  /// Raw answer by key (null when unanswered). Synchronous; call [ensureLoaded] first.
-  dynamic answer(String key) {
-    final answers = _data?.answers;
-    if (answers == null) return null;
-    for (final a in answers.reversed) {
-      if (a.answerKey == key) return a.answer;
-    }
-    return null;
-  }
+  bool get isOnboardingCompleted => _data?.isCompleted ?? false;
 
+  /// Every answer key the configured onboarding asks for, in screen order.
+  List<String> get answerKeys => [
+        for (final screen in _remoteConfig.getOnboardingScreens()) ...screen.answerKeys,
+      ];
+
+  /// Stored answers by key; a later answer for the same key wins.
   Map<String, dynamic> get answers {
     final out = <String, dynamic>{};
     for (final a in _data?.answers ?? const <OnboardingAnswer>[]) {
@@ -97,67 +71,93 @@ class UserProfileService extends ChangeNotifier {
     return out;
   }
 
-  String get vibeId => answer(keyVibe)?.toString() ?? WizCatalog.defaultVibeId;
-  VibeDef get vibe => catalog.vibeById(vibeId);
-
-  int get pushValue {
-    final v = answer(keyPush);
-    if (v is num) return v.toInt();
-    if (v is String) return int.tryParse(v) ?? WizCatalog.defaultPushValue;
-    return WizCatalog.defaultPushValue;
+  /// Raw answer by key (null when unanswered). Synchronous; call [ensureLoaded] first.
+  dynamic answer(String key) {
+    final stored = _data?.answers;
+    if (stored == null) return null;
+    for (final a in stored.reversed) {
+      if (a.answerKey == key) return a.answer;
+    }
+    return null;
   }
 
-  PushDef get push => catalog.pushForValue(pushValue);
-
-  String? get marketplace => answer(keyMarketplace)?.toString();
-  String? get dealsPerMonth => answer(keyDealsPerMonth)?.toString();
-
-  int get dealSizeValue {
-    final v = answer(keyDealSize);
-    if (v is num) return v.toInt();
-    if (v is String) return int.tryParse(v) ?? WizCatalog.defaultDealSizeValue;
-    return WizCatalog.defaultDealSizeValue;
+  /// Every field the configured onboarding fills — what the functions receive. The answer
+  /// key *is* the field name (`vibe`, `push`, `marketplace`, …), so there is no mapping: a
+  /// screen is wired to the backend by naming its `answer_key_name` after the field.
+  ///
+  /// Unanswered keys fall back to the screen's configured default, so a request made before
+  /// onboarding finishes still carries a complete profile. [overrides] wins over the stored
+  /// answer, [except] drops keys the caller sends elsewhere.
+  Map<String, dynamic> payload({
+    Map<String, dynamic> overrides = const {},
+    Set<String> except = const {},
+  }) {
+    final stored = answers;
+    final out = <String, dynamic>{};
+    for (final field in fields) {
+      if (except.contains(field.key)) continue;
+      final dynamic value = stored[field.key] ?? field.defaultValue;
+      if (value != null) out[field.key] = value;
+    }
+    for (final entry in overrides.entries) {
+      if (!except.contains(entry.key)) out[entry.key] = entry.value;
+    }
+    return out;
   }
 
-  DealSizeDef get dealSize => catalog.dealSizeForValue(dealSizeValue);
+  /// The configured answers as fields, in screen order (memoised on [RemoteConfigService]).
+  List<ProfileField> get fields => _remoteConfig.getProfileFields();
 
-  List<String> get hurdles {
-    final v = answer(keyHurdles);
-    if (v is List) return v.map((e) => e.toString()).toList();
-    if (v is String && v.isNotEmpty) return [v];
-    return const [];
-  }
+  /// The field that writes [key], or null when no configured screen does.
+  ProfileField? fieldFor(String key) => fields.where((f) => f.key == key).firstOrNull;
 
-  String? get referralCode => answer(keyReferral)?.toString();
+  /// The stored answer for [key], or the screen's configured default when unanswered.
+  dynamic valueOf(String key) => answer(key) ?? fieldFor(key)?.defaultValue;
 
-  int get monthlyLeak => catalog.monthlyLeak(dealSize: dealSizeValue, dealsPerMonth: dealsPerMonth);
+  /// The option behind [key] — label, colour, icon, subtext, emoji — or null when the answer
+  /// is unset or the config no longer offers it.
+  ProfileOption? optionFor(String key) => fieldFor(key)?.optionFor(valueOf(key));
 
-  /// Adds or replaces the answer for [key] and persists it.
-  Future<void> setAnswer(String key, dynamic value) async {
+  /// Stores [value] under [key] locally, then sends the answers to the backend.
+  Future<void> setAnswer(String key, dynamic value) => setAnswers({key: value});
+
+  /// Stores several answers in one write (one save, one push).
+  Future<void> setAnswers(Map<String, dynamic> values) async {
+    if (values.isEmpty) return;
     await ensureLoaded();
     final current = _data ?? const OnboardingDataEntity(answers: [], isCompleted: false);
-    final kept = current.answers.where((a) => a.answerKey != key).toList();
-    final existing = current.answers.where((a) => a.answerKey == key).firstOrNull;
-    kept.add(OnboardingAnswer(
-      screenIndex: existing?.screenIndex ?? -1,
-      screenTitle: existing?.screenTitle ?? key,
-      screenType: existing?.screenType ?? OnboardingScreenType.select,
-      answerKey: key,
-      answer: value,
-    ));
+    final kept = current.answers.where((a) => !values.containsKey(a.answerKey)).toList();
+    for (final entry in values.entries) {
+      kept.add(_answerFor(entry.key, entry.value, current));
+    }
     final updated = current.copyWith(answers: kept);
     final result = await _repository.saveOnboardingData(updated);
     result.fold(
-      (f) => _logger.w('UserProfileService.setAnswer($key) failed: ${f.message}'),
+      (f) => _logger.w('UserProfileService.setAnswers(${values.keys.join(', ')}) failed: ${f.message}'),
       (_) {
         _data = updated;
         notifyListeners();
+        _pushToBackend?.call();
       },
     );
   }
 
-  Future<void> setVibe(String id) => setAnswer(keyVibe, id);
-  Future<void> setPush(int value) => setAnswer(keyPush, value);
-  Future<void> setMarketplace(String value) => setAnswer(keyMarketplace, value);
-  Future<void> setDealsPerMonth(String value) => setAnswer(keyDealsPerMonth, value);
+  /// A stored answer keeps the trace of the screen that asks for [key] — the screen it came
+  /// from when remote config still has it, else whatever the previous answer recorded.
+  OnboardingAnswer _answerFor(String key, dynamic value, OnboardingDataEntity current) {
+    final existing = current.answers.where((a) => a.answerKey == key).firstOrNull;
+    final screens = _remoteConfig.getOnboardingScreens();
+    final index = screens.indexWhere((s) => s.answerKeys.contains(key));
+    final OnboardingModel? screen = index < 0 ? null : screens[index];
+    return OnboardingAnswer(
+      screenIndex: screen == null ? existing?.screenIndex ?? -1 : index,
+      screenTitle: screen?.titleForStorage ?? existing?.screenTitle ?? key,
+      screenType: screen?.type ?? existing?.screenType ?? OnboardingScreenType.select,
+      answerKey: key,
+      answer: value,
+      options: screen == null
+          ? existing?.options
+          : OnboardingAnswerFlattener.optionsFor(screen, key) ?? existing?.options,
+    );
+  }
 }

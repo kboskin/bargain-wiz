@@ -1,35 +1,51 @@
+import 'dart:async';
+
+import 'package:appwizard/core/config/attachment_limits.dart';
+import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/core/utils/screenshot_encoder.dart';
 import 'package:appwizard/features/conversation/data/datasources/conversations_api.dart';
+import 'package:appwizard/features/conversation/data/datasources/conversations_stream.dart';
 import 'package:appwizard/features/conversation/data/models/conversation_api_models.dart';
 import 'package:appwizard/features/express_dealmaker/data/datasources/express_dealmaker_remote_datasource.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/shared/data/models/ai/ai_api_models.dart';
 
 /// Express Dealmaker over the backend-owned `conversations` function (CONVERSATIONS.md).
 ///
 /// "Upload" prepares the screenshot on device (downscaled JPEG kept in memory under an id).
-/// The first [getDealReply] creates an `express` conversation with every prepared screenshot
-/// and gets the result inline; later calls ("Get More", a tone or keyword change) ask the same
-/// conversation to regenerate, so screenshots travel only once.
+/// The first [getDealReply] creates an `express` conversation with every prepared screenshot;
+/// later calls ("Get More", a tone or keyword change) ask the same conversation to regenerate,
+/// so screenshots travel only once. The backend queues the model call, so both cases wait for
+/// the result on the conversation document rather than in the HTTP response.
 class CloudExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteDataSource {
-  CloudExpressDealmakerRemoteDataSource(this._api, this._profile, this._encoder, this._logger,
-      {String Function()? requestIdGenerator})
-      : _requestId = requestIdGenerator ?? _uuid;
+  CloudExpressDealmakerRemoteDataSource(
+    this._api,
+    this._stream,
+    this._auth,
+    this._profile,
+    this._encoder,
+    this._logger, {
+    this.resultTimeout = const Duration(seconds: 90),
+  });
 
-  /// Prepared screenshots kept per session (a request uses at most 6); oldest are evicted.
-  static const int maxPrepared = 12;
+  /// Prepared screenshots kept per session; oldest are evicted, so the cache never
+  /// holds more than one request may carry.
+  static const int maxPrepared = AttachmentLimits.maxImages;
 
   final ConversationsApi _api;
+  final ConversationsStream _stream;
+  final AuthService _auth;
   final UserProfileService _profile;
   final ScreenshotEncoder _encoder;
   final AppLogger _logger;
-  final String Function() _requestId;
+
+  /// How long to wait for the queued result before giving up.
+  final Duration resultTimeout;
 
   final Map<String, EncodedImage> _prepared = {};
   int _sequence = 0;
-
-  static String _uuid() => DateTime.now().microsecondsSinceEpoch.toRadixString(36).padLeft(12, '0');
 
   @override
   Future<UploadScreenshotResultDto> uploadScreenshot(final String filePath) async {
@@ -39,7 +55,7 @@ class CloudExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteDat
     while (_prepared.length > maxPrepared) {
       _prepared.remove(_prepared.keys.first);
     }
-    _logger.i('Express: prepared $filePath → ${encoded.width}×${encoded.height}, ${encoded.bytes.length} B');
+    _logger.i('Express: prepared $filePath → ${encoded.bytes.length} B');
     return UploadScreenshotResultDto(id: id);
   }
 
@@ -52,19 +68,17 @@ class CloudExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteDat
     final String? conversationId,
   }) async {
     final profile = ConversationProfile(
-      vibe: vibe ?? _profile.vibeId,
-      push: _profile.pushValue,
+      _profile.payload(
+        overrides: vibe == null ? const {} : {ProfileFields.vibeKey: vibe},
+        except: const {ProfileFields.referralKey},
+      ),
       locale: locale,
-      marketplace: _profile.marketplace,
-      dealSize: _profile.dealSizeValue,
-      dealsPerMonth: _profile.dealsPerMonth,
-      hurdles: _profile.hurdles.isEmpty ? null : _profile.hurdles,
     );
     final ConversationWriteResponse response;
     if (conversationId != null) {
       response = await _api.redo(
         conversationId,
-        ConversationActionRequest(requestId: _requestId(), profile: profile, keyword: keyword),
+        ConversationActionRequest(profile: profile, keyword: keyword),
       );
     } else {
       final images = [
@@ -74,21 +88,32 @@ class CloudExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteDat
       if (images.isEmpty) throw StateError('Express: no prepared screenshots for $uploadedIds');
       response = await _api.create(CreateConversationRequest(
         type: 'express',
-        requestId: _requestId(),
         profile: profile,
         keyword: keyword,
         images: images,
       ));
     }
-    final express = response.express;
-    if (express == null) throw StateError('Express: the backend returned no result');
+    return _awaitResult(response.conversationId);
+  }
+
+  /// The wizard is "typing" until the queued generation finishes; the answer is then on the
+  /// conversation document. No lines by then means the turn failed.
+  Future<DealReplyDto> _awaitResult(String conversationId) async {
+    final uid = await _auth.ensureUid();
+    if (uid == null) throw StateError('Express: no Firebase user yet (offline?)');
+    final done = await _stream
+        .watchConversation(uid, conversationId)
+        .firstWhere((conversation) => conversation == null || !conversation.isTyping)
+        .timeout(resultTimeout);
+    if (done == null) throw StateError('Express: the deal was removed while the wizard worked on it');
+    final lines = done.effectiveLines;
+    // The backend records why it failed on the conversation (`last_error`); prefer that over a
+    // blanket message, so an unavailable model reads differently from an empty answer.
+    if (lines.isEmpty) throw StateError(done.errorMessage ?? 'Express: the wizard could not answer');
     return DealReplyDto(
-      conversationId: response.conversationId,
-      seeing: express.seeing.isEmpty ? null : express.seeing,
-      lines: [
-        for (final line in express.lines)
-          if (line.text.isNotEmpty) DealLineDto(text: line.text, intent: line.intent, why: line.why),
-      ],
+      conversationId: conversationId,
+      seeing: done.seeing,
+      lines: [for (final line in lines) DealLineDto(text: line.text, intent: line.intent.name, why: line.why)],
     );
   }
 }

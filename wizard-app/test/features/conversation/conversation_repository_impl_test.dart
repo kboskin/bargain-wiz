@@ -51,7 +51,7 @@ class _CountingAuth implements AuthService {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-const _profile = ConversationProfile(vibe: 'friendly', push: 60, locale: 'en');
+const _profile = ConversationProfile({'vibe': 'friendly', 'push': 60}, locale: 'en');
 
 void main() {
   late FakeConversationsBackend backend;
@@ -68,10 +68,9 @@ void main() {
 
   tearDown(() => repo.dispose());
 
-  Future<String> createDeal(String text, {String requestId = 'r1'}) async {
+  Future<String> createDeal(String text) async {
     final response = await backend.create(CreateConversationRequest(
       type: 'pro',
-      requestId: requestId,
       profile: _profile,
       text: text,
     ));
@@ -107,8 +106,8 @@ void main() {
   });
 
   test('deleteConversation archives: the row leaves the list, the backend keeps the deal', () async {
-    final first = await createDeal('one', requestId: 'r1');
-    await createDeal('two', requestId: 'r2');
+    final first = await createDeal('one');
+    await createDeal('two');
     expect(await list(), hasLength(2));
 
     final result = await repo.deleteConversation(first);

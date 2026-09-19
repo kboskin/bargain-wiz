@@ -23,5 +23,4 @@ class PrefsKeys {
 
   /// Random UUID minted on first launch; identifies this install to the profile endpoint
   /// while the user is signed out (see PROFILE_SYNC.md).
-  static const String installationId = 'installation_id';
 }

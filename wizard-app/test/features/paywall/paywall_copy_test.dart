@@ -281,4 +281,38 @@ void main() {
       expect(PaywallPricing.productIdFor(vision, const []), 'com.bargain.wiz.premium');
     });
   });
+
+  group('PaywallStepConfig.asksNotificationPermission', () {
+    test('is true for button_action: request_permission', () {
+      final step = PaywallStepConfig.fromJson({
+        'id': 'trial_reminder',
+        'button_action': 'request_permission',
+      });
+      expect(step.asksNotificationPermission, isTrue);
+    });
+
+    test('falls back to the reminder id when no action is configured', () {
+      expect(PaywallStepConfig.fromJson({'id': 'reminder'}).asksNotificationPermission, isTrue);
+      expect(PaywallStepConfig.fromJson({'id': 'intro'}).asksNotificationPermission, isFalse);
+    });
+
+    test('an explicit non-permission action wins over the id', () {
+      final step = PaywallStepConfig.fromJson({'id': 'reminder', 'button_action': 'continue'});
+      expect(step.asksNotificationPermission, isFalse);
+    });
+
+    test('the bundled reminder step asks for the permission', () {
+      final steps = _config(extra: {
+        'steps': [
+          {'id': 'intro', 'button_text': {'en': r'Try for $0.00'}},
+          {
+            'id': 'reminder',
+            'button_text': {'en': 'Continue for FREE'},
+            'button_action': 'request_permission',
+          },
+        ],
+      }).steps;
+      expect(steps.map((s) => s.asksNotificationPermission), [false, true]);
+    });
+  });
 }

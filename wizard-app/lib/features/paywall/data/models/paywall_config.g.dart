@@ -148,6 +148,7 @@ PaywallStepConfig _$PaywallStepConfigFromJson(Map<String, dynamic> json) =>
               json['title_highlight_words'] as Map<String, dynamic>,
             ),
       highlightColor: json['highlight_color'] as String?,
+      buttonAction: json['button_action'] as String?,
     );
 
 Map<String, dynamic> _$PaywallStepConfigToJson(PaywallStepConfig instance) =>
@@ -160,6 +161,7 @@ Map<String, dynamic> _$PaywallStepConfigToJson(PaywallStepConfig instance) =>
       'button_text': instance.buttonText,
       'title_highlight_words': instance.titleHighlightWords,
       'highlight_color': instance.highlightColor,
+      'button_action': instance.buttonAction,
     };
 
 PaywallOption _$PaywallOptionFromJson(Map<String, dynamic> json) =>

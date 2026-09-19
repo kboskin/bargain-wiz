@@ -13,6 +13,7 @@ import 'package:appwizard/core/widgets/wiz/wiz_header.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
 import 'package:appwizard/features/home/data/models/main_page_config.dart';
 import 'package:appwizard/features/paywall/presentation/paywall_launcher.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/cubit/pro_deal_closer_cubit.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/cubit/pro_deal_closer_state.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/widgets/pro_composer.dart';
@@ -58,8 +59,17 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
   final ScrollController _scroll = ScrollController();
   final List<Timer> _scrollTimers = [];
   late final UserProfileService _profile = di.sl<UserProfileService>();
-  late final MainPageConfig? _config = di.sl<RemoteConfigService>().getMainPageConfig();
+  late final RemoteConfigService _remoteConfig = di.sl<RemoteConfigService>();
+  late final MainPageConfig? _config = _remoteConfig.getMainPageConfig();
   bool _leaving = false;
+
+  /// The tone the wizard writes in: the stored answer, else the tone screen's configured
+  /// default. Empty when no screen asks for one.
+  String get _vibeId => _profile.valueOf(ProfileFields.vibeKey)?.toString() ?? '';
+
+  /// The tone options the onboarding screen offers.
+  List<ProfileOption> get _tones =>
+      _profile.fieldFor(ProfileFields.vibeKey)?.options ?? const [];
 
   @override
   void initState() {
@@ -86,7 +96,7 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
     if (!mounted) return;
     await cubit.start(
       conversationId: widget.conversationId,
-      vibe: _profile.vibeId,
+      vibe: _vibeId,
       locale: locale,
     );
     final allowed = await gate;
@@ -97,7 +107,9 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
   Future<void> _onBack() async {
     if (_leaving) return;
     _leaving = true;
-    await context.read<ProDealCloserCubit>().save(marketplace: _profile.marketplace);
+    await context
+        .read<ProDealCloserCubit>()
+        .save(marketplace: _profile.valueOf(ProfileFields.marketplaceKey)?.toString());
     if (mounted) _pop();
   }
 
@@ -110,12 +122,12 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
   }
 
   Future<void> _cycleTone() async {
-    final vibes = _profile.catalog.vibes;
-    if (vibes.isEmpty) return;
-    final index = vibes.indexWhere((v) => v.id == _profile.vibeId);
-    final next = vibes[(index + 1) % vibes.length];
-    context.read<ProDealCloserCubit>().setVibe(next.id);
-    await _profile.setVibe(next.id);
+    final tones = _tones;
+    if (tones.isEmpty) return;
+    final index = tones.indexWhere((o) => o.value == _vibeId);
+    final next = tones[(index + 1) % tones.length];
+    context.read<ProDealCloserCubit>().setVibe(next.value);
+    await _profile.setAnswer(ProfileFields.vibeKey, next.value);
   }
 
   Future<void> _attach() async {
@@ -188,7 +200,10 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
                   horizontalPadding: 16,
                   trailing: ListenableBuilder(
                     listenable: _profile,
-                    builder: (context, _) => ToneChipButton(vibe: _profile.vibe, onTap: _cycleTone),
+                    builder: (context, _) => ToneChipButton(
+                      tone: _profile.fieldFor(ProfileFields.vibeKey)?.optionFor(_vibeId),
+                      onTap: _cycleTone,
+                    ),
                   ),
                 ),
                 Expanded(

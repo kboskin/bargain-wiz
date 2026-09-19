@@ -1,3 +1,6 @@
 .idea/*
 .idea
 design_handoff_bargain_wiz
+# Firebase emulator suite (local-stack skill): exported Auth/Firestore/Storage state and logs
+wizard-backend/.emulator-data/
+wizard-backend/*-debug.log

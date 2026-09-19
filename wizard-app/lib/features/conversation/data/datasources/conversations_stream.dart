@@ -10,6 +10,10 @@ abstract class ConversationsStream {
 
   /// Messages of one conversation in server order.
   Stream<List<ProDealCloserMessage>> watchMessages(String uid, String conversationId);
+
+  /// One conversation document; null once it no longer exists. Express reads its result here,
+  /// because the backend queues the model call and writes the answer when it lands.
+  Stream<Conversation?> watchConversation(String uid, String conversationId);
 }
 
 class FirestoreConversationsStream implements ConversationsStream {
@@ -30,6 +34,12 @@ class FirestoreConversationsStream implements ConversationsStream {
       .limit(limit)
       .snapshots()
       .map((snapshot) => [for (final doc in snapshot.docs) ConversationDocuments.conversation(doc.id, doc.data())]);
+
+  @override
+  Stream<Conversation?> watchConversation(String uid, String conversationId) => _conversations(uid)
+      .doc(conversationId)
+      .snapshots()
+      .map((doc) => doc.exists ? ConversationDocuments.conversation(doc.id, doc.data()!) : null);
 
   @override
   Stream<List<ProDealCloserMessage>> watchMessages(String uid, String conversationId) => _conversations(uid)

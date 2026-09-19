@@ -52,7 +52,6 @@ import 'package:appwizard/features/feedback/presentation/bloc/feedback_bloc.dart
 import 'package:appwizard/features/lines_that_land/presentation/bloc/lines_that_land_bloc.dart';
 
 import 'package:appwizard/core/network/cloud_functions_client.dart';
-import 'package:appwizard/core/services/installation_id_service.dart';
 import 'package:appwizard/core/services/profile_sync_service.dart';
 import 'package:appwizard/core/utils/screenshot_encoder.dart';
 import 'package:appwizard/features/profile/data/datasources/profile_remote_datasource.dart';
@@ -150,6 +149,8 @@ Future<void> init() async {
     ..registerLazySingleton<ExpressDealmakerRemoteDataSource>(
       () => CloudExpressDealmakerRemoteDataSource(
         sl<ConversationsApi>(),
+        sl<ConversationsStream>(),
+        sl<AuthService>(),
         sl<UserProfileService>(),
         sl<ScreenshotEncoder>(),
         sl<AppLogger>(),
@@ -284,24 +285,24 @@ Future<void> init() async {
     ),
   );
 
-  // User profile (onboarding answers: vibe, push, marketplace…)
+  // User profile: the onboarding answers as stored, pushed to the `profile` function
   sl.registerLazySingleton<UserProfileService>(
     () => UserProfileService(
       sl<OnboardingRepository>(),
       sl<RemoteConfigService>(),
       sl<AppLogger>(),
+      // Resolved lazily: the sync service reads answers back off this one.
+      pushToBackend: () => sl<ProfileSyncService>().schedulePush(),
     ),
   );
 
   // Profile sync: device answers → `profile` Cloud Function → Firestore (PROFILE_SYNC.md)
   sl
-    ..registerLazySingleton<InstallationIdService>(() => InstallationIdService(sl<SharedPreferences>()))
     ..registerLazySingleton<ProfileRemoteDataSource>(() => ProfileRemoteDataSourceImpl(sl<CloudFunctionsApi>()))
     ..registerLazySingleton<ProfileSyncService>(
       () => ProfileSyncService(
         profile: sl<UserProfileService>(),
         remote: sl<ProfileRemoteDataSource>(),
-        installation: sl<InstallationIdService>(),
         auth: sl<AuthService>(),
         onboarding: sl<OnboardingRepository>(),
         logger: sl<AppLogger>(),

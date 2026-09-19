@@ -2,8 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:appwizard/core/config/wiz_catalog.dart';
+import 'package:appwizard/core/theme/option_style.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/wiz/fade_up.dart';
 import 'package:appwizard/core/widgets/wiz/frosted_surface.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
@@ -11,6 +12,7 @@ import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_text_field.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/cubit/express_dealmaker_state.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/express_copy.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/widgets/reply_card.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/widgets/screenshot_tile.dart';
 
@@ -20,7 +22,7 @@ class ExpressResultsStage extends StatefulWidget {
   const ExpressResultsStage({
     required this.state,
     required this.copy,
-    required this.vibes,
+    required this.tones,
     required this.onPick,
     required this.onRetryUpload,
     required this.onKeywordChanged,
@@ -36,7 +38,8 @@ class ExpressResultsStage extends StatefulWidget {
 
   final ExpressDealmakerState state;
   final ExpressCopy copy;
-  final List<VibeDef> vibes;
+  /// The tone options the onboarding screen offers, with their labels, colours and glyphs.
+  final List<ProfileOption> tones;
   final VoidCallback onPick;
   final ValueChanged<int> onRetryUpload;
   final ValueChanged<String> onKeywordChanged;
@@ -207,24 +210,26 @@ class _ExpressResultsStageState extends State<ExpressResultsStage> {
         clipBehavior: Clip.none,
         child: Row(
           children: [
-            for (var i = 0; i < widget.vibes.length; i++) ...[
+            for (var i = 0; i < widget.tones.length; i++) ...[
               if (i > 0) const SizedBox(width: 6),
-              WizChip(
-                label: widget.vibes[i].shortOf(context),
-                // Vibe glyph; inherits the chip foreground when selected (filled in the vibe colour).
-                leading: widget.vibes[i].icon == null
-                    ? null
-                    : Icon(
-                        widget.vibes[i].icon,
-                        color: widget.vibes[i].id == widget.state.vibeId ? null : widget.vibes[i].chipTextColor,
-                      ),
-                compact: true,
-                selected: widget.vibes[i].id == widget.state.vibeId,
-                selectedColor: widget.vibes[i].color,
-                selectedTextColor: widget.vibes[i].textOnColor,
-                fill: Colors.white,
-                onTap: () => widget.onVibeSelected(widget.vibes[i].id),
-              ),
+              if (widget.tones[i] case final tone)
+                if (OptionStyle.of(tone) case final style)
+                  WizChip(
+                    label: TemplateText.textOf(context, tone.shortLabel ?? tone.label),
+                    // The tone's glyph; inherits the chip foreground when selected (filled in its colour).
+                    leading: style.icon == null
+                        ? null
+                        : Icon(
+                            style.icon,
+                            color: tone.value == widget.state.vibeId ? null : style.textColor,
+                          ),
+                    compact: true,
+                    selected: tone.value == widget.state.vibeId,
+                    selectedColor: style.color,
+                    selectedTextColor: style.textOnColor,
+                    fill: Colors.white,
+                    onTap: () => widget.onVibeSelected(tone.value),
+                  ),
             ],
           ],
         ),

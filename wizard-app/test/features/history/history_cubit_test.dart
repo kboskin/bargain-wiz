@@ -74,7 +74,16 @@ void main() {
     // Seeded oldest-first on purpose: the cubit must sort newest first.
     repo = FakeConversationRepository([bike, iphone, kallax]);
     changes = ValueNotifier<int>(0);
-    cubit = HistoryCubit(repo, changes: changes);
+    cubit = HistoryCubit(
+      repo,
+      changes: changes,
+      // What the marketplace screen's options are labelled, as the page supplies them.
+      marketplaceLabels: () => const {
+        'facebook': 'Facebook Marketplace',
+        'ebay': 'eBay',
+        'olx': 'OLX',
+      },
+    );
   });
 
   tearDown(() async {

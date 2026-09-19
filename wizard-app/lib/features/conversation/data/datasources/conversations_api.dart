@@ -10,8 +10,8 @@ abstract class ConversationsApi {
   Future<ConversationWriteResponse> redo(String conversationId, ConversationActionRequest request);
   Future<void> patch(String conversationId, ConversationPatchRequest request);
 
-  /// Soft delete: the conversation leaves the user's list (`active: false`) but nothing is
-  /// destroyed until the server-side retention TTL fires.
+  /// Soft delete: the conversation leaves the user's list (`active: false`) and nothing is
+  /// destroyed — the server keeps it, there is no retention policy.
   Future<void> archive(String conversationId);
 }
 

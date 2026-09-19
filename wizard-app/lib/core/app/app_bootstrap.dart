@@ -5,16 +5,23 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/core/services/profile_sync_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 
 /// Startup, split into what the first real screen needs and what can follow it.
 ///
-/// [run] is the only thing the UI waits for: Firebase, the dependency container and the
-/// bundled Remote Config defaults (all local, no network). [warmUp] then starts the work that
-/// used to sit on the critical path: the Remote Config fetch (up to 10 s) and profile sync.
-/// Anonymous sign-in is started by `AuthBloc` for the same reason, so no screen waits on it.
+/// [run] is what the UI waits for: Firebase, the dependency container, the bundled Remote
+/// Config defaults (all local) and **anonymous sign-in**, the one network call on the
+/// critical path. It is there because a uid is not optional: every backend endpoint requires
+/// an ID token and the app has no signed-out mode, so a launch without one can only produce
+/// 401s. When it fails, [run] returns a message and `BargainWizApp` keeps the blocking
+/// failure screen up with tap-to-retry instead of letting a crippled app through.
+///
+/// [warmUp] then starts what can lag behind the first screen: the Remote Config fetch (up to
+/// 10 s) and profile sync. The splash is already painted before any of this begins, so the
+/// launch still shows something immediately (see STARTUP.md).
 class AppBootstrap {
   const AppBootstrap._();
 
@@ -30,6 +37,11 @@ class AppBootstrap {
       debugPrint('[ERROR] Startup failed: $e');
       debugPrintStack(stackTrace: stackTrace);
       return 'Bargain Wiz could not start. Please try again.';
+    }
+    // Blocking on purpose: no uid, no usable app. `force` because the person is waiting.
+    if (await di.sl<AuthService>().ensureSignedIn(force: true) == null) {
+      debugPrint('[ERROR] Startup failed: no Firebase user');
+      return 'Bargain Wiz could not connect. Check your internet connection.';
     }
     warmUp();
     return null;

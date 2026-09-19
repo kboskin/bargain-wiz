@@ -1,3 +1,4 @@
+import 'package:appwizard/core/config/attachment_limits.dart';
 import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/core/network/cloud_functions_client.dart';
 import 'package:appwizard/core/services/auth_service.dart';
@@ -8,6 +9,7 @@ import 'package:appwizard/features/conversation/data/datasources/conversations_a
 import 'package:appwizard/features/conversation/data/datasources/conversations_stream.dart';
 import 'package:appwizard/features/conversation/data/models/conversation_api_models.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/pro_deal_closer/domain/entities/chat_send_result.dart';
 import 'package:appwizard/features/pro_deal_closer/domain/repositories/pro_deal_closer_repository.dart';
 import 'package:appwizard/features/shared/data/models/ai/ai_api_models.dart';
@@ -31,8 +33,6 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
         _encoder = encoder,
         _logger = logger;
 
-  /// Server cap per message.
-  static const int maxImages = 6;
   static const int maxCached = 24;
 
   final ConversationsApi _api;
@@ -54,7 +54,6 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
   @override
   Future<Either<Failure, ChatSendResult>> send({
     String? conversationId,
-    required String requestId,
     String? text,
     List<String> attachmentPaths = const [],
     required String vibe,
@@ -67,7 +66,6 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
       final response = conversationId == null
           ? await _api.create(CreateConversationRequest(
               type: 'pro',
-              requestId: requestId,
               profile: profile,
               text: payloadText,
               images: images.isEmpty ? null : images,
@@ -75,7 +73,6 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
           : await _api.send(
               conversationId,
               SendMessageRequest(
-                requestId: requestId,
                 profile: profile,
                 text: payloadText,
                 images: images.isEmpty ? null : images,
@@ -93,22 +90,18 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
   }
 
   @override
-  Future<Either<Failure, List<DealLine>>> requestOptions({
+  Future<Either<Failure, void>> requestOptions({
     required String conversationId,
     required String messageId,
-    required String requestId,
     required String vibe,
     required String locale,
   }) async {
     try {
-      final response = await _api.requestOptions(
+      await _api.requestOptions(
         conversationId,
-        ConversationActionRequest(requestId: requestId, messageId: messageId, profile: _profileFields(vibe, locale)),
+        ConversationActionRequest(messageId: messageId, profile: _profileFields(vibe, locale)),
       );
-      return Right([
-        for (final line in response.lines ?? const <AiDealLine>[])
-          if (line.text.isNotEmpty) DealLine(text: line.text, intent: DealIntent.fromString(line.intent), why: line.why),
-      ]);
+      return const Right(null);
     } on Object catch (e, stackTrace) {
       _logger.e('Pro Deal Closer options failed', e, stackTrace);
       return Left(_failure(e));
@@ -119,14 +112,13 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
   Future<Either<Failure, void>> redo({
     required String conversationId,
     required String messageId,
-    required String requestId,
     required String vibe,
     required String locale,
   }) async {
     try {
       await _api.redo(
         conversationId,
-        ConversationActionRequest(requestId: requestId, messageId: messageId, profile: _profileFields(vibe, locale)),
+        ConversationActionRequest(messageId: messageId, profile: _profileFields(vibe, locale)),
       );
       return const Right(null);
     } on Object catch (e, stackTrace) {
@@ -136,18 +128,17 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
   }
 
   ConversationProfile _profileFields(String vibe, String locale) => ConversationProfile(
-        vibe: vibe,
-        push: _profile.pushValue,
+        _profile.payload(
+          overrides: {ProfileFields.vibeKey: vibe},
+          except: const {ProfileFields.referralKey},
+        ),
         locale: locale,
-        marketplace: _profile.marketplace,
-        dealSize: _profile.dealSizeValue,
-        dealsPerMonth: _profile.dealsPerMonth,
-        hurdles: _profile.hurdles.isEmpty ? null : _profile.hurdles,
       );
 
-  /// Newest [maxImages] attachments, downscaled; unreadable files are skipped.
+  /// Newest [AttachmentLimits.maxImages] attachments, downscaled; unreadable files are skipped.
   Future<List<AiImagePayload>> _encodeAll(List<String> paths) async {
-    final kept = paths.length > maxImages ? paths.sublist(paths.length - maxImages) : paths;
+    const limit = AttachmentLimits.maxImages;
+    final kept = paths.length > limit ? paths.sublist(paths.length - limit) : paths;
     final images = <AiImagePayload>[];
     for (final path in kept) {
       final encoded = await _encode(path);

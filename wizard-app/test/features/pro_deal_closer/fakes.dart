@@ -12,14 +12,12 @@ import 'package:dartz/dartz.dart';
 class SendCall {
   const SendCall({
     required this.conversationId,
-    required this.requestId,
     required this.text,
     required this.attachmentPaths,
     required this.vibe,
   });
 
   final String? conversationId;
-  final String requestId;
   final String? text;
   final List<String> attachmentPaths;
   final String vibe;
@@ -53,7 +51,6 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
   @override
   Future<Either<Failure, ChatSendResult>> send({
     String? conversationId,
-    required String requestId,
     String? text,
     List<String> attachmentPaths = const [],
     required String vibe,
@@ -61,7 +58,6 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
   }) async {
     sendCalls.add(SendCall(
       conversationId: conversationId,
-      requestId: requestId,
       text: text,
       attachmentPaths: attachmentPaths,
       vibe: vibe,
@@ -77,7 +73,6 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
         id: userId,
         text: text ?? '',
         attachments: [for (final p in attachmentPaths) ChatAttachment(storagePath: 'stored/$p')],
-        requestId: requestId,
         seq: list.length + 1,
       ))
       ..add(ProDealCloserMessage(
@@ -85,7 +80,6 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
         text: autoReply ? 'Reply for $vibe' : '',
         isWizard: true,
         status: autoReply ? MessageStatus.done : MessageStatus.pending,
-        requestId: requestId,
         seq: list.length + 2,
       ));
     _emit(cid);
@@ -104,7 +98,6 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
   Future<Either<Failure, List<DealLine>>> requestOptions({
     required String conversationId,
     required String messageId,
-    required String requestId,
     required String vibe,
     required String locale,
   }) async {
@@ -119,7 +112,6 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
   Future<Either<Failure, void>> redo({
     required String conversationId,
     required String messageId,
-    required String requestId,
     required String vibe,
     required String locale,
   }) async {
@@ -134,6 +126,9 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
     );
     return const Right(null);
   }
+
+  /// Re-emits the current messages (for a test that edits [store] directly).
+  void emitFor(String conversationId) => _emit(conversationId);
 
   void _update(String conversationId, ProDealCloserMessage Function(ProDealCloserMessage) change) {
     final list = store[conversationId];

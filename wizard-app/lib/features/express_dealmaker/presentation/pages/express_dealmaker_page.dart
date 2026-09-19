@@ -4,14 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:appwizard/core/config/wiz_catalog.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/theme/option_style.dart';
 import 'package:appwizard/core/routing/app_routes.dart';
 import 'package:appwizard/core/services/feature_gate_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/gallery_picker_helper.dart';
+import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_header.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/cubit/express_dealmaker_cubit.dart';
@@ -21,6 +22,7 @@ import 'package:appwizard/features/express_dealmaker/presentation/widgets/expres
 import 'package:appwizard/features/express_dealmaker/presentation/widgets/express_results_stage.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/widgets/express_uploading_stage.dart';
 import 'package:appwizard/features/paywall/presentation/paywall_launcher.dart';
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 
 /// Route `extra` for [AppRoutes.express].
 class ExpressDealmakerArgs {
@@ -49,9 +51,9 @@ class ExpressDealmakerPage extends StatelessWidget {
         final profile = di.sl<UserProfileService>();
         return di.sl<ExpressDealmakerCubit>(
           param1: ExpressDealmakerCubitParams(
-            vibeId: profile.vibeId,
+            vibeId: profile.valueOf(ProfileFields.vibeKey)?.toString() ?? '',
             locale: languageCode,
-            marketplace: profile.marketplace,
+            marketplace: profile.valueOf(ProfileFields.marketplaceKey)?.toString(),
           ),
         );
       },
@@ -98,8 +100,9 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
     final args = widget.args;
     final conversationId = args?.conversationId;
     final initialPaths = args?.initialPaths ?? const <String>[];
-    if (conversationId == null && _cubit.state.vibeId != profile.vibeId) {
-      await _cubit.changeVibe(profile.vibeId);
+    final vibeId = profile.valueOf(ProfileFields.vibeKey)?.toString();
+    if (conversationId == null && vibeId != null && _cubit.state.vibeId != vibeId) {
+      await _cubit.changeVibe(vibeId);
     }
     if (conversationId == null && initialPaths.isEmpty) {
       unawaited(_cubit.start());
@@ -116,7 +119,7 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
   }
 
   Future<void> _changeVibe(final String vibeId) async {
-    unawaited(di.sl<UserProfileService>().setVibe(vibeId));
+    unawaited(di.sl<UserProfileService>().setAnswer(ProfileFields.vibeKey, vibeId));
     await _cubit.changeVibe(vibeId);
   }
 
@@ -141,7 +144,8 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
   Widget build(final BuildContext context) {
     final config = di.sl<RemoteConfigService>().getMainPageConfig();
     final copy = ExpressCopy.resolve(context, config);
-    final catalog = di.sl<UserProfileService>().catalog;
+    // The tone options as the onboarding screen offers them (labels, colours, glyphs).
+    final tones = di.sl<UserProfileService>().fieldFor(ProfileFields.vibeKey)?.options ?? const [];
 
     return PopScope(
       canPop: false,
@@ -154,20 +158,23 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
           bottom: false,
           child: BlocBuilder<ExpressDealmakerCubit, ExpressDealmakerState>(
             builder: (final context, final state) {
-              final vibe = catalog.vibeById(state.vibeId);
+              final tone = tones.where((o) => o.value == state.vibeId).firstOrNull;
+              final toneStyle = OptionStyle.of(tone);
               return Column(
                 children: [
                   WizHeader(
                     title: copy.headerTitle,
                     horizontalPadding: 16,
                     onBack: _onBack,
-                    trailing: WizTag(
-                      label: vibe.shortOf(context),
-                      color: vibe.chipTextColor,
-                      textColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      style: WizType.chip,
-                    ),
+                    trailing: tone == null
+                        ? null
+                        : WizTag(
+                            label: TemplateText.textOf(context, tone.shortLabel ?? tone.label),
+                            color: toneStyle.textColor,
+                            textColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            style: WizType.chip,
+                          ),
                   ),
                   Expanded(
                     child: AnimatedSwitcher(
@@ -180,7 +187,7 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
                       ),
                       child: KeyedSubtree(
                         key: ValueKey(state.loadingConversation ? 'loading' : state.phase),
-                        child: _buildStage(state, copy, catalog),
+                        child: _buildStage(state, copy, tones),
                       ),
                     ),
                   ),
@@ -196,7 +203,7 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
   Widget _buildStage(
     final ExpressDealmakerState state,
     final ExpressCopy copy,
-    final WizCatalog catalog,
+    final List<ProfileOption> tones,
   ) {
     if (state.loadingConversation) {
       return const Center(
@@ -225,13 +232,14 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
       case ExpressPhase.error:
         return ExpressErrorStage(
           copy: copy,
+          message: state.errorMessage,
           onRetry: () => unawaited(_cubit.retry()),
         );
       case ExpressPhase.ready:
         return ExpressResultsStage(
           state: state,
           copy: copy,
-          vibes: catalog.vibes,
+          tones: tones,
           onPick: _pickScreenshots,
           onRetryUpload: (final i) => unawaited(_cubit.retryUpload(i)),
           onKeywordChanged: _cubit.setKeyword,

@@ -2,7 +2,7 @@
 
 Startup sequence and its rules: `STARTUP.md`.
 
-This project supports two flavors: **dev** and **prod**.
+This project supports three flavors: **dev**, **prod** and **local** (local points Firebase at the emulator suite).
 
 ## Bundle IDs
 
@@ -93,8 +93,15 @@ names rewritten, add it to the Podfile list, and run `pod install`.
 ### Local (Firebase emulators)
 
 `local` is the dev app pointed at the emulators (Auth, Firestore, Storage, Functions). Start
-them first from `wizard-backend/` (`firebase emulators:start`, UI at http://127.0.0.1:4000),
-then:
+them first from `wizard-backend/` (`firebase emulators:start --import=.emulator-data
+--export-on-exit`, UI at http://127.0.0.1:4000) — without the import/export flags the Auth
+emulator forgets its users on every restart. Then:
+
+`local` and `dev` share the applicationId `com.bargain.wiz.dev`, so they also share one
+Firebase Auth session store: switching between them hands the emulator a session the dev
+project issued, or vice versa. `FirebaseService._useEmulators` logs an `[ERROR]` line when it
+sees one; the cure either way is to clear the app data once
+(`adb shell pm clear com.bargain.wiz.dev`).
 
 ```bash
 # Android emulator (reaches the host through 10.0.2.2)

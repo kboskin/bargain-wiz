@@ -1,6 +1,7 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:appwizard/core/theme/button_style.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/highlight_words_config.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_layout.dart';
@@ -201,6 +202,9 @@ class PaywallTimelineRowConfig {
 /// e.g. "We want you to try X for free", "We'll remind you before trial ends".
 @JsonSerializable()
 class PaywallStepConfig {
+  /// Step whose CTA asks for the notification permission when no `button_action` is set.
+  static const String reminderStepId = 'reminder';
+
   /// Optional identifier (e.g. "intro", "reminder", "timeline").
   final String? id;
 
@@ -227,6 +231,11 @@ class PaywallStepConfig {
   @JsonKey(name: 'highlight_color')
   final String? highlightColor;
 
+  /// What the CTA does on top of advancing to the next step. Only `request_permission`
+  /// (the notification opt-in) changes anything today; see [ButtonAction].
+  @JsonKey(name: 'button_action')
+  final String? buttonAction;
+
   PaywallStepConfig({
     this.id,
     this.title,
@@ -236,7 +245,15 @@ class PaywallStepConfig {
     this.buttonText,
     this.titleHighlightWords,
     this.highlightColor,
+    this.buttonAction,
   });
+
+  /// Whether tapping this step's CTA should show the notification prompt. Driven by
+  /// `button_action: request_permission`; falls back to the [reminderStepId] id so configs
+  /// written before `button_action` existed keep working.
+  bool get asksNotificationPermission => buttonAction == null
+      ? id == reminderStepId
+      : ButtonAction.fromString(buttonAction!) == ButtonAction.requestPermission;
 
   factory PaywallStepConfig.fromJson(Map<String, dynamic> json) =>
       _$PaywallStepConfigFromJson(json);

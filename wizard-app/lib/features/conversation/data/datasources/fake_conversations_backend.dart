@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/conversation/data/datasources/conversations_api.dart';
 import 'package:appwizard/features/conversation/data/datasources/conversations_stream.dart';
 import 'package:appwizard/features/conversation/data/models/conversation_api_models.dart';
@@ -7,9 +8,11 @@ import 'package:appwizard/features/conversation/domain/entities/conversation.dar
 import 'package:appwizard/features/shared/data/models/ai/ai_api_models.dart';
 
 /// In-memory stand-in for the `conversations` function **and** its Firestore listeners
-/// (`--dart-define=MOCK_AI=true`, widget work, tests). Mirrors the server's behaviour: a user
-/// turn plus a pending wizard placeholder appear at once, the canned reply lands after
-/// [replyDelay], options after [optionsDelay]; "Redo" regenerates in place.
+/// (`--dart-define=MOCK_AI=true`, widget work, tests).
+///
+/// Mirrors the server: every write returns ids straight away, and the "queued" model call
+/// lands later — the canned reply after [replyDelay], options after [optionsDelay] with
+/// `pendingOptions` set meanwhile. "Redo" regenerates in place.
 class FakeConversationsBackend implements ConversationsApi, ConversationsStream {
   FakeConversationsBackend({
     this.replyDelay = const Duration(milliseconds: 1300),
@@ -68,6 +71,11 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
     ],
   };
 
+  /// The tone the request asks for; the fake stands in for the prompt builder, so it reads
+  /// the one field it needs out of the profile it was sent.
+  static String _vibeOf(ConversationProfile profile) =>
+      profile[ProfileFields.vibeKey]?.toString() ?? defaultVibe;
+
   static String replyFor(String vibe) => replyTexts[vibe] ?? replyTexts[defaultVibe]!;
   static List<DealLine> linesFor(String vibe) => lineSets[vibe] ?? lineSets[defaultVibe]!;
 
@@ -87,6 +95,10 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
   }
 
   @override
+  Stream<Conversation?> watchConversation(String uid, String conversationId) =>
+      watchConversations(uid).map((list) => list.where((c) => c.id == conversationId).firstOrNull);
+
+  @override
   Stream<List<ProDealCloserMessage>> watchMessages(String uid, String conversationId) async* {
     yield List.of(_messages[conversationId] ?? const []);
     yield* _messageController(conversationId).stream;
@@ -104,65 +116,61 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
       type: isExpress ? ConversationType.express : ConversationType.proDealCloser,
       createdAt: now,
       updatedAt: now,
-      vibe: request.profile.vibe,
-      marketplace: request.profile.marketplace,
+      vibe: _vibeOf(request.profile),
+      marketplace: request.profile[ProfileFields.marketplaceKey]?.toString(),
       keyword: request.keyword,
       title: isExpress ? null : _title(request.text, request.images),
     );
     _emitList();
-    return _turn(id, request.requestId, request.text, request.images ?? const [], request.profile.vibe,
+    return _turn(id, request.text, request.images ?? const [], _vibeOf(request.profile),
         express: isExpress, keyword: request.keyword);
   }
 
   @override
   Future<ConversationWriteResponse> send(String conversationId, SendMessageRequest request) {
     _require(conversationId);
-    return _turn(conversationId, request.requestId, request.text, request.images ?? const [], request.profile.vibe);
+    return _turn(conversationId, request.text, request.images ?? const [], _vibeOf(request.profile));
   }
 
   @override
   Future<ConversationWriteResponse> requestOptions(String conversationId, ConversationActionRequest request) async {
     final target = _targetWizard(conversationId, request.messageId);
-    await Future<void>.delayed(optionsDelay);
-    final lines = linesFor(request.profile.vibe);
-    _replace(conversationId, target.copyWith(options: lines));
-    return ConversationWriteResponse(
-      conversationId: conversationId,
-      messageId: target.id,
-      lines: [for (final l in lines) AiDealLine(text: l.text, intent: l.intent.name, why: l.why)],
-    );
+    _replace(conversationId, target.copyWith(pendingOptions: true));
+    unawaited(Future<void>.delayed(optionsDelay).then((_) {
+      final current = _messages[conversationId]?.where((m) => m.id == target.id).firstOrNull;
+      if (current == null) return;
+      _replace(conversationId, current.copyWith(options: linesFor(_vibeOf(request.profile)), pendingOptions: false));
+    }));
+    return ConversationWriteResponse(conversationId: conversationId, messageId: target.id);
   }
 
   @override
   Future<ConversationWriteResponse> redo(String conversationId, ConversationActionRequest request) async {
     final conversation = _require(conversationId);
     final target = _targetWizard(conversationId, request.messageId);
-    _replace(conversationId, target.copyWith(status: MessageStatus.pending));
-    _update(conversation.copyWith(isTyping: true, vibe: request.profile.vibe, keyword: request.keyword ?? conversation.keyword));
-    await Future<void>.delayed(replyDelay);
     final isExpress = conversation.type == ConversationType.express;
-    final lines = linesFor(request.profile.vibe);
-    final text = isExpress ? seeing : '${replyFor(request.profile.vibe)}$regeneratedSuffix';
-    _replace(
-      conversationId,
-      target.copyWith(
-        text: text,
-        status: MessageStatus.done,
-        revision: target.revision + 1,
-        options: isExpress ? lines : const [],
-      ),
-    );
-    _update(_require(conversationId).copyWith(
-      isTyping: false,
-      preview: isExpress ? lines.first.text : text,
-      replyLines: isExpress ? lines : null,
-      seeing: isExpress ? seeing : null,
-    ));
-    return ConversationWriteResponse(
-      conversationId: conversationId,
-      messageId: target.id,
-      express: isExpress ? _expressPayload(lines) : null,
-    );
+    _replace(conversationId, target.copyWith(status: MessageStatus.pending, options: const []));
+    _update(conversation.copyWith(isTyping: true, vibe: _vibeOf(request.profile), keyword: request.keyword ?? conversation.keyword));
+    unawaited(Future<void>.delayed(replyDelay).then((_) {
+      final lines = linesFor(_vibeOf(request.profile));
+      final text = isExpress ? seeing : '${replyFor(_vibeOf(request.profile))}$regeneratedSuffix';
+      _replace(
+        conversationId,
+        target.copyWith(
+          text: text,
+          status: MessageStatus.done,
+          revision: target.revision + 1,
+          options: isExpress ? lines : const [],
+        ),
+      );
+      _update(_require(conversationId).copyWith(
+        isTyping: false,
+        preview: isExpress ? lines.first.text : text,
+        replyLines: isExpress ? lines : null,
+        seeing: isExpress ? seeing : null,
+      ));
+    }));
+    return ConversationWriteResponse(conversationId: conversationId, messageId: target.id, replyId: target.id);
   }
 
   @override
@@ -189,20 +197,12 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
 
   Future<ConversationWriteResponse> _turn(
     String conversationId,
-    String requestId,
     String? text,
     List<AiImagePayload> images,
     String vibe, {
     bool express = false,
     String? keyword,
   }) async {
-    final existing = (_messages[conversationId] ?? const <ProDealCloserMessage>[])
-        .where((m) => m.isUser && m.requestId == requestId)
-        .firstOrNull;
-    if (existing != null) {
-      final reply = _messages[conversationId]!.where((m) => m.isWizard && m.requestId == requestId).firstOrNull;
-      return ConversationWriteResponse(conversationId: conversationId, messageId: existing.id, replyId: reply?.id);
-    }
     final list = _messages.putIfAbsent(conversationId, () => []);
     final seq = list.length;
     final userId = 'fake_m${++_ids}';
@@ -212,7 +212,6 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
         id: userId,
         text: text ?? '',
         attachments: [for (var i = 0; i < images.length; i++) ChatAttachment(storagePath: 'fake/$conversationId/$userId-$i.jpg')],
-        requestId: requestId,
         seq: seq + 1,
       ))
       ..add(ProDealCloserMessage(
@@ -220,7 +219,6 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
         text: '',
         isWizard: true,
         status: MessageStatus.pending,
-        requestId: requestId,
         seq: seq + 2,
       ));
     final conversation = _require(conversationId);
@@ -232,13 +230,10 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
     ));
     _emitMessages(conversationId);
 
-    final lines = linesFor(vibe);
-    if (express) {
-      await Future<void>.delayed(replyDelay);
-      _complete(conversationId, replyId, seeing, options: lines, express: true, keyword: keyword);
-      return ConversationWriteResponse(conversationId: conversationId, messageId: userId, replyId: replyId, express: _expressPayload(lines));
-    }
-    unawaited(Future<void>.delayed(replyDelay).then((_) => _complete(conversationId, replyId, replyFor(vibe))));
+    // Like the backend: the model call is queued, so only ids come back now.
+    unawaited(Future<void>.delayed(replyDelay).then((_) => express
+        ? _complete(conversationId, replyId, seeing, options: linesFor(vibe), express: true, keyword: keyword)
+        : _complete(conversationId, replyId, replyFor(vibe))));
     return ConversationWriteResponse(conversationId: conversationId, messageId: userId, replyId: replyId);
   }
 
@@ -261,11 +256,6 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
     ));
     _emitMessages(conversationId);
   }
-
-  ExpressResultPayload _expressPayload(List<DealLine> lines) => ExpressResultPayload(
-        seeing: seeing,
-        lines: [for (final l in lines) AiDealLine(text: l.text, intent: l.intent.name, why: l.why)],
-      );
 
   ProDealCloserMessage _targetWizard(String conversationId, String? messageId) {
     final list = _messages[conversationId] ?? const <ProDealCloserMessage>[];

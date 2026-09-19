@@ -5,27 +5,9 @@ part 'profile_api_models.g.dart';
 /// Request/response models of the `profile` Cloud Function (Firestore `profiles/{id}`).
 /// See PROFILE_SYNC.md for the schema and merge rules.
 
-/// Stable, typed preferences the app logic depends on (derived from onboarding answers).
-@JsonSerializable(includeIfNull: false)
-class ProfilePreferences {
-  const ProfilePreferences({this.vibe, this.push, this.marketplace, this.dealsPerMonth, this.dealSize, this.locale, this.hurdles});
-
-  factory ProfilePreferences.fromJson(Map<String, dynamic> json) => _$ProfilePreferencesFromJson(json);
-
-  final String? vibe;
-  final int? push;
-  final String? marketplace;
-  @JsonKey(name: 'deals_per_month')
-  final String? dealsPerMonth;
-  @JsonKey(name: 'deal_size')
-  final num? dealSize;
-  final String? locale;
-
-  /// Onboarding `main_hurdle` ids; the model compensates for them.
-  final List<String>? hurdles;
-
-  Map<String, dynamic> toJson() => _$ProfilePreferencesToJson(this);
-}
+/// The `preferences` section is a plain `{field: value}` map: whatever the onboarding screens
+/// declare a `key` for (`vibe`, `push`, …) plus the device locale. The app copies the fields;
+/// the backend owns their meaning and ignores what its contract does not define.
 
 /// One step of the onboarding trace: what was asked and which options were offered.
 @JsonSerializable(includeIfNull: false)
@@ -95,18 +77,12 @@ class ProfileApp {
 /// Server-managed identity block (read-only for the client).
 @JsonSerializable(includeIfNull: false)
 class ProfileIdentity {
-  const ProfileIdentity({this.uid, this.provider, this.installationIds, this.mergedFrom, this.mergedInto});
+  const ProfileIdentity({this.uid, this.provider});
 
   factory ProfileIdentity.fromJson(Map<String, dynamic> json) => _$ProfileIdentityFromJson(json);
 
   final String? uid;
   final String? provider;
-  @JsonKey(name: 'installation_ids')
-  final List<String>? installationIds;
-  @JsonKey(name: 'merged_from')
-  final List<String>? mergedFrom;
-  @JsonKey(name: 'merged_into')
-  final String? mergedInto;
 
   Map<String, dynamic> toJson() => _$ProfileIdentityToJson(this);
 }
@@ -114,13 +90,11 @@ class ProfileIdentity {
 /// Body of `PATCH /profile`: every section optional; nested maps merge, `null` deletes.
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class ProfilePatchRequest {
-  const ProfilePatchRequest({required this.installationId, this.preferences, this.onboarding, this.referral, this.app});
+  const ProfilePatchRequest({this.preferences, this.onboarding, this.referral, this.app});
 
   factory ProfilePatchRequest.fromJson(Map<String, dynamic> json) => _$ProfilePatchRequestFromJson(json);
 
-  @JsonKey(name: 'installation_id')
-  final String installationId;
-  final ProfilePreferences? preferences;
+  final Map<String, dynamic>? preferences;
   final ProfileOnboarding? onboarding;
   final ProfileReferral? referral;
   final ProfileApp? app;
@@ -147,7 +121,7 @@ class ProfileDocument {
   @JsonKey(name: 'schema_version')
   final int? schemaVersion;
   final ProfileIdentity? identity;
-  final ProfilePreferences? preferences;
+  final Map<String, dynamic>? preferences;
   final ProfileOnboarding? onboarding;
   final ProfileReferral? referral;
   final ProfileApp? app;

@@ -36,7 +36,7 @@ class LinesThatLandResponse {
   @JsonKey(name: 'refresh_interval_hours', fromJson: _hoursFromJson)
   final num refreshIntervalHours;
 
-  /// `remote_config` | `fallback`, as reported by the function.
+  /// `generated` | `fallback`, as reported by the function.
   @JsonKey(defaultValue: 'unknown')
   final String source;
 

@@ -30,7 +30,9 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+# Unanchored: Flutter builds into ./build, but Xcode and Gradle also drop output beside their
+# own projects (ios/build/ from a direct xcodebuild, android/**/build/).
+build/
 /coverage/
 
 # Symbolication related

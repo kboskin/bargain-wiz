@@ -43,7 +43,7 @@ class WizColors {
   static const Color successGreen = Color(0xFF2E7D32);
   static const Color warning = Color(0xFFF59E0B);
 
-  /// Push level (risk_tolerance) stops: 20 / 40 / 60 / 80 / 100.
+  /// Push level stops: 20 / 40 / 60 / 80 / 100.
   static const List<Color> push = [
     Color(0xFFC026D3),
     Color(0xFF7E57C2),

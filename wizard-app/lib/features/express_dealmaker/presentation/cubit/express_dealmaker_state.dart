@@ -21,6 +21,7 @@ class ExpressDealmakerState extends Equatable {
     this.conversationId,
     this.requestId = 0,
     this.errorKind,
+    this.errorMessage,
     this.loadingConversation = false,
   });
 
@@ -39,6 +40,9 @@ class ExpressDealmakerState extends Equatable {
   /// Increments on every successful reply; used to replay card entrance animations.
   final int requestId;
   final ExpressErrorKind? errorKind;
+  /// What the backend said went wrong (a rate limit names the wait); null uses the
+  /// configured copy.
+  final String? errorMessage;
   /// True while restoring a conversation from history.
   final bool loadingConversation;
 
@@ -62,8 +66,10 @@ class ExpressDealmakerState extends Equatable {
     final String? vibeId,
     final bool? replyLoading,
     final String? conversationId,
+    final bool clearConversationId = false,
     final int? requestId,
     final ExpressErrorKind? errorKind,
+    final String? errorMessage,
     final bool clearError = false,
     final bool? loadingConversation,
   }) =>
@@ -75,9 +81,10 @@ class ExpressDealmakerState extends Equatable {
         keyword: keyword ?? this.keyword,
         vibeId: vibeId ?? this.vibeId,
         replyLoading: replyLoading ?? this.replyLoading,
-        conversationId: conversationId ?? this.conversationId,
+        conversationId: clearConversationId ? null : (conversationId ?? this.conversationId),
         requestId: requestId ?? this.requestId,
         errorKind: clearError ? null : (errorKind ?? this.errorKind),
+        errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
         loadingConversation: loadingConversation ?? this.loadingConversation,
       );
 
@@ -93,6 +100,7 @@ class ExpressDealmakerState extends Equatable {
         conversationId,
         requestId,
         errorKind,
+        errorMessage,
         loadingConversation,
       ];
 }

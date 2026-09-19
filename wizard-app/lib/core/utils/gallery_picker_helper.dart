@@ -12,9 +12,9 @@ import 'package:appwizard/core/widgets/wiz/wiz_sheet.dart';
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
 import 'package:appwizard/features/home/data/models/main_page_config.dart';
 
-/// Shared gallery picker: requests photo permission, shows configurable
-/// dialogs/snackbars, and returns picked image file(s). Use for "Upload Product
-/// or Chat" and for chat attachments.
+/// Shared gallery picker: opens the OS picker, shows configurable dialogs/snackbars,
+/// and returns picked image file(s). Use for "Upload Product or Chat" and for chat
+/// attachments.
 class GalleryPickerHelper {
   GalleryPickerHelper._();
 
@@ -117,9 +117,21 @@ class GalleryPickerHelper {
     );
   }
 
-  /// Picks image(s) from the gallery. Requests [Permission.photos], shows
-  /// permission-denied dialog/snackbars on error. Returns the list of
-  /// picked files (empty if cancelled or error). Guards against double-open.
+  /// image_picker's own photo-library errors. Only the legacy `UIImagePickerController`
+  /// (iOS 13) and locked-down Android profiles report these; `PHPickerViewController` and
+  /// `ACTION_GET_CONTENT` never do.
+  static bool _isPhotoAccessError(String code) =>
+      code == 'photo_access_denied' || code == 'photo_access_restricted';
+
+  /// Picks image(s) from the gallery.
+  ///
+  /// Nothing is requested up front: the picker runs out of process
+  /// (`PHPickerViewController` on iOS 14+, `ACTION_GET_CONTENT` on Android) and needs no
+  /// photo-library permission, so asking for one only adds a prompt that can come back
+  /// `limited`/`denied` and block a picker that would have worked. The permission dialog is
+  /// shown only when the picker itself says it cannot read the library.
+  ///
+  /// Returns the picked files (empty if cancelled or on error). Guards against double-open.
   static Future<List<XFile>> pickImages(BuildContext context) async {
     if (_isPickerOpen) return [];
     final now = DateTime.now();
@@ -129,55 +141,21 @@ class GalleryPickerHelper {
     }
     final config = di.sl<RemoteConfigService>().getMainPageConfig();
     final logger = di.sl<AppLogger>();
+    _isPickerOpen = true;
     try {
-      try {
-        final status = await Permission.photos.request();
-        if (!context.mounted) return [];
-        if (!status.isGranted) {
-          if (status.isPermanentlyDenied) {
-            _showPhotoPermissionDeniedDialog(context, config);
-            return [];
-          }
-          final snackbarText = _photoPermissionText(
-            context,
-            config?.photoPermissionSnackbar,
-            'Photo access is needed to pick a screenshot.',
-          );
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(snackbarText)),
-          );
-          return [];
-        }
-      } on MissingPluginException catch (e, stackTrace) {
-        logger.e(
-          'Permission handler not registered (e.g. after hot restart), opening picker anyway',
-          e,
-          stackTrace,
-        );
-        if (!context.mounted) return [];
-      }
-
-      // Defer opening the picker to the next frame so the permission dialog
-      // can fully dismiss and avoid the native picker opening twice.
-      await Future<void>.delayed(Duration.zero);
+      final picker = ImagePicker();
+      // maxWidth/imageQuality make the OS re-encode to JPEG (iOS photos are HEIC
+      // otherwise, which the on-device encoder cannot read) and cap the file size.
+      final images = await picker.pickMultiImage(maxWidth: 2048, imageQuality: 90);
       if (!context.mounted) return [];
-
-      _isPickerOpen = true;
-      try {
-        final picker = ImagePicker();
-        // maxWidth/imageQuality make the OS re-encode to JPEG (iOS photos are HEIC
-        // otherwise, which the on-device encoder cannot read) and cap the file size.
-        final images = await picker.pickMultiImage(maxWidth: 2048, imageQuality: 90);
-        if (!context.mounted) return [];
-        return images;
-      } finally {
-        _isPickerOpen = false;
-        _lastPickerClosedAt = DateTime.now();
-      }
+      return images;
     } on PlatformException catch (e, stackTrace) {
-      _isPickerOpen = false;
       logger.e('Gallery picker platform error: ${e.code}', e, stackTrace);
       if (!context.mounted) return [];
+      if (_isPhotoAccessError(e.code)) {
+        _showPhotoPermissionDeniedDialog(context, config);
+        return [];
+      }
       final message = e.code == 'channel-error'
           ? _photoPermissionText(
               context,
@@ -193,7 +171,6 @@ class GalleryPickerHelper {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       return [];
     } catch (e, stackTrace) {
-      _isPickerOpen = false;
       logger.e('Gallery picker error', e, stackTrace);
       if (!context.mounted) return [];
       final message = _photoPermissionText(
@@ -205,6 +182,9 @@ class GalleryPickerHelper {
         SnackBar(content: Text(message)),
       );
       return [];
+    } finally {
+      _isPickerOpen = false;
+      _lastPickerClosedAt = DateTime.now();
     }
   }
 

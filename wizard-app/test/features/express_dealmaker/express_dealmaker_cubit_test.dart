@@ -287,5 +287,62 @@ void main() {
       expect(cubit.state.phase, ExpressPhase.pick);
       expect(cubit.state.loadingConversation, isFalse);
     });
+
+    test('a deal whose generation failed reopens as an error, not a bare picker', () async {
+      conversations.store['43'] = Conversation(
+        id: '43',
+        type: ConversationType.express,
+        createdAt: DateTime(2026, 9, 18),
+        errorMessage: 'The wizard could not answer. Try again.',
+      );
+
+      await cubit.start(conversationId: '43');
+
+      expect(cubit.state.phase, ExpressPhase.error);
+      expect(cubit.state.errorKind, ExpressErrorKind.reply);
+      expect(cubit.state.errorMessage, 'The wizard could not answer. Try again.');
+      expect(cubit.state.conversationId, '43');
+    });
+
+    test('retrying a failed deal regenerates it without re-picking screenshots', () async {
+      conversations.store['44'] = Conversation(
+        id: '44',
+        type: ConversationType.express,
+        createdAt: DateTime(2026, 9, 18),
+        errorMessage: 'The wizard could not answer. Try again.',
+      );
+      await cubit.start(conversationId: '44');
+      expect(cubit.state.uploadedIds, isEmpty); // a failed deal projects no screenshots
+
+      await cubit.retry();
+
+      // Reached the backend with the existing conversation, uploading nothing.
+      expect(repo.uploadedPaths, isEmpty);
+      expect(repo.lastConversationId, '44');
+      expect(cubit.state.phase, ExpressPhase.ready);
+    });
+
+    test('screenshots added to an existing deal start a new one instead of being dropped',
+        () async {
+      conversations.store['45'] = Conversation(
+        id: '45',
+        type: ConversationType.express,
+        createdAt: DateTime(2026, 9, 18),
+        errorMessage: 'The wizard could not answer. Try again.',
+      );
+      await cubit.start(conversationId: '45');
+      expect(cubit.state.conversationId, '45');
+
+      cubit.addPaths(const ['fresh.png']);
+      expect(cubit.state.conversationId, isNull, reason: 'express takes no follow-up turns');
+
+      await cubit.startUpload();
+      await pumpEventQueue();
+
+      // The new screenshot was actually sent, and it opened its own deal.
+      expect(repo.uploadedPaths, ['fresh.png']);
+      expect(repo.lastConversationId, isNull);
+      expect(cubit.state.phase, ExpressPhase.ready);
+    });
   });
 }

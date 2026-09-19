@@ -1,4 +1,3 @@
-import 'package:appwizard/core/config/wiz_catalog.dart';
 import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 import 'package:equatable/equatable.dart';
@@ -19,7 +18,6 @@ class ProChatMessage extends Equatable {
     this.optionsLoading = false,
     this.restored = false,
     this.status = MessageStatus.done,
-    this.requestId,
   });
 
   /// [localPaths] are this device's files for a turn it sent (server refs otherwise).
@@ -39,7 +37,6 @@ class ProChatMessage extends Equatable {
         options: List<DealLine>.from(entity.options),
         restored: restored,
         status: entity.status,
-        requestId: entity.requestId,
       );
 
   /// Stable key for list items / per-row widget state.
@@ -58,8 +55,6 @@ class ProChatMessage extends Equatable {
   final bool restored;
   /// Server lifecycle (pending = typing placeholder, failed = needs a Redo / resend).
   final MessageStatus status;
-  /// Client request id of the turn this bubble belongs to.
-  final String? requestId;
 
   bool get isUser => !isWizard;
   bool get hasAttachments => attachmentPaths.isNotEmpty;
@@ -94,7 +89,6 @@ class ProChatMessage extends Equatable {
         optionsLoading: optionsLoading ?? this.optionsLoading,
         restored: restored ?? this.restored,
         status: status ?? this.status,
-        requestId: requestId,
       );
 
   @override
@@ -109,7 +103,6 @@ class ProChatMessage extends Equatable {
         optionsLoading,
         restored,
         status,
-        requestId,
       ];
 }
 
@@ -123,7 +116,7 @@ class ProDealCloserState extends Equatable {
     this.conversationStatus = ConversationStatus.open,
     this.messages = const [],
     this.isTyping = false,
-    this.vibe = WizCatalog.defaultVibeId,
+    this.vibe = '',
     this.locale = 'en',
     this.failure,
     this.errorCount = 0,

@@ -60,7 +60,7 @@ void main() {
   test('maps a pro conversation with an active turn and tolerates missing fields', () {
     final conversation = ConversationDocuments.conversation('c2', {
       'type': 'pro',
-      'active_turn': {'message_id': 'm2', 'request_id': 'r1'},
+      'active_turn': {'message_id': 'm2'},
     });
 
     expect(conversation.type, ConversationType.proDealCloser);
@@ -77,12 +77,10 @@ void main() {
       'role': 'wizard',
       'text': '',
       'status': 'pending',
-      'request_id': 'r1',
       'seq': 2,
     });
     expect(pending.isWizard, isTrue);
     expect(pending.isPending, isTrue);
-    expect(pending.requestId, 'r1');
     expect(pending.seq, 2);
 
     final failed = ConversationDocuments.message('m4', {

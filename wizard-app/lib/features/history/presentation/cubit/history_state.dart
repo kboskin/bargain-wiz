@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-import 'package:appwizard/core/config/wiz_catalog.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 import 'package:appwizard/features/conversation/domain/helpers/conversation_title_helper.dart';
 
@@ -35,6 +34,7 @@ class HistoryState extends Equatable {
     this.query = '',
     this.filter = HistoryFilter.all,
     this.errorMessage,
+    this.marketplaceLabels = const {},
   });
 
   final HistoryLoadStatus loadStatus;
@@ -44,29 +44,37 @@ class HistoryState extends Equatable {
   final HistoryFilter filter;
   final String? errorMessage;
 
+  /// Stored marketplace value → the label its onboarding option configures, for search.
+  final Map<String, String> marketplaceLabels;
+
   bool get isLoading =>
       loadStatus == HistoryLoadStatus.loading || loadStatus == HistoryLoadStatus.initial;
   bool get hasAny => conversations.isNotEmpty;
   bool get isFiltering => query.trim().isNotEmpty || filter != HistoryFilter.all;
 
   /// Rows after applying [filter] and [query].
-  List<Conversation> get visible => apply(conversations, query: query, filter: filter);
+  List<Conversation> get visible =>
+      apply(conversations, query: query, filter: filter, marketplaceLabels: marketplaceLabels);
 
   /// Pure filter: status chip + case-insensitive search on title and marketplace.
+  /// [marketplaceLabels] maps a stored marketplace value to the label its onboarding option
+  /// configures, so "Facebook Marketplace" finds a deal stored as `facebook`.
   static List<Conversation> apply(
     Iterable<Conversation> source, {
     String query = '',
     HistoryFilter filter = HistoryFilter.all,
+    Map<String, String> marketplaceLabels = const {},
   }) {
     final status = filter.status;
     final q = query.trim().toLowerCase();
     return source.where((c) {
       if (status != null && c.status != status) return false;
       if (q.isEmpty) return true;
+      final marketplace = c.marketplace ?? '';
       final haystack = [
         ConversationTitleHelper.titleOf(c),
-        WizCatalog.marketplaceLabel(c.marketplace, fallback: ''),
-        c.marketplace ?? '',
+        marketplaceLabels[marketplace] ?? '',
+        marketplace,
       ].join(' ').toLowerCase();
       return haystack.contains(q);
     }).toList();
@@ -79,6 +87,7 @@ class HistoryState extends Equatable {
     HistoryFilter? filter,
     String? errorMessage,
     bool clearError = false,
+    Map<String, String>? marketplaceLabels,
   }) =>
       HistoryState(
         loadStatus: loadStatus ?? this.loadStatus,
@@ -86,8 +95,10 @@ class HistoryState extends Equatable {
         query: query ?? this.query,
         filter: filter ?? this.filter,
         errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+        marketplaceLabels: marketplaceLabels ?? this.marketplaceLabels,
       );
 
   @override
-  List<Object?> get props => [loadStatus, conversations, query, filter, errorMessage];
+  List<Object?> get props =>
+      [loadStatus, conversations, query, filter, errorMessage, marketplaceLabels];
 }
