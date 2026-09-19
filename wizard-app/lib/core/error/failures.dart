@@ -30,3 +30,15 @@ class ValidationFailure extends Failure {
   const ValidationFailure(super.message);
 }
 
+/// A turn the backend accepted and then failed to generate.
+///
+/// [conversationId] is the conversation the backend already owns, so a retry regenerates that
+/// deal instead of creating a second one. Null when the call never reached the backend.
+class GenerationFailure extends Failure {
+  const GenerationFailure(super.message, {this.conversationId});
+
+  final String? conversationId;
+
+  @override
+  List<Object> get props => [message, if (conversationId != null) conversationId!];
+}

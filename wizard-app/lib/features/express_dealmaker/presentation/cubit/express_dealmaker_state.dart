@@ -53,8 +53,10 @@ class ExpressDealmakerState extends Equatable {
   List<ScreenshotUploadItem> get uploaded => screenshots.where((final s) => s.isSuccess).toList();
   List<String> get uploadedIds => uploaded.map((final s) => s.effectiveId).toList();
   List<String> get paths => screenshots.map((final s) => s.path).toList();
-  /// Something worth persisting on back (results reached or an existing conversation).
-  bool get isSaveable => lines.isNotEmpty || conversationId != null;
+  /// Something worth persisting on back. A deal whose generation failed has a conversation but
+  /// nothing of its own to write: saving it would push a placeholder title over the one the
+  /// backend derived.
+  bool get isSaveable => lines.isNotEmpty;
 
   ExpressDealmakerState copyWith({
     final ExpressPhase? phase,

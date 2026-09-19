@@ -1,6 +1,7 @@
 import 'package:dartz/dartz.dart';
 
 import 'package:appwizard/core/error/failures.dart';
+import 'package:appwizard/core/network/cloud_functions_client.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/express_dealmaker/data/datasources/express_dealmaker_remote_datasource.dart';
 import 'package:appwizard/features/express_dealmaker/data/mappers/express_dealmaker_mapper.dart';
@@ -51,7 +52,16 @@ class ExpressDealmakerRepositoryImpl implements ExpressDealmakerRepository {
       return Right(_dealReplyMapper.toEntity(dto));
     } on Object catch (e, stackTrace) {
       _logger.e('Express Dealmaker getDealReply failed', e, stackTrace);
-      return Left(ServerFailure(e.toString()));
+      return Left(_failure(e));
     }
   }
+
+  /// A generation failure keeps the conversation it belongs to, so the cubit can retry it as a
+  /// regeneration. Everything else only carries a message — the backend's when it sent one,
+  /// because `toString()` on an exception is not copy a buyer should read.
+  static Failure _failure(final Object e) => switch (e) {
+        ExpressGenerationException() => GenerationFailure(e.message, conversationId: e.conversationId),
+        CloudFunctionException() => ServerFailure(e.message),
+        _ => ServerFailure(e.toString()),
+      };
 }

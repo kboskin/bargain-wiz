@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:appwizard/core/network/cloud_functions_client.dart';
 import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
@@ -10,6 +11,7 @@ import 'package:appwizard/features/conversation/data/datasources/conversations_s
 import 'package:appwizard/features/conversation/data/models/conversation_api_models.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 import 'package:appwizard/features/express_dealmaker/data/datasources/cloud_express_dealmaker_remote_datasource.dart';
+import 'package:appwizard/features/express_dealmaker/data/datasources/express_dealmaker_remote_datasource.dart';
 import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -73,12 +75,16 @@ class _FakeStream implements ConversationsStream {
 
 class _FakeApi implements ConversationsApi {
   CreateConversationRequest? created;
+  int creates = 0;
   String? redoneConversation;
   ConversationActionRequest? redone;
+  /// What `redo` throws instead of accepting the turn.
+  CloudFunctionException? redoError;
 
   @override
   Future<ConversationWriteResponse> create(CreateConversationRequest request) async {
     created = request;
+    creates++;
     return const ConversationWriteResponse(conversationId: 'c1', messageId: 'm1', replyId: 'm2');
   }
 
@@ -86,6 +92,8 @@ class _FakeApi implements ConversationsApi {
   Future<ConversationWriteResponse> redo(String conversationId, ConversationActionRequest request) async {
     redoneConversation = conversationId;
     redone = request;
+    final error = redoError;
+    if (error != null) throw error;
     return const ConversationWriteResponse(conversationId: 'c1', messageId: 'm2', replyId: 'm2');
   }
 
@@ -178,12 +186,57 @@ void main() {
     expect(reply.lines.single.text, 'Again');
   });
 
-  test('a failed turn (no lines when the wizard stops) surfaces as an error', () async {
-    final pending = source.getDealReply(uploadedIds: const ['x'], locale: 'en', conversationId: 'c1');
+  test('a failed turn names the conversation, so a retry can regenerate it', () async {
+    final a = await source.uploadScreenshot('/tmp/a.jpg');
+    final pending = source.getDealReply(uploadedIds: [a.id!], locale: 'en');
     await pumpEventQueue();
     stream.emit(_result(lines: const [], seeing: null));
 
-    await expectLater(pending, throwsStateError);
+    await expectLater(
+      pending,
+      throwsA(isA<ExpressGenerationException>()
+          .having((final e) => e.conversationId, 'conversationId', 'c1')
+          .having((final e) => e.message, 'message', 'The wizard could not answer. Try again.')),
+    );
+    expect(api.creates, 1);
+  });
+
+  test('giving up on the wait still names the conversation', () async {
+    source = CloudExpressDealmakerRemoteDataSource(
+      api, stream, _FakeAuth(), _FakeProfile(), const _FakeEncoder(), _SilentLogger(),
+      resultTimeout: const Duration(milliseconds: 10),
+    );
+
+    await expectLater(
+      source.getDealReply(uploadedIds: const ['x'], locale: 'en', conversationId: 'c1'),
+      throwsA(isA<ExpressGenerationException>().having((final e) => e.conversationId, 'conversationId', 'c1')),
+    );
+  });
+
+  test('a retry while the wizard is still typing waits for that turn instead of queueing one',
+      () async {
+    api.redoError = const CloudFunctionException(
+      CloudExpressDealmakerRemoteDataSource.turnInProgress,
+      'The wizard is still typing',
+      httpStatus: 409,
+    );
+
+    final pending = source.getDealReply(uploadedIds: const ['x'], locale: 'en', conversationId: 'c1');
+    await pumpEventQueue();
+    stream.emit(_result(lines: const [DealLine(text: 'Late but here', intent: DealIntent.close)]));
+
+    final reply = await pending;
+    expect(reply.lines.single.text, 'Late but here');
+    expect(api.creates, 0, reason: 'the running turn was reused, not replaced');
+  });
+
+  test('any other error from a regeneration is not swallowed', () async {
+    api.redoError = const CloudFunctionException('NOT_FOUND', 'No such conversation', httpStatus: 404);
+
+    await expectLater(
+      source.getDealReply(uploadedIds: const ['x'], locale: 'en', conversationId: 'c1'),
+      throwsA(isA<CloudFunctionException>()),
+    );
   });
 
   test('throws when nothing was prepared for a new deal', () async {

@@ -278,6 +278,28 @@ def test_express_redo_regenerates_with_the_new_tone_and_keyword(service, store, 
     assert store.list_messages("u1", cid)[1]["revision"] == 1
 
 
+def test_express_redo_after_a_failed_generation_reuses_the_stored_screenshots(service, store, gen):
+    """What the app's Retry does: the failed deal is regenerated in place, so a turn that broke
+    never costs a second conversation (wizard-app express retry)."""
+    gen.queue(UpstreamError("boom"), {"seeing": "Kallax", "lines": LINES})
+    _, first = _call("POST", "/conversations", {"type": "express", "keyword": "scuff", "images": [IMG]})
+    cid = first["conversation_id"]
+    failed = store.get_conversation("u1", cid)
+    assert failed["last_error"]["code"] == "UPSTREAM_ERROR" and "active_turn" not in failed
+
+    status, body = _call("POST", f"/conversations/{cid}/redo", {"vibe": "friendly"})
+
+    assert status == 200 and body["conversation_id"] == cid
+    conv = store.get_conversation("u1", cid)
+    assert conv["express"]["lines"] == LINES and "last_error" not in conv
+    assert conv["express"]["keyword"] == "scuff"  # kept: the retry carries no new one
+    assert len(store.list_conversations("u1")) == 1
+    # The screenshots travelled once: the regeneration read them back from the stored turn.
+    assert sum(1 for p in gen.calls[1]["parts"] if p["type"] == "image") == 1
+    wizard = store.list_messages("u1", cid)[1]
+    assert wizard["status"] == "done" and wizard["revision"] == 1
+
+
 def test_express_conversations_take_no_follow_up_messages(service, gen):
     gen.queue({"seeing": "Kallax", "lines": LINES})
     _, first = _call("POST", "/conversations", {"type": "express", "text": "Kallax $180"})

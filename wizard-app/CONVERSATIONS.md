@@ -272,6 +272,15 @@ keyword) and one wizard turn (`seeing` + `lines`). The result page renders from 
 The stateless `express_dealmaker` and `pro_deal_closer` functions stay deployed until the app
 has moved, then are removed.
 
+**Retry regenerates, it does not re-create.** The conversation exists from the moment the turn
+is accepted, so a failure — `last_error` on the document, or the client giving up on the wait —
+belongs to a deal that is already in the person's history. The app keeps that id through the
+failure and sends Retry to `redo`; creating a second conversation would leave the first one
+stranded in the history, one per tap. A `redo` for a turn that is still generating comes back
+409 `TURN_IN_PROGRESS`, which the app reads as "that turn is still yours" and goes back to
+waiting for it. Screenshots that only failed to *upload* are a different case: they never
+reached a conversation, so Retry re-uploads and then creates one.
+
 ## 5. Read path: the client listens
 
 - Add `cloud_firestore`, `firebase_storage`, `firebase_app_check`.

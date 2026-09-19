@@ -24,6 +24,24 @@ class DealReplyDto {
   final String? conversationId;
 }
 
+/// A turn the backend accepted and then could not finish (the model failed, or the wait for
+/// the queued result ran out).
+///
+/// The conversation exists on the server from the moment the turn is accepted, so carrying its
+/// id out of the failure is what lets a retry regenerate that deal instead of creating a
+/// second one.
+class ExpressGenerationException implements Exception {
+  const ExpressGenerationException(this.conversationId, this.message);
+
+  final String conversationId;
+
+  /// User-safe: the backend's `last_error` when it recorded one.
+  final String message;
+
+  @override
+  String toString() => 'ExpressGenerationException($conversationId): $message';
+}
+
 /// Remote data source for Express Dealmaker (upload screenshots, get reply).
 /// Implement with mock or real HTTP client.
 abstract class ExpressDealmakerRemoteDataSource {

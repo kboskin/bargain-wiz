@@ -159,6 +159,41 @@ void main() {
       expect(repo.replyRequests.last.ids, ['id_ok.png', 'id_bad.png']);
     });
 
+    test('a failed first reply keeps the deal, so Retry regenerates it instead of opening a second',
+        () async {
+      repo.failReply = true;
+      await cubit.start(initialPaths: ['a.png']);
+
+      expect(cubit.state.phase, ExpressPhase.error);
+      expect(cubit.state.conversationId, 'conv_1', reason: 'the backend created it before it failed');
+
+      repo.failReply = false;
+      await cubit.retry();
+
+      expect(cubit.state.phase, ExpressPhase.ready);
+      expect(cubit.state.conversationId, 'conv_1');
+      expect(
+        repo.replyRequests.map((final r) => r.conversationId),
+        [null, 'conv_1'],
+        reason: 'exactly one deal was created; the retry regenerated it',
+      );
+    });
+
+    test('a reply that never reached the backend still opens a deal on Retry', () async {
+      repo
+        ..failReply = true
+        ..failureKeepsConversation = false;
+      await cubit.start(initialPaths: ['a.png']);
+
+      expect(cubit.state.conversationId, isNull);
+
+      repo.failReply = false;
+      await cubit.retry();
+
+      expect(repo.replyRequests.map((final r) => r.conversationId), [null, null]);
+      expect(cubit.state.phase, ExpressPhase.ready);
+    });
+
     test('nothing to retry with no screenshots falls back to pick', () async {
       await cubit.retry();
       expect(cubit.state.phase, ExpressPhase.pick);
@@ -320,6 +355,21 @@ void main() {
       expect(repo.uploadedPaths, isEmpty);
       expect(repo.lastConversationId, '44');
       expect(cubit.state.phase, ExpressPhase.ready);
+    });
+
+    test('a deal that never produced lines is not saved over the title the backend derived',
+        () async {
+      conversations.store['46'] = Conversation(
+        id: '46',
+        type: ConversationType.express,
+        createdAt: DateTime(2026, 9, 18),
+        title: 'Screenshot deal',
+        errorMessage: 'The wizard could not answer. Try again.',
+      );
+      await cubit.start(conversationId: '46');
+
+      expect(await cubit.saveConversation(), isFalse);
+      expect(conversations.store['46']!.title, 'Screenshot deal');
     });
 
     test('screenshots added to an existing deal start a new one instead of being dropped',

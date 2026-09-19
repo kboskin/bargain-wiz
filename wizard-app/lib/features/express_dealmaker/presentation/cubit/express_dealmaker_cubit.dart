@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:appwizard/core/config/prefs_keys.dart';
+import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 import 'package:appwizard/features/conversation/domain/repositories/conversation_repository.dart';
 import 'package:appwizard/features/express_dealmaker/domain/repositories/express_dealmaker_repository.dart';
@@ -255,6 +256,10 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
         replyLoading: false,
         errorKind: ExpressErrorKind.reply,
         errorMessage: failure.message,
+        // The backend creates the conversation before it generates, so a turn that failed
+        // still left one behind. Keeping its id makes Retry regenerate that deal; dropping it
+        // would send the retry through `create` and leave a second deal in the history.
+        conversationId: failure is GenerationFailure ? failure.conversationId : null,
       )),
       (final reply) {
         emit(state.copyWith(

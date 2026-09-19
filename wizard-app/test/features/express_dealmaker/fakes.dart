@@ -11,11 +11,13 @@ import 'package:appwizard/features/express_dealmaker/domain/repositories/express
 
 /// One recorded `getDealReply` call.
 class ReplyRequest {
-  const ReplyRequest({required this.ids, required this.locale, this.keyword, this.vibe});
+  const ReplyRequest({required this.ids, required this.locale, this.keyword, this.vibe, this.conversationId});
   final List<String> ids;
   final String locale;
   final String? keyword;
   final String? vibe;
+  /// null = the call created a deal; set = it regenerated that one.
+  final String? conversationId;
 }
 
 /// In-memory Express repository: uploads succeed unless the path is in
@@ -23,6 +25,9 @@ class ReplyRequest {
 class FakeExpressRepository implements ExpressDealmakerRepository {
   final Set<String> failingPaths = {};
   bool failReply = false;
+  /// Like the backend: the conversation exists before the generation runs, so a failed turn
+  /// still names it. False for a failure that never reached the backend.
+  bool failureKeepsConversation = true;
   final List<String> uploadedPaths = [];
   final List<ReplyRequest> replyRequests = [];
   /// Conversation id the last reply was asked for: null = "create a new deal", set = redo.
@@ -56,11 +61,22 @@ class FakeExpressRepository implements ExpressDealmakerRepository {
     final String? vibe,
     final String? conversationId,
   }) async {
-    replyRequests.add(ReplyRequest(ids: uploadedIds, locale: locale, keyword: keyword, vibe: vibe));
+    replyRequests.add(ReplyRequest(
+      ids: uploadedIds,
+      locale: locale,
+      keyword: keyword,
+      vibe: vibe,
+      conversationId: conversationId,
+    ));
     lastConversationId = conversationId;
-    if (failReply) return const Left(ServerFailure('reply failed'));
     // Like the backend: the first reply creates the conversation, later ones keep its id.
-    return Right(DealReply(lines: reply.lines, seeing: reply.seeing, conversationId: conversationId ?? 'conv_1'));
+    final cid = conversationId ?? 'conv_1';
+    if (failReply) {
+      return Left(failureKeepsConversation
+          ? GenerationFailure('reply failed', conversationId: cid)
+          : const ServerFailure('reply failed'));
+    }
+    return Right(DealReply(lines: reply.lines, seeing: reply.seeing, conversationId: cid));
   }
 }
 
