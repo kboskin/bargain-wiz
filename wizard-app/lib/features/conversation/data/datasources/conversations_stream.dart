@@ -47,5 +47,11 @@ class FirestoreConversationsStream implements ConversationsStream {
       .collection('messages')
       .orderBy('seq')
       .snapshots()
-      .map((snapshot) => [for (final doc in snapshot.docs) ConversationDocuments.message(doc.id, doc.data())]);
+      // The backend records the system prompt the deal started with as the seq-0 message
+      // (CONVERSATIONS.md). It is configuration, not something the buyer said or was told,
+      // so it never reaches the chat.
+      .map((snapshot) => [
+            for (final doc in snapshot.docs)
+              if (!ConversationDocuments.isSystem(doc.data())) ConversationDocuments.message(doc.id, doc.data()),
+          ]);
 }
