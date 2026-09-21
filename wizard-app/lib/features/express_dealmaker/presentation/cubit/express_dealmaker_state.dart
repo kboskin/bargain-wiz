@@ -11,7 +11,7 @@ enum ExpressErrorKind { upload, reply, load }
 
 class ExpressDealmakerState extends Equatable {
   const ExpressDealmakerState({
-    required this.vibeId,
+    required this.overrides,
     this.phase = ExpressPhase.pick,
     this.screenshots = const [],
     this.lines = const [],
@@ -31,8 +31,10 @@ class ExpressDealmakerState extends Equatable {
   /// What the wizard saw in the screenshots (results strip).
   final String? seeing;
   final String keyword;
-  /// Negotiation vibe id used for the current/next request.
-  final String vibeId;
+  /// The conversation-scoped answers this deal overrides, `{answer key: value}` — whatever
+  /// the template marks `scope: "conversation"`. Sent with every request and saved with the
+  /// deal, so reopening it coaches in the voice it was written in.
+  final Map<String, dynamic> overrides;
   /// True while a reply request is in flight (initial read, Get More, tone change).
   final bool replyLoading;
   /// Set when reopening a saved conversation (kept on save).
@@ -65,7 +67,7 @@ class ExpressDealmakerState extends Equatable {
     final String? seeing,
     final bool clearSeeing = false,
     final String? keyword,
-    final String? vibeId,
+    final Map<String, dynamic>? overrides,
     final bool? replyLoading,
     final String? conversationId,
     final bool clearConversationId = false,
@@ -81,7 +83,7 @@ class ExpressDealmakerState extends Equatable {
         lines: lines ?? this.lines,
         seeing: clearSeeing ? null : (seeing ?? this.seeing),
         keyword: keyword ?? this.keyword,
-        vibeId: vibeId ?? this.vibeId,
+        overrides: overrides ?? this.overrides,
         replyLoading: replyLoading ?? this.replyLoading,
         conversationId: clearConversationId ? null : (conversationId ?? this.conversationId),
         requestId: requestId ?? this.requestId,
@@ -97,7 +99,7 @@ class ExpressDealmakerState extends Equatable {
         lines,
         seeing,
         keyword,
-        vibeId,
+        overrides,
         replyLoading,
         conversationId,
         requestId,

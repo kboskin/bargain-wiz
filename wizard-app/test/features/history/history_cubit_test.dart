@@ -44,7 +44,7 @@ void main() {
     type: ConversationType.express,
     createdAt: DateTime(2026, 9, 11),
     title: 'IKEA Kallax shelf',
-    marketplace: 'facebook',
+    overrides: const {'marketplace': 'facebook'},
     priceBefore: '\$180',
   );
   final iphone = Conversation(
@@ -52,7 +52,7 @@ void main() {
     type: ConversationType.express,
     createdAt: DateTime(2026, 9, 10),
     seeing: 'iPhone 13, 128GB · \$420 · eBay',
-    marketplace: 'ebay',
+    overrides: const {'marketplace': 'ebay'},
     status: ConversationStatus.won,
     priceBefore: '\$420',
     priceAfter: '\$365',
@@ -62,7 +62,7 @@ void main() {
     type: ConversationType.proDealCloser,
     createdAt: DateTime(2026, 9, 8),
     messages: const [ProDealCloserMessage(text: 'Road bike, 56cm')],
-    marketplace: 'olx',
+    overrides: const {'marketplace': 'olx'},
     status: ConversationStatus.lost,
   );
 
@@ -78,7 +78,7 @@ void main() {
       repo,
       changes: changes,
       // What the marketplace screen's options are labelled, as the page supplies them.
-      marketplaceLabels: () => const {
+      overrideLabels: () => const {
         'facebook': 'Facebook Marketplace',
         'ebay': 'eBay',
         'olx': 'OLX',

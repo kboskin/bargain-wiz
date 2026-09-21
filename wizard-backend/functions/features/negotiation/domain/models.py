@@ -9,10 +9,10 @@ import binascii
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from core import config
-from core.validation import clip_text, number_or_none, trimmed
+from core.validation import clip_text, trimmed
 
 SUPPORTED_MIME = {"image/jpeg", "image/png", "image/webp"}
 
@@ -104,53 +104,71 @@ class StoredImage(BaseModel):
 Material = Image | StoredImage
 
 
+class Answer(BaseModel):
+    """One thing the buyer tapped, and the line the app's template writes for it.
+
+    One entry per *pick*, so a multi-select arrives as several answers sharing a key. That
+    is what keeps the sentence attached to the value it describes: a client can restate the
+    answer it is sending, and has nowhere to put a line for an option it did not pick.
+
+    Nothing here knows what a key means. `value` is carried so the profile can be stored and
+    echoed back; the prompt only ever reads `prompt`.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    key: str
+    value: str | int | float | bool
+    prompt: str | None = None
+
+    @field_validator("key", mode="before")
+    @classmethod
+    def _key(cls, value: object) -> str:
+        """Whatever the template named the answer. Unknown keys are the point, not an error."""
+        text = clip_text(value, 40, ellipsis=False)
+        if not text:
+            raise ValueError("is required (the answer key the template gave this question)")
+        return text.strip().lower()
+
+    @field_validator("prompt", mode="before")
+    @classmethod
+    def _prompt(cls, value: object) -> str | None:
+        """The text is passed through as written, like the chat text in `trimmed` — there is
+        no cap, because the same client already sends unbounded `text` into the user parts.
+        The only thing done to it is collapsing its whitespace, which keeps it to one prompt
+        line; the block it lands in is fenced and introduced as data.
+
+        Anything that is not a sentence is dropped rather than rejected: an undescribed
+        answer costs that one line and is logged, exactly as one the template forgot."""
+        if not isinstance(value, str) or not value.split():
+            return None
+        return " ".join(value.split())
+
+
 class Profile(BaseModel):
     """Buyer profile from onboarding, sent with every AI request (see PROFILE_SYNC.md).
-    Unknown values fall back to defaults; only wrong types are rejected."""
+
+    Every answer is equal here: there is no field this backend recognises and none it
+    requires, so a question added to the funnel reaches the prompt with no deploy. The order
+    is the app's send order, which is onboarding screen order, and it is the order the buyer
+    block reads in."""
 
     model_config = ConfigDict(extra="ignore")
 
-    vibe: str
-    push: int
-    marketplace: str | None = None
-    deal_size: float | None = None
+    answers: list[Answer] = []
     locale: str = "en"  # BCP-47; the language every user-facing text is written in
-    hurdles: tuple[str, ...] = ()
-    deals_per_month: str | None = None
 
-    # `{answer key: {option id: sentence}}` — each answer's contribution to the system
-    # prompt, under the same name the app's Remote Config template gives it: `prompt` on the
-    # option. The ids live in that template, so the sentence explaining an id travels with
-    # it and a new option needs no deploy here (AI_INTEGRATION.md). Absent for an older app,
-    # and for an option nobody has described: the tables in prompts.py answer then.
-    prompt: dict[str, dict[str, str]] = {}
-
-    @field_validator("vibe", mode="before")
+    @field_validator("answers", mode="before")
     @classmethod
-    def _vibe(cls, value: object) -> str:
-        """Any id the app offers; an unknown one still prompts, with the first known tone."""
-        text = clip_text(value, 40)
-        if not text:
-            raise ValueError("is required (the app sends the buyer's tone)")
-        return text.lower()
-
-    @field_validator("push", mode="before")
-    @classmethod
-    def _push(cls, value: object) -> int:
-        number = number_or_none(value)
-        if number is None:
-            raise ValueError("is required (0-100, the buyer's push level)")
-        return int(min(100, max(0, number)))
-
-    @field_validator("deal_size", mode="before")
-    @classmethod
-    def _deal_size(cls, value: object) -> float | None:
-        return number_or_none(value)
-
-    @field_validator("marketplace", "deals_per_month", mode="before")
-    @classmethod
-    def _short_text(cls, value: object) -> str | None:
-        return clip_text(value, 40)
+    def _answers(cls, value: object) -> list:
+        """A malformed entry fails the request rather than being skipped. A dropped
+        *sentence* costs one line of coaching; a dropped *answer* would change the coaching
+        invisibly, which is worse than a 400 the client can see."""
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("must be a list of {key, value, prompt} answers")
+        return value
 
     @field_validator("locale", mode="before")
     @classmethod
@@ -160,51 +178,13 @@ class Profile(BaseModel):
         tag = clip_text(value, 20, ellipsis=False) or ""
         return tag if LOCALE_TAG.fullmatch(tag) else "en"
 
-    @field_validator("hurdles", mode="before")
-    @classmethod
-    def _hurdles(cls, value: object) -> tuple[str, ...]:
-        if value is None:
-            return ()
-        if not isinstance(value, list | tuple):
-            raise ValueError("must be a list of ids")
-        return tuple(h.strip().lower() for h in value if isinstance(h, str) and h.strip())[:8]
 
-    @field_validator("prompt", mode="before")
-    @classmethod
-    def _prompt(cls, value: object) -> dict[str, dict[str, str]]:
-        """The shape is checked, the content is not: an answer key this function has never
-        heard of is kept — that is how a question added to the funnel reaches the prompt —
-        and the text is passed through as written, like the chat text in `trimmed`. Anything
-        that is not a description is dropped, so one bad entry costs that line and no more.
-
-        The only thing done to a sentence is collapsing its whitespace, which keeps it to
-        one prompt line; the block it lands in is fenced and introduced as data.
-        """
-        if value is None:
-            return {}
-        if not isinstance(value, dict):
-            raise ValueError("must be a map of answer key to {option id: description}")
-        described: dict[str, dict[str, str]] = {}
-        for field, table in value.items():
-            if not isinstance(field, str) or not isinstance(table, dict):
-                continue
-            sentences = {
-                option.strip().lower(): " ".join(text.split())
-                for option, text in table.items()
-                if isinstance(option, str) and option.strip() and isinstance(text, str) and text.split()
-            }
-            if field.strip() and sentences:
-                described[field.strip().lower()] = sentences
-        return described
-
-
-def _profile_of(model: Profile) -> Profile:
-    return Profile(**{name: getattr(model, name) for name in Profile.model_fields})
-
-
-class ExpressRequest(Profile):
+class ExpressRequest(BaseModel):
     """`express_dealmaker` body: screenshots and/or text plus the buyer profile."""
 
+    model_config = ConfigDict(extra="ignore")
+
+    profile: Profile = Field(default_factory=Profile)
     images: list[Material] = []
     text: str | None = None
     keyword: str | None = None
@@ -240,15 +220,13 @@ class ExpressRequest(Profile):
             raise ValueError('provide "images" (screenshots) or "text" (listing / chat text)')
         return self
 
-    @property
-    def profile(self) -> Profile:
-        return _profile_of(self)
-
 
 class ChatMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    role: Literal["user", "wizard"] = "user"
+    # Gemini's own vocabulary: `Content.role` "must be either 'user' or 'model'". The coach
+    # is still "the Wizard" in the product and in the prompt's prose — this is the wire.
+    role: Literal["user", "model"] = "user"
     text: str = ""
     images: list[Material] = []
 
@@ -277,9 +255,12 @@ class ChatMessage(BaseModel):
         return [item if isinstance(item, StoredImage) else Image.model_validate(item) for item in value]
 
 
-class ProRequest(Profile):
+class ProRequest(BaseModel):
     """`pro_deal_closer` body: the chat so far plus the buyer profile."""
 
+    model_config = ConfigDict(extra="ignore")
+
+    profile: Profile = Field(default_factory=Profile)
     messages: list[ChatMessage]
     mode: Literal["reply", "options"] = "reply"
     regenerate: bool = False
@@ -316,8 +297,4 @@ class ProRequest(Profile):
         kept.reverse()
         self.messages = kept
         return self
-
-    @property
-    def profile(self) -> Profile:
-        return _profile_of(self)
 

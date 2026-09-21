@@ -51,15 +51,19 @@ abstract class ExpressDealmakerRemoteDataSource {
     required final List<String> uploadedIds,
     required final String locale,
     final String? keyword,
-    /// Negotiation vibe id ("friendly" | "no_nonsense" | "tactical" | "quiet_closer").
-    final String? vibe,
-    /// Existing backend conversation to regenerate ("Get More", tone change); null creates one.
+    /// Conversation-scoped answers this deal overrides, `{answer key: value}` — the ones
+    /// the template marks `scope: "conversation"`. Empty means "use the stored profile".
+    final Map<String, dynamic> overrides,
+    /// Existing backend conversation to regenerate ("Get More", an override change); null
+    /// creates one.
     final String? conversationId,
   });
 }
 
-/// Mock implementation: simulates delay for uploads and returns the
-/// vibe-specific reply set from the design prototype.
+/// Mock implementation: simulates delay for uploads and cycles the canned reply sets from
+/// the design prototype, so changing an answer or tapping "Get More" visibly changes the
+/// result without a backend. Nothing here is keyed by an option id — the mock stands in for
+/// a server that has content, not for the template that names the answers.
 ///
 /// QA hooks: a keyword equal to [failKeyword] makes [getDealReply] throw so the
 /// error state can be exercised.
@@ -71,14 +75,13 @@ class MockExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteData
   static const Duration _getReplyDelay = Duration(milliseconds: 1200);
 
   static const String failKeyword = 'fail';
-  static const String defaultVibe = 'friendly';
 
   /// What the wizard "sees" in the mock screenshots.
   static const String seeing = r'IKEA Kallax shelf · $180 · listed 9 days · "slight scuff"';
 
-  /// Reply sets per vibe (verbatim from the prototype `REPLY_SETS`).
-  static const Map<String, List<DealLineDto>> replySets = {
-    'friendly': [
+  /// Canned reply sets (verbatim from the prototype `REPLY_SETS`), handed out in order.
+  static const List<List<DealLineDto>> replySets = [
+    [
       DealLineDto(
         intent: 'opener',
         text: r'Hi! Is the Kallax still available? I could pick it up today if $140 works for you.',
@@ -95,7 +98,7 @@ class MockExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteData
         why: 'Assumes the yes and moves straight to logistics.',
       ),
     ],
-    'no_nonsense': [
+    [
       DealLineDto(
         intent: 'opener',
         text: r'Still available? $140 cash, pickup today.',
@@ -112,7 +115,7 @@ class MockExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteData
         why: 'Closes without reopening price.',
       ),
     ],
-    'tactical': [
+    [
       DealLineDto(
         intent: 'opener',
         text: r'Two identical Kallax units sold this week for $130–150 in this area. Would you take $140?',
@@ -129,7 +132,7 @@ class MockExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteData
         why: 'Removes friction and rewards the agreement.',
       ),
     ],
-    'quiet_closer': [
+    [
       DealLineDto(
         intent: 'opener',
         text: r'Lovely shelf. Would you consider $140? Happy to pick up whenever suits.',
@@ -146,7 +149,7 @@ class MockExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteData
         why: 'Gracious close that reduces the chance of a back-out.',
       ),
     ],
-  };
+  ];
 
   @override
   Future<UploadScreenshotResultDto> uploadScreenshot(final String filePath) async {
@@ -161,22 +164,26 @@ class MockExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteData
     required final List<String> uploadedIds,
     required final String locale,
     final String? keyword,
-    final String? vibe,
+    final Map<String, dynamic> overrides = const {},
     final String? conversationId,
   }) async {
-    _logger.i('Mock getDealReply ids: $uploadedIds keyword: $keyword locale: $locale vibe: $vibe');
+    _logger.i('Mock getDealReply ids: $uploadedIds keyword: $keyword locale: $locale overrides: $overrides');
     await Future<void>.delayed(_getReplyDelay);
-    return buildReply(keyword: keyword, vibe: vibe);
+    return buildReply(keyword: keyword, set: _nextSet++);
   }
+
+  /// Which canned set the next call hands out. Advancing per call is what makes a tone
+  /// change or a "Get More" look like it did something.
+  int _nextSet = 0;
 
   /// Synchronous body of [getDealReply] (no delay) – handy for tests.
   /// Spanish (and any other locale) reuses the English copy.
-  static DealReplyDto buildReply({final String? keyword, final String? vibe}) {
+  static DealReplyDto buildReply({final String? keyword, final int set = 0}) {
     final trimmedKeyword = keyword?.trim() ?? '';
     if (trimmedKeyword.toLowerCase() == failKeyword) {
       throw StateError('QA hook: keyword "$failKeyword" forces a reply failure');
     }
-    final lines = replySets[vibe] ?? replySets[defaultVibe]!;
+    final lines = replySets[set.abs() % replySets.length];
     final seen = trimmedKeyword.isEmpty ? seeing : '$seeing ($trimmedKeyword)';
     return DealReplyDto(seeing: seen, lines: lines);
   }

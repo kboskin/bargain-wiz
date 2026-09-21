@@ -23,9 +23,9 @@ class _SilentLogger implements AppLogger {
 class _FakeProfile implements UserProfileService {
   /// What the configured screens collect, keyed as they are sent.
   static const _stored = <String, dynamic>{
-    ProfileFields.vibeKey: 'friendly',
-    ProfileFields.pushKey: 40,
-    ProfileFields.marketplaceKey: 'facebook',
+    'vibe': 'friendly',
+    'push': 40,
+    'marketplace': 'facebook',
     'deal_size': 50,
     'deals_per_month': '3_5',
     'hurdles': ['being_rude'],
@@ -35,7 +35,7 @@ class _FakeProfile implements UserProfileService {
   /// The `metadata.prompt` sentence behind two of the answers above; the rest describe
   /// nothing, so the backend falls back to its own table for them.
   static const _prompts = <String, Map<String, String>>{
-    ProfileFields.vibeKey: {'friendly': 'Friendly Collaborator: warm and polite.'},
+    'vibe': {'friendly': 'Friendly Collaborator: warm and polite.'},
     'hurdles': {'being_rude': 'fears sounding rude: keep every line warm and polite.'},
   };
 
@@ -55,10 +55,12 @@ class _FakeProfile implements UserProfileService {
       for (final e in _stored.entries)
         if (!except.contains(e.key)) e.key: overrides[e.key] ?? e.value,
     };
-    return ProfileSnapshot(fields, {
-      for (final e in _prompts.entries)
-        if (fields.containsKey(e.key)) e.key: e.value,
-    });
+    // One answer per pick, in the order the fields are declared, each with its sentence.
+    return ProfileSnapshot(fields, [
+      for (final e in fields.entries)
+        for (final id in e.value is List ? (e.value as List).map((dynamic v) => '$v') : ['${e.value}'])
+          ProfileAnswer(e.key, e.value is List ? id : e.value, _prompts[e.key]?[id]),
+    ]);
   }
 
   @override
@@ -164,18 +166,25 @@ void main() {
     final a = await source.uploadScreenshot('/tmp/a.jpg');
     final b = await source.uploadScreenshot('/tmp/b.jpg');
 
-    final pending = source.getDealReply(uploadedIds: [a.id!, b.id!], locale: 'es', keyword: 'scuff', vibe: 'tactical');
+    final pending = source.getDealReply(uploadedIds: [a.id!, b.id!], locale: 'es', keyword: 'scuff', overrides: const {'vibe': 'tactical'});
     await pumpEventQueue();
 
     final body = api.created!.toJson();
     expect(body['type'], 'express');
+    expect(body['overrides'], {'vibe': 'tactical'});
     expect(body['keyword'], 'scuff');
-    expect(body['vibe'], 'tactical');
-    expect(body['push'], 40);
-    expect(body['locale'], 'es');
-    expect(body['deals_per_month'], '3_5');
-    expect(body['hurdles'], ['being_rude']);
-    expect(body.containsKey('referral_code'), isFalse); // the profile endpoint's business
+    final profile = body['profile']! as Map<String, dynamic>;
+    expect(profile['locale'], 'es');
+    // Every answer travels as its own entry, the override applied, with the sentence for the
+    // option actually being sent — and the referral code is the profile endpoint's business.
+    expect(profile['answers'], [
+      {'key': 'vibe', 'value': 'tactical'},
+      {'key': 'push', 'value': 40},
+      {'key': 'marketplace', 'value': 'facebook'},
+      {'key': 'deal_size', 'value': 50},
+      {'key': 'deals_per_month', 'value': '3_5'},
+      {'key': 'hurdles', 'value': 'being_rude', 'prompt': 'fears sounding rude: keep every line warm and polite.'},
+    ]);
     expect((body['images'] as List), hasLength(2));
 
     stream.emit(_result(typing: true)); // still working: not a result
@@ -192,7 +201,7 @@ void main() {
       uploadedIds: const ['whatever'],
       locale: 'en',
       keyword: 'pickup',
-      vibe: 'friendly',
+      overrides: const {'vibe': 'friendly'},
       conversationId: 'c1',
     );
     await pumpEventQueue();

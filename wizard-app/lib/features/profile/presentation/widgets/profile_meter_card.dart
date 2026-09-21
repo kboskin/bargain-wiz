@@ -5,18 +5,18 @@ import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/wiz/frosted_surface.dart';
 import 'package:appwizard/features/profile/domain/profile_fields.dart';
-import 'package:appwizard/features/profile/presentation/widgets/profile_vibe_card.dart';
+import 'package:appwizard/features/profile/presentation/widgets/profile_chip_card.dart';
 
 /// "How hard you push": header with "{emoji} {label}" in the stop colour + a tappable meter,
 /// one segment per configured stop. [title], the stops and their colours all come from the
 /// onboarding screen that asks the question.
-class ProfilePushCard extends StatelessWidget {
-  const ProfilePushCard({
+class ProfileMeterCard extends StatelessWidget {
+  const ProfileMeterCard({
     super.key,
     required this.options,
     required this.selectedValue,
     required this.onSelect,
-    this.title = 'How hard you push',
+    required this.title,
   });
 
   final String title;

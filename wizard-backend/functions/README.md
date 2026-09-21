@@ -155,6 +155,11 @@ already limits a conversation to one outstanding turn, and `pending_options` doe
   `QUEUE_MAX_DISPATCHES_PER_SECOND`, `QUEUE_MAX_CONCURRENT_DISPATCHES`, `QUEUE_MAX_ATTEMPTS`,
   `IMAGE_MAX_SIDE`, `IMAGE_JPEG_QUALITY`, `REQUIRE_APP_CHECK` (false until the app ships App
   Attest / Play Integrity); full list in `core/config.py`.
+- **The transcript records its own configuration.** Creating a conversation writes a
+  `system` message at `seq` 0 with the prompt the first turn was built from, so a deal can be
+  read back as the model saw it even after the Remote Config sentences behind it change. It
+  is not a turn (outside `message_count`), not replayed as history (it is already
+  `system_instruction`), and the app skips it — `wizard-app/CONVERSATIONS.md`.
 - Generation is queued: a write stores the turn plus a `pending` wizard placeholder and
   enqueues the `generate` task-queue function, whose `RateLimits` (`QUEUE_MAX_*` in `.env`)
   are the rate limiter — project-wide, not per user — and whose `RetryConfig` retries a

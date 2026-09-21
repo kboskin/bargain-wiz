@@ -142,7 +142,7 @@ class OnboardingMetadata {
   /// picking it says about the buyer (`metadata.prompt`), forwarded with every AI request
   /// under that same key (AI_INTEGRATION.md). Never localized: the prompt is English and the
   /// language of the answer is `locale`. Read leniently — a `{en, es}` map here is a config
-  /// mistake, and losing the sentence (the backend then falls back to its own table) beats
+  /// mistake, and losing the sentence (the answer then contributes no prompt line) beats
   /// failing the whole screen list.
   String? get prompt => _stringOrNull(raw?['prompt']);
 
@@ -334,6 +334,7 @@ class AnswerStructure extends ValidatableEntity {
   AnswerStructure({
     required this.answerKeyName,
     this.multi = false,
+    this.scope,
   });
 
   factory AnswerStructure.fromJson(Map<String, dynamic> json) =>
@@ -346,6 +347,11 @@ class AnswerStructure extends ValidatableEntity {
   /// True when the answer is a list of values (multi_select).
   @JsonKey(defaultValue: false)
   final bool multi;
+
+  /// `"conversation"` when this answer describes the deal rather than the person, so a
+  /// conversation may carry its own value for it. Anything else (including absent) means
+  /// the answer is global — see CONVERSATIONS.md.
+  final String? scope;
 
   Map<String, dynamic> toJson() => _$AnswerStructureToJson(this);
 
@@ -670,6 +676,7 @@ class SelectGroup extends ValidatableEntity {
     required this.label,
     required this.answerKeyName,
     required this.options,
+    this.scope,
   });
 
   factory SelectGroup.fromJson(Map<String, dynamic> json) => _$SelectGroupFromJson(json);
@@ -680,6 +687,10 @@ class SelectGroup extends ValidatableEntity {
   /// The key this group's answer is stored under, and the field it is sent as.
   @JsonKey(name: 'answer_key_name')
   final String answerKeyName;
+
+  /// As [AnswerStructure.scope]: a group carries its own, because a `select_group` screen
+  /// asks two independent questions.
+  final String? scope;
 
   final List<OnboardingOption> options;
 

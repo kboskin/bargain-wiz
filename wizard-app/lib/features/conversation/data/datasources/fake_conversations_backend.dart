@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/conversation/data/datasources/conversations_api.dart';
 import 'package:appwizard/features/conversation/data/datasources/conversations_stream.dart';
 import 'package:appwizard/features/conversation/data/models/conversation_api_models.dart';
@@ -71,10 +70,11 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
     ],
   };
 
-  /// The tone the request asks for; the fake stands in for the prompt builder, so it reads
-  /// the one field it needs out of the profile it was sent.
-  static String _vibeOf(ConversationProfile profile) =>
-      profile[ProfileFields.vibeKey]?.toString() ?? defaultVibe;
+  /// What this deal's overrides amount to, as one key into the canned content below. The
+  /// fake stands in for the prompt builder, which likewise reads only what the request
+  /// carries — it names no answer key, it just joins the values it was given.
+  static String _toneOf(Map<String, dynamic> overrides) =>
+      overrides.values.isEmpty ? defaultVibe : overrides.values.map((v) => '$v').join('|');
 
   static String replyFor(String vibe) => replyTexts[vibe] ?? replyTexts[defaultVibe]!;
   static List<DealLine> linesFor(String vibe) => lineSets[vibe] ?? lineSets[defaultVibe]!;
@@ -116,20 +116,19 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
       type: isExpress ? ConversationType.express : ConversationType.proDealCloser,
       createdAt: now,
       updatedAt: now,
-      vibe: _vibeOf(request.profile),
-      marketplace: request.profile[ProfileFields.marketplaceKey]?.toString(),
+      overrides: request.overrides,
       keyword: request.keyword,
       title: isExpress ? null : _title(request.text, request.images),
     );
     _emitList();
-    return _turn(id, request.text, request.images ?? const [], _vibeOf(request.profile),
+    return _turn(id, request.text, request.images ?? const [], _toneOf(request.overrides),
         express: isExpress, keyword: request.keyword);
   }
 
   @override
   Future<ConversationWriteResponse> send(String conversationId, SendMessageRequest request) {
     _require(conversationId);
-    return _turn(conversationId, request.text, request.images ?? const [], _vibeOf(request.profile));
+    return _turn(conversationId, request.text, request.images ?? const [], _toneOf(request.overrides));
   }
 
   @override
@@ -139,7 +138,7 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
     unawaited(Future<void>.delayed(optionsDelay).then((_) {
       final current = _messages[conversationId]?.where((m) => m.id == target.id).firstOrNull;
       if (current == null) return;
-      _replace(conversationId, current.copyWith(options: linesFor(_vibeOf(request.profile)), pendingOptions: false));
+      _replace(conversationId, current.copyWith(options: linesFor(_toneOf(request.overrides)), pendingOptions: false));
     }));
     return ConversationWriteResponse(conversationId: conversationId, messageId: target.id);
   }
@@ -150,10 +149,11 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
     final target = _targetWizard(conversationId, request.messageId);
     final isExpress = conversation.type == ConversationType.express;
     _replace(conversationId, target.copyWith(status: MessageStatus.pending, options: const []));
-    _update(conversation.copyWith(isTyping: true, vibe: _vibeOf(request.profile), keyword: request.keyword ?? conversation.keyword));
+    _update(conversation.copyWith(isTyping: true, overrides: request.overrides, keyword: request.keyword ?? conversation.keyword));
     unawaited(Future<void>.delayed(replyDelay).then((_) {
-      final lines = linesFor(_vibeOf(request.profile));
-      final text = isExpress ? seeing : '${replyFor(_vibeOf(request.profile))}$regeneratedSuffix';
+      final tone = _toneOf(request.overrides);
+      final lines = linesFor(tone);
+      final text = isExpress ? seeing : '${replyFor(tone)}$regeneratedSuffix';
       _replace(
         conversationId,
         target.copyWith(
@@ -181,8 +181,7 @@ class FakeConversationsBackend implements ConversationsApi, ConversationsStream 
       status: request.status == null ? null : ConversationStatus.fromString(request.status),
       priceBefore: request.priceBefore,
       priceAfter: request.priceAfter,
-      vibe: request.vibe,
-      marketplace: request.marketplace,
+      overrides: request.overrides,
     ));
   }
 

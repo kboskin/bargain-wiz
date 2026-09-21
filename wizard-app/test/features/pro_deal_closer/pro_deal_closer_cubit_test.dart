@@ -23,7 +23,8 @@ void main() {
 
   tearDown(() => cubit.close());
 
-  Future<void> startFresh({String vibe = 'friendly'}) => cubit.start(vibe: vibe, locale: 'en');
+  Future<void> startFresh({String vibe = 'friendly', String marketplace = 'ebay'}) =>
+      cubit.start(overrides: {'vibe': vibe, 'marketplace': marketplace}, locale: 'en');
 
   List<ProChatMessage> messages() => cubit.state.messages;
 
@@ -38,7 +39,7 @@ void main() {
       expect(messages().single.showActions, isFalse);
       expect(cubit.state.hasUserMessages, isFalse);
       expect(cubit.state.conversationId, isNull);
-      expect(cubit.state.vibe, 'friendly');
+      expect(cubit.state.overrides, {'vibe': 'friendly', 'marketplace': 'ebay'});
     });
 
     test('reopening a saved chat projects the server messages() as restored', () async {
@@ -48,7 +49,7 @@ void main() {
         type: ConversationType.proDealCloser,
         createdAt: createdAt,
         status: ConversationStatus.won,
-        vibe: 'tactical',
+        overrides: const {'vibe': 'tactical'},
       );
       repo.store['c1'] = const [
         ProDealCloserMessage(id: 'm1', text: 'They ask 180', seq: 1),
@@ -61,7 +62,7 @@ void main() {
         ),
       ];
 
-      await cubit.start(conversationId: 'c1', vibe: 'friendly', locale: 'es');
+      await cubit.start(conversationId: 'c1', overrides: const {'vibe': 'friendly'}, locale: 'es');
       await pumpEventQueue();
 
       expect(cubit.state.conversationId, 'c1');
@@ -73,6 +74,35 @@ void main() {
       expect(messages().last.options, FakeProDealCloserRepository.options);
       expect(messages().last.showActions, isFalse);
       expect(cubit.state.isTyping, isFalse);
+      // The deal keeps the answers it was written with, not the profile defaults passed in:
+      // the transcript above was coached in that voice (CONVERSATIONS.md).
+      expect(cubit.state.overrides, {'vibe': 'tactical'});
+    });
+
+    test('a reopened deal with no saved answers falls back to the profile defaults', () async {
+      conversations.store['c2'] = Conversation(
+        id: 'c2',
+        type: ConversationType.proDealCloser,
+        createdAt: DateTime(2026, 9),
+      );
+      repo.store['c2'] = const [ProDealCloserMessage(id: 'm1', text: 'hi', seq: 1)];
+
+      await cubit.start(conversationId: 'c2', overrides: const {'vibe': 'friendly'}, locale: 'en');
+      await pumpEventQueue();
+
+      expect(cubit.state.overrides, {'vibe': 'friendly'});
+    });
+
+    test('changing an answer mid-deal is this deal\'s business only', () async {
+      await startFresh(vibe: 'friendly');
+      cubit.setOverride('vibe', 'quiet_closer');
+
+      // The cubit has no route to the stored profile at all — the next request carries the
+      // new value, and what a future deal starts from is the Profile screen's to change.
+      expect(cubit.state.overrides['vibe'], 'quiet_closer');
+      await cubit.sendText('hello');
+      await pumpEventQueue();
+      expect(repo.sendCalls.single.overrides['vibe'], 'quiet_closer');
     });
   });
 
@@ -90,7 +120,7 @@ void main() {
 
       expect(repo.sendCalls.single.conversationId, isNull);
       expect(repo.sendCalls.single.text, 'They ask 180');
-      expect(repo.sendCalls.single.vibe, 'no_nonsense');
+      expect(repo.sendCalls.single.overrides['vibe'], 'no_nonsense');
       expect(cubit.state.conversationId, 'c1');
       expect(messages().map((m) => m.text), [ProDealCloserCubit.greetingText, 'They ask 180', 'Reply for no_nonsense']);
       expect(messages().where((m) => m.id.startsWith('local_')), isEmpty); // echoed, optimistic copy dropped
@@ -240,7 +270,7 @@ void main() {
       await pumpEventQueue();
       final reply = messages().last;
 
-      cubit.setVibe('quiet_closer');
+      cubit.setOverride('vibe', 'quiet_closer');
       await cubit.redo(reply.id);
       await pumpEventQueue();
 
@@ -268,16 +298,15 @@ void main() {
   group('save', () {
     test('patches history metadata once the conversation exists on the server', () async {
       await startFresh(vibe: 'tactical');
-      expect(await cubit.save(marketplace: 'ebay'), isFalse);
+      expect(await cubit.save(), isFalse);
 
       await cubit.sendText('hello');
       await pumpEventQueue();
 
-      expect(await cubit.save(marketplace: 'ebay'), isTrue);
+      expect(await cubit.save(), isTrue);
       final saved = conversations.store['c1']!;
       expect(saved.type, ConversationType.proDealCloser);
-      expect(saved.vibe, 'tactical');
-      expect(saved.marketplace, 'ebay');
+      expect(saved.overrides, {'vibe': 'tactical', 'marketplace': 'ebay'});
       expect(saved.status, ConversationStatus.open);
     });
   });

@@ -59,11 +59,11 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
 
   /// Starts a fresh chat or reopens [conversationId] from history.
   Future<void> start({
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
     String? conversationId,
   }) async {
-    emit(state.copyWith(status: ProDealCloserStatus.loading, vibe: vibe, locale: locale));
+    emit(state.copyWith(status: ProDealCloserStatus.loading, overrides: overrides, locale: locale));
     if (conversationId == null) {
       emit(state.copyWith(status: ProDealCloserStatus.ready, messages: [_greeting()]));
       return;
@@ -80,15 +80,19 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
       conversationId: conversationId,
       createdAt: conversation?.createdAt,
       conversationStatus: conversation?.status ?? ConversationStatus.open,
+      // A reopened thread keeps the answers it was written with, not today's profile
+      // defaults — the transcript above was coached in that voice (CONVERSATIONS.md).
+      overrides: conversation?.overrides,
       messages: [_greeting(restored: true)],
     ));
     _subscribe(conversationId);
   }
 
-  /// Tone used for subsequent replies (header chip).
-  void setVibe(String vibe) {
-    if (vibe == state.vibe) return;
-    emit(state.copyWith(vibe: vibe));
+  /// Changes one conversation-scoped answer for this deal only (a header chip). The profile
+  /// default is untouched, so the next deal still starts from it.
+  void setOverride(String key, dynamic value) {
+    if (state.overrides[key] == value) return;
+    emit(state.copyWith(overrides: {...state.overrides, key: value}));
   }
 
   /// Sends a user text line; the wizard reply arrives through the listener.
@@ -114,7 +118,7 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
       conversationId: state.conversationId,
       text: text.isEmpty ? null : text,
       attachmentPaths: paths,
-      vibe: state.vibe,
+      overrides: state.overrides,
       locale: state.locale,
     );
     if (isClosed) return;
@@ -149,7 +153,7 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
     final result = await _repository.requestOptions(
       conversationId: conversationId,
       messageId: messageId,
-      vibe: state.vibe,
+      overrides: state.overrides,
       locale: state.locale,
     );
     if (isClosed) return;
@@ -165,16 +169,16 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
     final result = await _repository.redo(
       conversationId: conversationId,
       messageId: messageId,
-      vibe: state.vibe,
+      overrides: state.overrides,
       locale: state.locale,
     );
     if (isClosed) return;
     result.fold(_fail, (_) {});
   }
 
-  /// Persists history metadata (vibe, marketplace, status) when the chat exists on the server.
-  /// Returns true when saved. Messages themselves are already there.
-  Future<bool> save({String? marketplace}) async {
+  /// Persists history metadata (the deal's overrides and status) when the chat exists on
+  /// the server. Returns true when saved. Messages themselves are already there.
+  Future<bool> save() async {
     final conversationId = state.conversationId;
     if (conversationId == null) return false;
     final result = await _conversations.saveConversation(Conversation(
@@ -182,8 +186,7 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
       type: ConversationType.proDealCloser,
       createdAt: state.createdAt ?? DateTime.now(),
       status: state.conversationStatus,
-      vibe: state.vibe,
-      marketplace: marketplace,
+      overrides: state.overrides,
     ));
     return result.fold((failure) {
       _logger.w('ProDealCloserCubit: save failed: ${failure.message}');

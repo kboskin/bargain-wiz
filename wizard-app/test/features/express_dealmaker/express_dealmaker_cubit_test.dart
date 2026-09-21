@@ -18,13 +18,14 @@ void main() {
   late SharedPreferences prefs;
   late ExpressDealmakerCubit cubit;
 
-  ExpressDealmakerCubit build({final String vibeId = 'friendly', final String? marketplace = 'facebook'}) =>
+  ExpressDealmakerCubit build({
+    final Map<String, dynamic> overrides = const {'vibe': 'friendly', 'marketplace': 'facebook'},
+  }) =>
       ExpressDealmakerCubit(
         repository: repo,
         conversationRepository: conversations,
         prefs: prefs,
-        vibeId: vibeId,
-        marketplace: marketplace,
+        overrides: overrides,
       );
 
   setUp(() async {
@@ -70,9 +71,9 @@ void main() {
       expect(cubit.state.requestId, 1);
       expect(repo.replyRequests, hasLength(1));
       expect(repo.replyRequests.single.ids, ['id_a.png', 'id_b.png']);
-      expect(repo.replyRequests.single.vibe, 'friendly');
-      expect(repo.replyRequests.single.locale, 'en');
       expect(repo.replyRequests.single.keyword, isNull);
+      expect(repo.replyRequests.single.overrides['vibe'], 'friendly');
+      expect(repo.replyRequests.single.locale, 'en');
       expect(prefs.getBool(PrefsKeys.expressUsed), isTrue);
       await sub.cancel();
     });
@@ -235,17 +236,19 @@ void main() {
 
       expect(repo.replyRequests, hasLength(2));
       expect(repo.replyRequests.last.keyword, 'pickup today');
-      expect(repo.replyRequests.last.vibe, 'friendly');
+      expect(repo.replyRequests.last.overrides['vibe'], 'friendly');
       expect(cubit.state.requestId, 2);
       expect(cubit.state.phase, ExpressPhase.ready);
     });
 
-    test('changing the tone re-requests with the new vibe', () async {
-      await cubit.changeVibe('tactical');
-      expect(cubit.state.vibeId, 'tactical');
-      expect(repo.replyRequests.last.vibe, 'tactical');
+    test('changing a conversation-scoped answer re-requests with the new value', () async {
+      await cubit.setOverride('vibe', 'tactical');
+      expect(cubit.state.overrides['vibe'], 'tactical');
+      expect(repo.replyRequests.last.overrides['vibe'], 'tactical');
+      // The other overrides ride along untouched.
+      expect(repo.replyRequests.last.overrides['marketplace'], 'facebook');
 
-      await cubit.changeVibe('tactical'); // same tone → no request
+      await cubit.setOverride('vibe', 'tactical'); // same value → no request
       expect(repo.replyRequests, hasLength(2));
     });
 
@@ -296,7 +299,7 @@ void main() {
     test('saveConversation writes an express conversation with a derived title', () async {
       await cubit.start(initialPaths: ['a.png', 'b.png']);
       cubit.setKeyword('cash');
-      await cubit.changeVibe('quiet_closer');
+      await cubit.setOverride('vibe', 'quiet_closer');
 
       expect(await cubit.saveConversation(), isTrue);
       final saved = conversations.store.values.single;
@@ -307,8 +310,7 @@ void main() {
       expect(saved.effectiveLines, repo.reply.lines);
       expect(saved.keyword, 'cash');
       expect(saved.seeing, repo.reply.seeing);
-      expect(saved.vibe, 'quiet_closer');
-      expect(saved.marketplace, 'facebook');
+      expect(saved.overrides, {'vibe': 'quiet_closer', 'marketplace': 'facebook'});
       expect(saved.status, ConversationStatus.open);
     });
 
@@ -322,7 +324,7 @@ void main() {
         keyword: 'shelf',
         createdAt: createdAt,
         seeing: r'Old shelf · $90',
-        vibe: 'no_nonsense',
+        overrides: const {'vibe': 'no_nonsense'},
         status: ConversationStatus.won,
       );
 
@@ -338,7 +340,7 @@ void main() {
       expect(cubit.state.lines.single.text, 'Saved line');
       expect(cubit.state.seeing, r'Old shelf · $90');
       expect(cubit.state.keyword, 'shelf');
-      expect(cubit.state.vibeId, 'no_nonsense');
+      expect(cubit.state.overrides, {'vibe': 'no_nonsense'});
       expect(cubit.state.screenshots.single.isSuccess, isTrue);
       expect(cubit.state.uploadedIds, ['old.png']); // path fallback for restored shots
       expect(repo.uploadedPaths, isEmpty);

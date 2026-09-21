@@ -84,6 +84,12 @@ def service(monkeypatch, store, gen):
     return _service(store, gen, monkeypatch=monkeypatch)
 
 
+def _turns(store, cid, uid="u1"):
+    """The conversation's turns. `create` also writes the `system` record at seq 0 — the
+    configuration the chat started with, which the app skips too (CONVERSATIONS.md)."""
+    return [m for m in store.list_messages(uid, cid) if m["role"] != "system"]
+
+
 def _message(store, cid, mid):
     return next(m for m in store.list_messages("u1", cid) if m["id"] == mid)
 
@@ -99,12 +105,26 @@ VIBE_PROMPTS = {
     "quiet_closer": "Quiet Closer: low-pressure, yet always moves the deal to a close.",
 }
 
-PROFILE = {"vibe": "friendly", "push": 60, "prompt": {"vibe": VIBE_PROMPTS}}
+
+
+def _profile(vibe="friendly", locale="en") -> dict:
+    """The profile as the app sends it: one entry per pick, each carrying its own line."""
+    return {
+        "answers": [
+            {"key": "vibe", "value": vibe, "prompt": VIBE_PROMPTS.get(vibe, f"Tone: {vibe}.")},
+            {"key": "push", "value": 60, "prompt": "Push level: Balanced — a fair anchor."},
+        ],
+        "locale": locale,
+    }
 
 
 def _call(method, path, body=None, profile=True):
     if profile and isinstance(body, dict):
-        body = {**PROFILE, **body}
+        # `vibe` and `locale` are written flat by the callers below for brevity; the wire
+        # nests them, and a conversation-scoped answer also rides as an override.
+        body = dict(body)
+        vibe, locale = body.pop("vibe", "friendly"), body.pop("locale", "en")
+        body = {"profile": _profile(vibe, locale), "overrides": {"vibe": vibe}, **body}
     with Flask(__name__).test_request_context(path, method=method, json=body):
         res = main.conversations(request)
     return res.status_code, json.loads(res.get_data(as_text=True))
@@ -125,7 +145,8 @@ def test_first_turn_stores_user_and_wizard_messages_and_the_screenshot(service, 
     assert status == 200
     cid, mid, rid = body["conversation_id"], body["message_id"], body["reply_id"]
     conv = store.get_conversation("u1", cid)
-    assert conv["type"] == "pro" and conv["status"] == "open" and conv["vibe"] == "no_nonsense"
+    assert conv["type"] == "pro" and conv["status"] == "open"
+    assert conv["overrides"] == {"vibe": "no_nonsense"}  # the deal remembers the tone it was opened with
     assert conv["active"] is True
     assert conv["message_count"] == 2 and "active_turn" not in conv
     assert conv["title"] == "They ask $180 for the Kallax"
@@ -133,7 +154,7 @@ def test_first_turn_stores_user_and_wizard_messages_and_the_screenshot(service, 
     assert conv["thumbnail"]["path"].startswith(f"users/u1/conversations/{cid}/")
     assert conv["created_at"] == NOW and conv["last_message_at"] == NOW
 
-    user, wizard = store.list_messages("u1", cid)
+    user, wizard = _turns(store, cid)
     assert (user["id"], wizard["id"]) == (mid, rid)
     assert user["role"] == "user" and user["seq"] == 1 and user["status"] == "done"
     assert user["reply_id"] == rid
@@ -141,7 +162,7 @@ def test_first_turn_stores_user_and_wizard_messages_and_the_screenshot(service, 
     assert ref["mime_type"] == "image/jpeg" and ref["width"] == 40 and ref["height"] == 30
     stored = store.get_image(ref["path"])
     assert stored[:3] == b"\xff\xd8\xff"  # re-encoded as JPEG, no PNG left
-    assert wizard["role"] == "wizard" and wizard["seq"] == 2 and wizard["status"] == "done"
+    assert wizard["role"] == "model" and wizard["seq"] == 2 and wizard["status"] == "done"
     assert wizard["text"] == "Open at $140, pickup today." and wizard["model"] == "fake-gemini"
     assert wizard["revision"] == 0 and "latency_ms" in wizard
 
@@ -163,14 +184,14 @@ def test_follow_up_sends_only_the_new_message_and_uses_stored_history(service, s
                          {"text": "Seller says $170 is final", "vibe": "tactical"})
 
     assert status == 200 and body["conversation_id"] == cid
-    messages = store.list_messages("u1", cid)
+    messages = _turns(store, cid)
     assert [m["seq"] for m in messages] == [1, 2, 3, 4]
     assert messages[3]["text"] == "Hold at $150."
     transcript = gen.calls[1]["parts"][-1]["text"]
     assert "Wizard: Open at $140." in transcript and "Buyer: Seller says $170 is final" in transcript
     assert gen.calls[1]["parts"][0]["type"] == "image"  # the stored screenshot is reused
     assert "Tactical" in gen.calls[1]["system"]
-    assert store.get_conversation("u1", cid)["vibe"] == "tactical"
+    assert store.get_conversation("u1", cid)["overrides"] == {"vibe": "tactical"}
 
 
 def test_a_second_options_request_while_one_is_pending_does_not_queue_another(service, store, gen):
@@ -206,12 +227,12 @@ def test_model_failure_marks_the_reply_failed_and_frees_the_conversation(service
     cid = body["conversation_id"]
     conv = store.get_conversation("u1", cid)
     assert "active_turn" not in conv
-    wizard = store.list_messages("u1", cid)[1]
+    wizard = _turns(store, cid)[1]
     assert wizard["status"] == "failed" and wizard["error"]["code"] == "UPSTREAM_ERROR"
 
     status, _ = _call("POST", f"/conversations/{cid}/messages", {"text": "retry"})
     assert status == 200
-    assert store.list_messages("u1", cid)[-1]["text"] == "Recovered."
+    assert _turns(store, cid)[-1]["text"] == "Recovered."
 
 
 def test_options_attach_lines_to_the_wizard_reply(service, store, gen):
@@ -266,8 +287,8 @@ def test_express_conversation_returns_and_stores_seeing_and_lines(service, store
     assert conv["type"] == "express" and conv["keyword"] == "scuff"
     assert conv["title"] == "IKEA Kallax · $180 · slight scuff"
     assert conv["express"]["keyword"] == "scuff"
-    assert [ref["path"] for ref in conv["express"]["images"]] == [ref["path"] for ref in store.list_messages("u1", cid)[0]["images"]]
-    user, wizard = store.list_messages("u1", cid)
+    assert [ref["path"] for ref in conv["express"]["images"]] == [ref["path"] for ref in _turns(store, cid)[0]["images"]]
+    user, wizard = _turns(store, cid)
     assert len(user["images"]) == 2 and wizard["seeing"] == conv["express"]["seeing"] and wizard["lines"] == LINES
     call = gen.calls[0]
     assert call["schema"] is EXPRESS_SCHEMA and "locale tag es" in call["system"]
@@ -286,9 +307,10 @@ def test_express_redo_regenerates_with_the_new_tone_and_keyword(service, store, 
     assert status == 200
     conv = store.get_conversation("u1", cid)
     assert len(conv["express"]["lines"]) == 2
-    assert conv["vibe"] == "friendly" and conv["keyword"] == "pickup" and conv["express"]["keyword"] == "pickup"
+    assert conv["overrides"] == {"vibe": "friendly"}
+    assert conv["keyword"] == "pickup" and conv["express"]["keyword"] == "pickup"
     assert "Friendly" in gen.calls[1]["system"] and "focus on: pickup" in gen.calls[1]["parts"][-1]["text"]
-    assert store.list_messages("u1", cid)[1]["revision"] == 1
+    assert _turns(store, cid)[1]["revision"] == 1
 
 
 def test_express_redo_after_a_failed_generation_reuses_the_stored_screenshots(service, store, gen):
@@ -309,7 +331,7 @@ def test_express_redo_after_a_failed_generation_reuses_the_stored_screenshots(se
     assert len(store.list_conversations("u1")) == 1
     # The screenshots travelled once: the regeneration read them back from the stored turn.
     assert sum(1 for p in gen.calls[1]["parts"] if p["type"] == "image") == 1
-    wizard = store.list_messages("u1", cid)[1]
+    wizard = _turns(store, cid)[1]
     assert wizard["status"] == "done" and wizard["revision"] == 1
 
 
@@ -343,7 +365,13 @@ def test_get_and_list_return_the_documents_with_iso_dates(service, gen):
     cid = first["conversation_id"]
 
     status, one = _call("GET", f"/conversations/{cid}")
-    assert status == 200 and one["id"] == cid and len(one["messages"]) == 2
+    # The whole transcript, configuration included: system at seq 0, then the turns. The app
+    # skips the system row; the endpoint does not hide it, so a deal can be read back exactly
+    # as the model saw it.
+    assert status == 200 and one["id"] == cid
+    assert [m["role"] for m in one["messages"]] == ["system", "user", "model"]
+    assert one["messages"][0]["seq"] == 0
+    assert one["messages"][0]["text"].startswith("You are Bargain Wiz")
     assert one["created_at"] == "2026-09-17T12:00:00Z"
     status, many = _call("GET", "/conversations")
     assert status == 200 and [c["id"] for c in many["conversations"]] == [cid]
@@ -359,7 +387,7 @@ def test_delete_archives_instead_of_removing(service, store, gen):
     assert status == 200 and body == {"conversation_id": cid, "active": False}
     conv = store.get_conversation("u1", cid)
     assert conv["active"] is False and conv["archived_at"] == NOW
-    assert len(store.list_messages("u1", cid)) == 2 and store.images  # nothing is destroyed
+    assert len(_turns(store, cid)) == 2 and store.images  # nothing is destroyed
     assert [c["id"] for c in _call("GET", "/conversations")[1]["conversations"]] != [cid]
     assert cid not in [c["id"] for c in store.list_conversations("u1")]
     # archived conversations are gone for the app: writes and reads answer 404
@@ -457,7 +485,8 @@ def test_the_turn_is_queued_and_the_response_does_not_wait_for_the_model(monkeyp
 
     task = queued[0]
     assert (task.uid, task.conversation_id, task.message_id) == ("u1", cid, wizard["id"])
-    assert (task.action, task.kind, task.profile.vibe) == ("reply", "pro", "no_nonsense")
+    assert (task.action, task.kind) == ("reply", "pro")
+    assert next((a.key, a.value) for a in task.profile.answers) == ("vibe", "no_nonsense")
 
     svc.generate(task.model_dump(mode="json"))
 
@@ -466,13 +495,45 @@ def test_the_turn_is_queued_and_the_response_does_not_wait_for_the_model(monkeyp
     assert "active_turn" not in store.get_conversation("u1", cid)
 
 
+def test_the_conversation_records_the_system_prompt_it_started_with(service, store, gen):
+    """Firestore keeps the configuration, not just the turns, so a deal can be read back as
+    the model saw it — which matters now the prompt comes from Remote Config and can change
+    between conversations without a deploy."""
+    gen.queue({"reply": "Open at $140."})
+    _, body = _start_pro(vibe="no_nonsense")
+    cid = body["conversation_id"]
+
+    system = store.list_messages("u1", cid)[0]
+    assert (system["role"], system["seq"], system["status"]) == ("system", 0, "done")
+    # Verbatim what the model was configured with, the template's own lines included.
+    assert system["text"].startswith("You are Bargain Wiz")
+    assert VIBE_PROMPTS["no_nonsense"] in system["text"]
+    # Not a turn: it does not count against the chat's cap, and it sits before seq 1.
+    assert store.get_conversation("u1", cid)["message_count"] == 2
+    assert [m["seq"] for m in _turns(store, cid)] == [1, 2]
+
+
+def test_the_system_record_is_not_replayed_as_a_chat_turn(service, store, gen):
+    """It already reaches Gemini as `system_instruction`; sending it again as history would
+    say everything twice."""
+    gen.queue({"reply": "Open at $140."})
+    _, body = _start_pro()
+    cid = body["conversation_id"]
+    gen.queue({"reply": "Try $150."})
+    _call("POST", f"/conversations/{cid}/messages", {"text": "They said no"})
+
+    transcript = gen.calls[-1]["parts"][-1]["text"]
+    assert "You are Bargain Wiz" not in transcript  # only in `system`, never in the material
+    assert gen.calls[-1]["system"].startswith("You are Bargain Wiz")
+
+
 def test_a_later_turn_re_references_the_screenshot_without_downloading_it(service, store, gen):
     """The point of handing Vertex a `gs://` URI: a long chat stops re-reading the same
     screenshots out of the bucket on every turn."""
     gen.queue({"reply": "Open at $140."})
     _, body = _start_pro(images=[IMG])
     cid = body["conversation_id"]
-    ref = store.list_messages("u1", cid)[0]["images"][0]
+    ref = _turns(store, cid)[0]["images"][0]
 
     downloads = []
     original = store.get_image
@@ -498,9 +559,11 @@ def test_the_answer_descriptions_survive_the_queue_and_reach_the_prompt(monkeypa
     svc = _service(store, gen, Recorder(), monkeypatch=monkeypatch)
     gen.queue({"reply": "Open at $140."})
 
-    _start_pro(prompt={"vibe": {"no_nonsense": "Bulldozer: never blinks."}})
+    _start_pro(profile={"answers": [
+        {"key": "vibe", "value": "no_nonsense", "prompt": "Bulldozer: never blinks."}
+    ]})
     task = queued[0]
-    assert task.profile.prompt == {"vibe": {"no_nonsense": "Bulldozer: never blinks."}}
+    assert [(a.key, a.prompt) for a in task.profile.answers] == [("vibe", "Bulldozer: never blinks.")]
 
     svc.generate(task.model_dump(mode="json"))
     assert "Bulldozer: never blinks." in gen.calls[0]["system"]

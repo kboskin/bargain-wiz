@@ -94,45 +94,50 @@ class UserProfileService extends ChangeNotifier {
   }) =>
       snapshot(overrides: overrides, except: except).fields;
 
-  /// [payload], plus the `prompt` sentence behind each answer it carries — what the
-  /// functions render into the prompt instead of keeping their own copy of the option list
-  /// (AI_INTEGRATION.md). Resolved in the same pass as the values so an [overrides] entry
-  /// always describes the option actually being sent, not the stored one.
+  /// [payload]'s answers as the AI functions take them: an ordered list, one entry per
+  /// pick, each carrying the `metadata.prompt` sentence remote config writes for that
+  /// option (AI_INTEGRATION.md). Values and sentences are resolved in the same pass, so an
+  /// [overrides] entry always describes the option actually being sent, not the stored one.
   ///
-  /// An option remote config no longer offers, or never described, contributes no sentence;
-  /// the backend falls back to its own table for that id.
+  /// The order is screen order, and it is the order the buyer block reads in. An option
+  /// remote config no longer offers, or never described, carries no sentence: the backend
+  /// renders no line for it and logs the miss.
   ProfileSnapshot snapshot({
     Map<String, dynamic> overrides = const {},
     Set<String> except = const {},
   }) {
     final stored = answers;
     final out = <String, dynamic>{};
-    final prompts = <String, Map<String, String>>{};
+    final list = <ProfileAnswer>[];
     for (final field in fields) {
       if (except.contains(field.key)) continue;
-      assert(field.key != ProfileFields.promptKey,
-          '"${ProfileFields.promptKey}" is reserved on the wire; rename the screen\'s answer_key_name');
       final dynamic value =
           overrides.containsKey(field.key) ? overrides[field.key] : (stored[field.key] ?? field.defaultValue);
       if (value == null) continue;
       out[field.key] = value;
       for (final id in _optionIds(value)) {
-        final text = field.optionFor(id)?.prompt;
-        if (text != null && text.isNotEmpty) {
-          (prompts[field.key] ??= <String, String>{})[id] = text;
-        }
+        list.add(ProfileAnswer(field.key, _leafOf(value, id), field.optionFor(id)?.prompt));
       }
     }
     for (final entry in overrides.entries) {
-      if (!except.contains(entry.key) && !out.containsKey(entry.key)) out[entry.key] = entry.value;
+      if (!except.contains(entry.key) && !out.containsKey(entry.key)) {
+        out[entry.key] = entry.value;
+        for (final id in _optionIds(entry.value)) {
+          list.add(ProfileAnswer(entry.key, _leafOf(entry.value, id), null));
+        }
+      }
     }
-    return ProfileSnapshot(out, prompts);
+    return ProfileSnapshot(out, list);
   }
 
   /// The option ids one answer stands for: every pick of a multi-select, otherwise the one
   /// value. Slider stops stringify to the ids [ProfileFields] built them with (`60`, `550`).
   static Iterable<String> _optionIds(dynamic value) =>
       value is List ? value.map((dynamic v) => v.toString()) : [value.toString()];
+
+  /// What one pick is worth on the wire: the element for a multi-select, the value itself
+  /// otherwise, so a slider stop stays the number it was stored as.
+  static dynamic _leafOf(dynamic value, String id) => value is List ? id : value;
 
   /// The configured answers as fields, in screen order (memoised on [RemoteConfigService]).
   List<ProfileField> get fields => _remoteConfig.getProfileFields();

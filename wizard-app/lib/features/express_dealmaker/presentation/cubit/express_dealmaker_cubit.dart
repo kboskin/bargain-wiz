@@ -18,41 +18,36 @@ export 'package:appwizard/features/express_dealmaker/presentation/cubit/express_
 /// `registerFactoryParam`).
 class ExpressDealmakerCubitParams {
   const ExpressDealmakerCubitParams({
-    this.vibeId = '',
+    this.overrides = const {},
     this.locale = 'en',
-    this.marketplace,
   });
 
-  final String vibeId;
+  final Map<String, dynamic> overrides;
   final String locale;
-  final String? marketplace;
 }
 
 /// Drives the Express Dealmaker flow: pick → uploading → ready / error,
-/// Get More / tone changes, reopening from history and saving on back.
+/// Get More / override changes, reopening from history and saving on back.
 ///
-/// Context-derived values (vibe, locale, marketplace) are passed in by the page;
+/// Context-derived values (the deal's overrides and the locale) are passed in by the page;
 /// the cubit itself only depends on repositories so it can be unit-tested with fakes.
 class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
   ExpressDealmakerCubit({
     required final ExpressDealmakerRepository repository,
     required final ConversationRepository conversationRepository,
     final SharedPreferences? prefs,
-    final String vibeId = '',
+    final Map<String, dynamic> overrides = const {},
     final String locale = 'en',
-    final String? marketplace,
   })  : _repository = repository,
         _conversationRepository = conversationRepository,
         _prefs = prefs,
         _locale = locale,
-        _marketplace = marketplace,
-        super(ExpressDealmakerState(vibeId: vibeId));
+        super(ExpressDealmakerState(overrides: overrides));
 
   final ExpressDealmakerRepository _repository;
   final ConversationRepository _conversationRepository;
   final SharedPreferences? _prefs;
   final String _locale;
-  final String? _marketplace;
 
   /// Conversation loaded from history (keeps id / createdAt / status on save).
   Conversation? _loaded;
@@ -120,7 +115,7 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
       lines: lines,
       seeing: conversation.seeing,
       keyword: conversation.keyword ?? '',
-      vibeId: conversation.vibe ?? state.vibeId,
+      overrides: conversation.overrides ?? state.overrides,
       requestId: lines.isNotEmpty ? 1 : 0,
       clearError: !failed,
     ));
@@ -255,7 +250,7 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
       uploadedIds: ids,
       keyword: keyword.isEmpty ? null : keyword,
       locale: _locale,
-      vibe: state.vibeId,
+      overrides: state.overrides,
       conversationId: state.conversationId,
     );
     if (isClosed) return;
@@ -285,11 +280,12 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
     );
   }
 
-  /// Switches the tone. Persisting the vibe on the user profile is done by the
-  /// page; here we only re-request lines when results are already showing.
-  Future<void> changeVibe(final String vibeId) async {
-    if (vibeId == state.vibeId) return;
-    emit(state.copyWith(vibeId: vibeId));
+  /// Changes one conversation-scoped answer for this deal only — the profile default is
+  /// untouched, so the next deal still starts from it. Re-requests lines when results are
+  /// already showing.
+  Future<void> setOverride(final String key, final dynamic value) async {
+    if (state.overrides[key] == value) return;
+    emit(state.copyWith(overrides: {...state.overrides, key: value}));
     final shouldRefetch = state.phase == ExpressPhase.ready ||
         (state.phase == ExpressPhase.error && state.errorKind == ExpressErrorKind.reply);
     if (shouldRefetch) await requestReply();
@@ -349,9 +345,8 @@ class ExpressDealmakerCubit extends Cubit<ExpressDealmakerState> {
       replyLines: state.lines,
       keyword: keyword.isEmpty ? null : keyword,
       title: DealTitle.fromSeeing(state.seeing ?? base.seeing),
-      marketplace: _marketplace ?? base.marketplace,
       seeing: state.seeing ?? base.seeing,
-      vibe: state.vibeId,
+      overrides: state.overrides,
     );
   }
 }

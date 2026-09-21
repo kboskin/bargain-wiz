@@ -110,8 +110,7 @@ void main() {
       final byKey = {for (final f in ProfileFields.fromScreens(screens)) f.key: f};
       expect(_resolve(byKey['hurdles']!.label), 'Money leaks');
       expect(_resolve(byKey['deal_size']!.label), 'Typical deal size');
-      expect(_resolve(ProfileFields.labelForKey(screens, 'push')), 'How hard you push');
-      expect(ProfileFields.labelForKey(screens, 'nope'), isNull);
+      expect(_resolve(byKey['push']!.label), 'How hard you push');
     });
 
     test('falls back to the screen title when no profile_label is configured', () {

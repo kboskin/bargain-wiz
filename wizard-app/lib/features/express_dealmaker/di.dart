@@ -16,9 +16,8 @@ void registerExpressDealmakerDependencies(final GetIt sl) {
       repository: sl<ExpressDealmakerRepository>(),
       conversationRepository: sl<ConversationRepository>(),
       prefs: sl.isRegistered<SharedPreferences>() ? sl<SharedPreferences>() : null,
-      vibeId: params.vibeId,
+      overrides: params.overrides,
       locale: params.locale,
-      marketplace: params.marketplace,
     ),
   );
 }

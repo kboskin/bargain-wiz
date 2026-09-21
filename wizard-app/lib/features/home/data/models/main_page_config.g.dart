@@ -176,7 +176,6 @@ MainPageCenterVisual _$MainPageCenterVisualFromJson(
   visual: json['visual'] as String,
   width: (json['width'] as num?)?.toDouble(),
   height: (json['height'] as num?)?.toDouble(),
-  historySize: (json['history_size'] as num?)?.toDouble(),
 );
 
 Map<String, dynamic> _$MainPageCenterVisualToJson(
@@ -185,5 +184,4 @@ Map<String, dynamic> _$MainPageCenterVisualToJson(
   'visual': instance.visual,
   'width': instance.width,
   'height': instance.height,
-  'history_size': instance.historySize,
 };

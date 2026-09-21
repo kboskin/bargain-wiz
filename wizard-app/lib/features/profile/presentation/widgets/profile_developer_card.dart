@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/widgets/wiz/frosted_surface.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
-import 'package:appwizard/features/profile/presentation/widgets/profile_vibe_card.dart';
+import 'package:appwizard/features/profile/presentation/widgets/profile_chip_card.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 
 /// Developer row (debug / dev builds only): tier override chips free · basic · premium · off.

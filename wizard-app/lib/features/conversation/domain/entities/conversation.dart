@@ -163,12 +163,11 @@ class Conversation extends Equatable {
     required this.createdAt,
     this.updatedAt,
     this.title,
-    this.marketplace,
     this.status = ConversationStatus.open,
     this.priceBefore,
     this.priceAfter,
     this.seeing,
-    this.vibe,
+    this.overrides,
     this.preview,
     this.thumbnailStoragePath,
     this.messageCount = 0,
@@ -196,15 +195,18 @@ class Conversation extends Equatable {
   // ── History metadata (Bargains History screen) ──
   /// Auto-generated from the screenshot / first message when null.
   final String? title;
-  final String? marketplace;
   final ConversationStatus status;
   /// Free-form price strings, e.g. "$420" → "$365".
   final String? priceBefore;
   final String? priceAfter;
   /// What the wizard "saw" in the screenshots (Express results strip).
   final String? seeing;
-  /// Negotiation vibe id used for this deal (e.g. "friendly").
-  final String? vibe;
+
+  /// The conversation-scoped answers this deal carries, `{answer key: value}` — the ones
+  /// the template marks `scope: "conversation"`, snapshotted when the deal was opened and
+  /// edited by the chips in its header. Reopening a deal coaches from these, not from the
+  /// profile, so the thread keeps the voice it was written in (CONVERSATIONS.md).
+  final Map<String, dynamic>? overrides;
   /// Last message text, clipped by the server.
   final String? preview;
   /// First screenshot stored for this deal (Cloud Storage path).
@@ -247,12 +249,11 @@ class Conversation extends Equatable {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? title,
-    String? marketplace,
     ConversationStatus? status,
     String? priceBefore,
     String? priceAfter,
     String? seeing,
-    String? vibe,
+    Map<String, dynamic>? overrides,
     String? preview,
     String? thumbnailStoragePath,
     int? messageCount,
@@ -270,12 +271,11 @@ class Conversation extends Equatable {
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         title: title ?? this.title,
-        marketplace: marketplace ?? this.marketplace,
         status: status ?? this.status,
         priceBefore: priceBefore ?? this.priceBefore,
         priceAfter: priceAfter ?? this.priceAfter,
         seeing: seeing ?? this.seeing,
-        vibe: vibe ?? this.vibe,
+        overrides: overrides ?? this.overrides,
         preview: preview ?? this.preview,
         thumbnailStoragePath: thumbnailStoragePath ?? this.thumbnailStoragePath,
         messageCount: messageCount ?? this.messageCount,
@@ -295,12 +295,11 @@ class Conversation extends Equatable {
         createdAt,
         updatedAt,
         title,
-        marketplace,
         status,
         priceBefore,
         priceAfter,
         seeing,
-        vibe,
+        overrides,
         preview,
         thumbnailStoragePath,
         messageCount,

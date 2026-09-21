@@ -241,7 +241,6 @@ class MainPageCenterVisual {
     required this.visual,
     this.width,
     this.height,
-    this.historySize,
   });
 
   /// Asset path or URL (Lottie, SVG, or image) – rendered via VisualAssetWidget.
@@ -249,11 +248,6 @@ class MainPageCenterVisual {
 
   final double? width;
   final double? height;
-
-  /// Size of the compact copy shown above the history grid once the user has deals
-  /// (0 hides it). Defaults to [HomeTab.defaultHistoryVisualSize].
-  @JsonKey(name: 'history_size')
-  final double? historySize;
 
   factory MainPageCenterVisual.fromJson(Map<String, dynamic> json) =>
       _$MainPageCenterVisualFromJson(json);

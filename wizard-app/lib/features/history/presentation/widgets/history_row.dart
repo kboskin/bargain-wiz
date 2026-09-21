@@ -19,7 +19,7 @@ class HistoryRow extends StatelessWidget {
     this.onLongPress,
     this.onDismissed,
     this.now,
-    this.marketplaceLabel,
+    this.scopedLabel,
   });
 
   final Conversation conversation;
@@ -29,9 +29,9 @@ class HistoryRow extends StatelessWidget {
   /// Reference time for the relative date (tests); defaults to `DateTime.now()`.
   final DateTime? now;
 
-  /// Label configured for the conversation's marketplace; the stored value is shown when the
-  /// config no longer offers it, and "Any marketplace" when there is none.
-  final String? marketplaceLabel;
+  /// Label for the first conversation-scoped answer this deal carries, as its onboarding
+  /// option names it. Null falls back to the "Any marketplace" copy.
+  final String? scopedLabel;
 
   static const TextStyle _metaStyle = TextStyle(
     fontFamily: WizType.bodyFont,
@@ -45,9 +45,8 @@ class HistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = conversation;
     final title = ConversationLabels.title(context, c);
-    final marketplace = switch ((marketplaceLabel, c.marketplace)) {
-      (final String label, _) when label.isNotEmpty => label,
-      (_, final String value) when value.isNotEmpty => value,
+    final marketplace = switch (scopedLabel) {
+      final String label when label.isNotEmpty => label,
       _ => ConversationLabels.of(context, ConversationLabels.anyMarketplace),
     };
     final date = ConversationLabels.date(context, c.createdAt, now: now);

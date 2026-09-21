@@ -50,7 +50,17 @@ VIBE_PROMPTS = {
     "quiet_closer": "Quiet Closer: low-pressure, yet always moves the deal to a close.",
 }
 
-PROFILE = {"vibe": "friendly", "push": 60, "prompt": {"vibe": VIBE_PROMPTS}}
+
+
+def _profile(vibe="friendly", locale="en") -> dict:
+    """The profile as the app sends it: one entry per pick, each carrying its own line."""
+    return {
+        "answers": [
+            {"key": "vibe", "value": vibe, "prompt": VIBE_PROMPTS.get(vibe, f"Tone: {vibe}.")},
+            {"key": "push", "value": 60, "prompt": "Push level: Balanced — a fair anchor."},
+        ],
+        "locale": locale,
+    }
 
 
 def _install(result=None, error=None, auth=None):
@@ -64,7 +74,10 @@ def _install(result=None, error=None, auth=None):
 def _post(path, functions, body, method="POST", headers=None, profile=True):
     app = Flask(__name__)
     if profile and isinstance(body, dict):
-        body = {**PROFILE, **body}
+        # `vibe` and `locale` are written flat by the callers below for brevity; the wire nests them.
+        body = dict(body)
+        vibe, locale = body.pop("vibe", "friendly"), body.pop("locale", "en")
+        body = {"profile": _profile(vibe, locale), **body}
     with app.test_request_context(path, method=method, json=body, headers=headers or {}):
         res = functions[path](request)
     return res.status_code, json.loads(res.get_data(as_text=True))
@@ -144,6 +157,6 @@ def test_pro_validation():
 def test_express_accepts_json_without_content_type():
     _install({"seeing": "x", "lines": LINES})
     app = Flask(__name__)
-    with app.test_request_context("/", method="POST", data=json.dumps({**PROFILE, "text": "bike $300"}), content_type="text/plain"):
+    with app.test_request_context("/", method="POST", data=json.dumps({"profile": _profile(), "text": "bike $300"}), content_type="text/plain"):
         res = main.express_dealmaker(request)
     assert res.status_code == 200

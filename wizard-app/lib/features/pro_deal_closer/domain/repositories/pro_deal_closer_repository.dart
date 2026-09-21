@@ -17,7 +17,7 @@ abstract class ProDealCloserRepository {
     String? conversationId,
     String? text,
     List<String> attachmentPaths = const [],
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   });
 
@@ -27,7 +27,7 @@ abstract class ProDealCloserRepository {
   Future<Either<Failure, void>> requestOptions({
     required String conversationId,
     required String messageId,
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   });
 
@@ -35,7 +35,7 @@ abstract class ProDealCloserRepository {
   Future<Either<Failure, void>> redo({
     required String conversationId,
     required String messageId,
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   });
 }

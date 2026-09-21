@@ -12,8 +12,7 @@ void main() {
       'type': 'express',
       'title': 'IKEA Kallax · \$180',
       'status': 'won',
-      'vibe': 'tactical',
-      'marketplace': 'facebook',
+      'overrides': {'vibe': 'tactical', 'marketplace': 'facebook'},
       'price_before': '\$180',
       'price_after': '\$150',
       'preview': 'Is it still available?',
@@ -39,7 +38,7 @@ void main() {
     expect(conversation.type, ConversationType.express);
     expect(conversation.title, 'IKEA Kallax · \$180');
     expect(conversation.status, ConversationStatus.won);
-    expect(conversation.vibe, 'tactical');
+    expect(conversation.overrides, {'vibe': 'tactical', 'marketplace': 'facebook'});
     expect(conversation.priceAfter, '\$150');
     expect(conversation.preview, 'Is it still available?');
     expect(conversation.messageCount, 2);
@@ -74,7 +73,7 @@ void main() {
 
   test('maps wizard and user message documents', () {
     final pending = ConversationDocuments.message('m2', {
-      'role': 'wizard',
+      'role': 'model',
       'text': '',
       'status': 'pending',
       'seq': 2,
@@ -84,7 +83,7 @@ void main() {
     expect(pending.seq, 2);
 
     final failed = ConversationDocuments.message('m4', {
-      'role': 'wizard',
+      'role': 'model',
       'status': 'failed',
       'error': {'code': 'UPSTREAM_ERROR', 'message': 'The wizard could not answer. Try again.'},
       'revision': 1,
@@ -110,5 +109,14 @@ void main() {
     expect(user.attachments.single.width, 640);
     expect(user.displayPaths, ['users/u1/conversations/c1/x.jpg']);
     expect(user.options.single.intent, DealIntent.close);
+  });
+
+  test('the system record is recognised so the chat can skip it', () {
+    // The backend writes the prompt the deal started with at seq 0 (CONVERSATIONS.md); it is
+    // configuration, not a turn, and `watchMessages` drops it before anything renders.
+    expect(ConversationDocuments.isSystem({'role': 'system', 'text': 'You are Bargain Wiz…'}), isTrue);
+    expect(ConversationDocuments.isSystem({'role': 'user', 'text': 'They ask \$180'}), isFalse);
+    expect(ConversationDocuments.isSystem({'role': 'model', 'text': 'Open at \$140'}), isFalse);
+    expect(ConversationDocuments.isSystem(const {}), isFalse);
   });
 }

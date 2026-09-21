@@ -11,10 +11,12 @@ void registerHistoryDependencies(GetIt sl) {
   sl.registerFactory<HistoryCubit>(
     () => HistoryCubit(
       sl<ConversationRepository>(),
-      // Search matches the marketplace labels the onboarding screen configures.
-      marketplaceLabels: () => ProfileFields.searchLabels(
-        sl<UserProfileService>().fieldFor(ProfileFields.marketplaceKey),
-      ),
+      // Search matches the labels the onboarding screens configure for every answer a deal
+      // can carry its own value for, so "Facebook Marketplace" finds one stored as `facebook`.
+      overrideLabels: () => {
+        for (final field in ProfileFields.conversationScoped(sl<UserProfileService>().fields))
+          ...ProfileFields.searchLabels(field),
+      },
     ),
   );
 }

@@ -16,17 +16,17 @@ import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/widgets/reply_card.dart';
 import 'package:appwizard/features/express_dealmaker/presentation/widgets/screenshot_tile.dart';
 
-/// 5d Results: thumbnail strip + "Seeing: …", keyword field, tone chips, bobbing
+/// 5d Results: thumbnail strip + "Seeing: …", keyword field, override chips, bobbing
 /// hint, staggered reply cards and a sticky "✨ Get More" over a bottom fade.
 class ExpressResultsStage extends StatefulWidget {
   const ExpressResultsStage({
     required this.state,
     required this.copy,
-    required this.tones,
+    required this.scoped,
     required this.onPick,
     required this.onRetryUpload,
     required this.onKeywordChanged,
-    required this.onVibeSelected,
+    required this.onOverride,
     required this.onGetMore,
     super.key,
   });
@@ -38,12 +38,14 @@ class ExpressResultsStage extends StatefulWidget {
 
   final ExpressDealmakerState state;
   final ExpressCopy copy;
-  /// The tone options the onboarding screen offers, with their labels, colours and glyphs.
-  final List<ProfileOption> tones;
+  /// The answers this deal may override — whatever the template marks
+  /// `scope: "conversation"` — each with the options, labels, colours and glyphs it offers.
+  final List<ProfileField> scoped;
   final VoidCallback onPick;
   final ValueChanged<int> onRetryUpload;
   final ValueChanged<String> onKeywordChanged;
-  final ValueChanged<String> onVibeSelected;
+  /// One conversation-scoped answer changed: `(answer key, picked value)`.
+  final void Function(String key, dynamic value) onOverride;
   final VoidCallback onGetMore;
 
   @override
@@ -205,35 +207,51 @@ class _ExpressResultsStageState extends State<ExpressResultsStage> {
     );
   }
 
-  Widget _buildToneChips(final BuildContext context) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        child: Row(
-          children: [
-            for (var i = 0; i < widget.tones.length; i++) ...[
-              if (i > 0) const SizedBox(width: 6),
-              if (widget.tones[i] case final tone)
-                if (OptionStyle.of(tone) case final style)
-                  WizChip(
-                    label: TemplateText.textOf(context, tone.shortLabel ?? tone.label),
-                    // The tone's glyph; inherits the chip foreground when selected (filled in its colour).
-                    leading: style.icon == null
-                        ? null
-                        : Icon(
-                            style.icon,
-                            color: tone.value == widget.state.vibeId ? null : style.textColor,
-                          ),
-                    compact: true,
-                    selected: tone.value == widget.state.vibeId,
-                    selectedColor: style.color,
-                    selectedTextColor: style.textOnColor,
-                    fill: Colors.white,
-                    onTap: () => widget.onVibeSelected(tone.value),
-                  ),
-            ],
+  /// One scrollable row of chips per conversation-scoped answer, in screen order. Nothing
+  /// here knows what any of them mean: an answer marked `scope: "conversation"` in remote
+  /// config gets a row the day it lands.
+  Widget _buildToneChips(final BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var f = 0; f < widget.scoped.length; f++) ...[
+            if (f > 0) const SizedBox(height: 6),
+            _chipRow(context, widget.scoped[f]),
           ],
-        ),
+        ],
       );
+
+  Widget _chipRow(final BuildContext context, final ProfileField field) {
+    final selected = widget.state.overrides[field.key];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        children: [
+          for (var i = 0; i < field.options.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            if (field.options[i] case final option)
+              if (OptionStyle.of(option) case final style)
+                WizChip(
+                  label: TemplateText.textOf(context, option.shortLabel ?? option.label),
+                  // The option's glyph; inherits the chip foreground when selected (filled in its colour).
+                  leading: style.icon == null
+                      ? null
+                      : Icon(
+                          style.icon,
+                          color: option.value == '$selected' ? null : style.textColor,
+                        ),
+                  compact: true,
+                  selected: option.value == '$selected',
+                  selectedColor: style.color,
+                  selectedTextColor: style.textOnColor,
+                  fill: Colors.white,
+                  onTap: () => widget.onOverride(field.key, ProfileFields.storedValue(field, option.value)),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _buildCards() {
     final state = widget.state;

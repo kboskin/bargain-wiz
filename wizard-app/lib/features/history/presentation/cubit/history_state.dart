@@ -34,7 +34,7 @@ class HistoryState extends Equatable {
     this.query = '',
     this.filter = HistoryFilter.all,
     this.errorMessage,
-    this.marketplaceLabels = const {},
+    this.overrideLabels = const {},
   });
 
   final HistoryLoadStatus loadStatus;
@@ -45,7 +45,7 @@ class HistoryState extends Equatable {
   final String? errorMessage;
 
   /// Stored marketplace value → the label its onboarding option configures, for search.
-  final Map<String, String> marketplaceLabels;
+  final Map<String, String> overrideLabels;
 
   bool get isLoading =>
       loadStatus == HistoryLoadStatus.loading || loadStatus == HistoryLoadStatus.initial;
@@ -54,27 +54,26 @@ class HistoryState extends Equatable {
 
   /// Rows after applying [filter] and [query].
   List<Conversation> get visible =>
-      apply(conversations, query: query, filter: filter, marketplaceLabels: marketplaceLabels);
+      apply(conversations, query: query, filter: filter, overrideLabels: overrideLabels);
 
   /// Pure filter: status chip + case-insensitive search on title and marketplace.
-  /// [marketplaceLabels] maps a stored marketplace value to the label its onboarding option
+  /// [overrideLabels] maps a stored answer value to the label its onboarding option
   /// configures, so "Facebook Marketplace" finds a deal stored as `facebook`.
   static List<Conversation> apply(
     Iterable<Conversation> source, {
     String query = '',
     HistoryFilter filter = HistoryFilter.all,
-    Map<String, String> marketplaceLabels = const {},
+    Map<String, String> overrideLabels = const {},
   }) {
     final status = filter.status;
     final q = query.trim().toLowerCase();
     return source.where((c) {
       if (status != null && c.status != status) return false;
       if (q.isEmpty) return true;
-      final marketplace = c.marketplace ?? '';
+      final values = [for (final v in (c.overrides ?? const {}).values) '$v'];
       final haystack = [
         ConversationTitleHelper.titleOf(c),
-        marketplaceLabels[marketplace] ?? '',
-        marketplace,
+        for (final value in values) ...[overrideLabels[value] ?? '', value],
       ].join(' ').toLowerCase();
       return haystack.contains(q);
     }).toList();
@@ -87,7 +86,7 @@ class HistoryState extends Equatable {
     HistoryFilter? filter,
     String? errorMessage,
     bool clearError = false,
-    Map<String, String>? marketplaceLabels,
+    Map<String, String>? overrideLabels,
   }) =>
       HistoryState(
         loadStatus: loadStatus ?? this.loadStatus,
@@ -95,10 +94,10 @@ class HistoryState extends Equatable {
         query: query ?? this.query,
         filter: filter ?? this.filter,
         errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-        marketplaceLabels: marketplaceLabels ?? this.marketplaceLabels,
+        overrideLabels: overrideLabels ?? this.overrideLabels,
       );
 
   @override
   List<Object?> get props =>
-      [loadStatus, conversations, query, filter, errorMessage, marketplaceLabels];
+      [loadStatus, conversations, query, filter, errorMessage, overrideLabels];
 }

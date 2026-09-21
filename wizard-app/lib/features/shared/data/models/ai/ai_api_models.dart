@@ -35,47 +35,6 @@ class AiDealLine {
   Map<String, dynamic> toJson() => _$AiDealLineToJson(this);
 }
 
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
-class ExpressDealmakerRequest {
-  const ExpressDealmakerRequest({
-    required this.images,
-    required this.locale,
-    required this.vibe,
-    required this.push,
-    this.text,
-    this.keyword,
-    this.marketplace,
-    this.dealSize,
-    this.dealsPerMonth,
-    this.hurdles,
-  });
-
-  factory ExpressDealmakerRequest.fromJson(Map<String, dynamic> json) => _$ExpressDealmakerRequestFromJson(json);
-
-  final List<AiImagePayload> images;
-
-  /// Optional listing/chat text (typed by the buyer, or OCR'd on device).
-  final String? text;
-  final String? keyword;
-  final String locale;
-  final String vibe;
-
-  /// Push level 0–100 (the onboarding answer declaring the `push` field).
-  final int push;
-  final String? marketplace;
-  @JsonKey(name: 'deal_size')
-  final num? dealSize;
-
-  /// Onboarding `deals_per_month` bucket (`0_2` | `3_5` | `6_plus`).
-  @JsonKey(name: 'deals_per_month')
-  final String? dealsPerMonth;
-
-  /// Ids of the money-leak answer (`hurdles`) the coach should compensate for.
-  final List<String>? hurdles;
-
-  Map<String, dynamic> toJson() => _$ExpressDealmakerRequestToJson(this);
-}
-
 @JsonSerializable(explicitToJson: true)
 class ExpressDealmakerResponse {
   const ExpressDealmakerResponse({required this.seeing, required this.lines, this.model});
@@ -104,41 +63,6 @@ class AiChatMessage {
   final List<AiImagePayload>? images;
 
   Map<String, dynamic> toJson() => _$AiChatMessageToJson(this);
-}
-
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
-class ProDealCloserRequest {
-  const ProDealCloserRequest({
-    required this.messages,
-    required this.mode,
-    required this.locale,
-    required this.vibe,
-    required this.push,
-    this.regenerate = false,
-    this.marketplace,
-    this.dealSize,
-    this.dealsPerMonth,
-    this.hurdles,
-  });
-
-  factory ProDealCloserRequest.fromJson(Map<String, dynamic> json) => _$ProDealCloserRequestFromJson(json);
-
-  final List<AiChatMessage> messages;
-
-  /// "reply" (coach answer) | "options" (three lines for the seller).
-  final String mode;
-  final bool regenerate;
-  final String locale;
-  final String vibe;
-  final int push;
-  final String? marketplace;
-  @JsonKey(name: 'deal_size')
-  final num? dealSize;
-  @JsonKey(name: 'deals_per_month')
-  final String? dealsPerMonth;
-  final List<String>? hurdles;
-
-  Map<String, dynamic> toJson() => _$ProDealCloserRequestToJson(this);
 }
 
 @JsonSerializable()

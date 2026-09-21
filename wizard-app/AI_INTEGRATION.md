@@ -25,14 +25,28 @@ is present but invalid is rejected.
   "images": [{"mime_type": "image/jpeg", "data": "<base64>"}],
   "text": "optional listing/chat text (typed, or OCR'd on device)",
   "keyword": "scuff",
-  "locale": "en", "vibe": "tactical", "push": 80, "marketplace": "ebay", "deal_size": 550,
-  "deals_per_month": "3_5", "hurdles": ["being_rude", "holding_ground"],
-  "prompt": {
-    "vibe": {"tactical": "Tactical Strategist: uses logic, comparable prices and product flaws as leverage…"},
-    "hurdles": {"being_rude": "fears sounding rude: keep every line warm and polite…"}
+  "profile": {
+    "answers": [
+      {"key": "hurdles", "value": "being_rude",
+       "prompt": "Weak spot — fears sounding rude: keep every line warm and polite while still firm on price."},
+      {"key": "hurdles", "value": "holding_ground",
+       "prompt": "Weak spot — tends to accept the first counter: include a line that holds the position."},
+      {"key": "vibe", "value": "tactical",
+       "prompt": "Tone: Tactical Strategist — uses logic, comparable prices and product flaws as leverage; persistent but fair."},
+      {"key": "push", "value": 80,
+       "prompt": "Push level: Bold — a low anchor around 25-35% under asking, holds firm."},
+      {"key": "marketplace", "value": "ebay", "prompt": "Marketplace etiquette on eBay: …"}
+    ],
+    "locale": "en"
   }
 }
 ```
+
+The profile is a **list, not a record**: one entry per *pick*, so a multi-select (`hurdles`
+above) arrives as several entries sharing a key, and the order is the order the app resolved
+them — onboarding screen order, which is the order the buyer block reads in. `prompt` is
+optional on an entry; `value` is carried so the answer can be stored and echoed back, and
+nothing in the function reads it.
 → `{"seeing": "IKEA Kallax · $180 · slight scuff", "lines": [{"intent": "opener|counter|close", "text": "…", "why": "…"}], "model": "gemini-2.5-flash"}`
 
 Limits: ≤ 10 images, ≤ 4 MB each, ≤ 16 MB together (also across chat turns), JPEG/PNG/WebP;
@@ -47,18 +61,23 @@ asked to look at.
 ```json
 {
   "messages": [{"role": "user", "text": "Kallax listed at $180", "images": [ … ]},
-               {"role": "wizard", "text": "Open at $140."}],
+               {"role": "model", "text": "Open at $140."}],
   "mode": "reply",            // or "options"
   "regenerate": false,
-  "locale": "en", "vibe": "friendly", "push": 60, "marketplace": "facebook", "deal_size": 550,
-  "prompt": {"vibe": {"friendly": "Friendly Collaborator: warm and polite…"}}
+  "profile": {
+    "answers": [{"key": "vibe", "value": "friendly",
+                 "prompt": "Tone: Friendly Collaborator — warm and polite, builds rapport, asks nicely…"}],
+    "locale": "en"
+  }
 }
 ```
 → reply mode `{"reply": "…", "model": "…"}`; options mode `{"lines": [ … ], "model": "…"}`.
-`vibe` and `push` are required: the buyer's tone and how hard to push are the app's to decide,
-never a server default. The newest `MAX_MESSAGES` turns are used (200, the same as the cap on a
-conversation, so the model normally sees the whole chat); screenshots are kept newest-first
-within the 6-image budget.
+Nothing in `profile` is required and `profile` itself may be left out: an empty `answers` list
+is a valid request that simply produces a prompt with no buyer block. The buyer's tone and how
+hard to push are still the app's to decide and never a server default — the difference is that
+the function no longer knows those answers exist, so it has nothing to demand. The newest
+`MAX_MESSAGES` turns are used (200, the same as the cap on a conversation, so the model
+normally sees the whole chat); screenshots are kept newest-first within the 6-image budget.
 
 ### Screenshots: bytes once, then a URI
 
@@ -76,28 +95,36 @@ account can read. A body describes images by their bytes, full stop — enforced
 
 ### Prompting
 
-`features/negotiation/domain/prompts.py` builds the system prompt from the buyer profile: tone from `vibe`
-(the four onboarding presets), anchor aggressiveness from `push` (0–100, five bands),
-marketplace etiquette, typical deal size, deal frequency (`deals_per_month`), the buyer's
-known weak spots (`hurdles`, the money-leak ids, turned into coaching hints),
-and the output language from `locale`: the tag the app sends is handed to the model as the
-language to write in, so any language the model knows works and there is no list on the server
-to extend.
+`features/negotiation/domain/prompts.py` builds the system prompt out of two things: the
+standing rules every request gets — who the coach is, that a line is pasted verbatim by the
+buyer, no placeholders, no invented facts — and the buyer block, which is nothing but the
+sentences the profile's answers carried, in the order they arrived. It names no answer:
+`Profile` holds `answers` and `locale` and nothing else, so tone, push, marketplace etiquette,
+deal size, deal frequency and the buyer's weak spots reach the model as lines the template
+wrote, not as fields this module knows about. The output language comes from `locale`: the tag
+the app sends is handed to the model as the language to write in, so any language the model
+knows works and there is no list on the server to extend. It must look like a BCP-47 tag
+(`en`, `pt-BR`, `zh-Hant-TW`) — that value goes into the prompt, so anything else is answered
+in English.
 
 **Where the sentences come from.** What an answer *means* to the coach is written next to the
 answer, in the app's own Remote Config template — `metadata.prompt` on an option, `prompt`
-on a slider stop — and the app forwards it with every request under that same name, shaped
-`{answer key: {option id: sentence}}`. So adding an option, or a whole new question, changes
-the prompt with **no deploy on either side**: publish the template and every client that has
-fetched it starts describing the new answer. `UserProfileService.snapshot()` resolves the
-values and their sentences in one pass, which is what makes the tone chip describe the tone
-actually being sent rather than the stored one.
+on a slider stop — and the app forwards it with every request **on the answer it describes**:
+each entry of `profile.answers` is one pick, `{key, value, prompt}`. So adding an option, or a
+whole new question, changes the prompt with **no deploy on either side**: publish the template
+and every client that has fetched it starts describing the new answer.
+`UserProfileService.snapshot()` resolves the values and their sentences in one pass, which is
+what makes a header chip describe the tone actually being sent rather than the stored one.
 
 **The template writes the whole line; the backend renders it verbatim.** There is no
 server-side copy of the option list, no per-field label and no ordering sequence: `prompts.py`
 keeps the standing rules, the fence, and the task each endpoint asks for, and `buyer_block()`
-is a loop over what arrived. Line order is the order the app sent, which is onboarding screen
-order — so the template controls the buyer block's content *and* its shape.
+is `[a.prompt for a in answers if a.prompt]` plus a warning for the ones that described
+nothing. The last lists of keys went with the old shape — `ANSWER_FIELDS`, `answered()`,
+`option_id()` and the `SKIP_KEYS` for answers that describe nothing (the referral code) are
+gone from `prompts.py`; the skip list now lives in the drift test, the only place that still
+has to know one. Line order is the order the app sent, which is onboarding screen order — so
+the template controls the buyer block's content *and* its shape.
 
 An answer the client does not describe contributes nothing and is logged
 (`undescribed onboarding answer field=… value=…`); a profile that describes none of itself
@@ -115,13 +142,14 @@ shape the server chose.
 live path (`conversations`) that client holds at least an anonymous Firebase ID token and
 passes App Check when it is enabled, and the only output it can steer is its own. Sentences
 have their whitespace collapsed, so a sentence is one line and cannot forge a second, and a
-sentence only applies when its option id is the answer actually sent — a client may restate
-what it sends, never append to it. Nothing else is filtered and nothing is capped: the block
-is fenced and introduced as data, and the same client already sends unbounded `text` into
-the user parts, so scrubbing or truncating honest copy would cost more than it buys. When anything is
-present the buyer block is wrapped in `<buyer_profile>…</buyer_profile>` and introduced as
-data about a person, not instructions. It must look like a BCP-47 tag (`en`, `pt-BR`, `zh-Hant-TW`) — that value goes into
-the prompt, so anything else is answered in English. The same fields live in the Firestore profile
+sentence rides on the answer it describes — a client may restate what it sends and has
+nowhere to put a line for an option it did not pick. That last one used to hold because the
+app behaved; it now holds because of the shape of the body. Nothing else is filtered and
+nothing is capped: the block is fenced and introduced as data, and the same client already
+sends unbounded `text` into the user parts, so scrubbing or truncating honest copy would cost
+more than it buys. When anything is present the buyer block is wrapped in
+`<buyer_profile>…</buyer_profile>` and introduced as data about a person, not instructions.
+The same answers live in the Firestore profile
 (`PROFILE_SYNC.md`); the functions may read them from there in a later step. Lines are
 written as the buyer speaking to the seller, one message each, no placeholders, no invented
 facts. Output is constrained with a JSON response schema and normalised (missing intents are
@@ -152,8 +180,10 @@ run. Memory 512 MB, timeout 60 s.
   `AttachmentLimits.maxImageBytes`. ~150–400 KB per screenshot, so staying inside the
   function's caps is the client's job and they never surface as an error. The gallery picker
   still asks the OS for JPEG (`maxWidth`/`imageQuality`).
-- `features/shared/data/models/ai/ai_api_models.dart` — json_serializable request/response
-  models for both functions.
+- `features/shared/data/models/ai/ai_api_models.dart` — json_serializable image, chat-message
+  and response models for both functions; the buyer profile a request nests under `profile`
+  is `ConversationProfile` in `features/conversation/data/models/conversation_api_models.dart`,
+  built straight from one `ProfileSnapshot`.
 - `features/express_dealmaker/data/datasources/cloud_express_dealmaker_remote_datasource.dart`
   — "upload" prepares the image in memory under an id; `getDealReply` posts all prepared
   images + profile + keyword. The existing repository, mapper, cubit and UI are unchanged.
@@ -165,10 +195,13 @@ run. Memory 512 MB, timeout 60 s.
 Profile values come from `UserProfileService`, which copies the answers the onboarding screens
 collect (`vibe`, `push`, `marketplace`, `deal_size`, `deals_per_month`, `hurdles`) straight out
 of local storage under the keys remote config gave them — the app has no mapping of its own,
-see `PROFILE_SYNC.md`. An unanswered screen contributes its configured default. The caller's
-explicit vibe (tone chip) overrides the stored one for that request; `locale` is the device's.
-`snapshot()` returns those values together with the `metadata.prompt` sentence behind each
-one (the `prompt` block); `payload()` is the fields half of the same resolution, so the two can never
+see `PROFILE_SYNC.md`. An unanswered screen contributes its configured default. A deal's own
+answers — the `overrides` behind the chips in its header, `CONVERSATIONS.md` — win over the
+stored ones for that request; `locale` is the device's. `snapshot()` does both halves of that
+resolution in one pass and returns a `ProfileSnapshot`: `fields`, the `{key: value}` map
+`payload()` hands to `PATCH /profile`, and `answers`, the ordered list of
+`ProfileAnswer(key, value, prompt)` an AI request carries — one per pick, each with the
+`metadata.prompt` sentence behind the option actually being sent, so the two can never
 describe different options.
 
 ## Subscriptions without a backend

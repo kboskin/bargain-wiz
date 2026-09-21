@@ -39,8 +39,6 @@ import 'package:appwizard/l10n/app_localizations.dart';
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
-  /// Compact wizard size above the history grid (see `center_visual.history_size`).
-  static const double defaultHistoryVisualSize = 120;
   static const String defaultVisual = 'assets/lottie/wizard_hello.json';
 
   @override
@@ -242,23 +240,9 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  /// Keeps the wizard_hello animation on Home once history exists (README §3 shows it only
-  /// in the empty state). Hidden on short screens so the grid keeps room.
-  Widget _compactWizard(BuildContext context, MainPageConfig? cfg) {
-    final visual = cfg?.centerVisual;
-    final size = visual?.historySize ?? HomeTab.defaultHistoryVisualSize;
-    if (size <= 0 || MediaQuery.sizeOf(context).height < 640) return const SizedBox.shrink();
-    final path = (visual?.visual ?? '').isNotEmpty ? visual!.visual : HomeTab.defaultVisual;
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Center(child: VisualAssetWidget(visualPath: path, width: size, height: size)),
-    );
-  }
-
   Widget _historySection(BuildContext context, MainPageConfig? cfg, AppLocalizations l10n) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _compactWizard(context, cfg),
           Padding(
             padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
             child: Row(

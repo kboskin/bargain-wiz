@@ -1,4 +1,5 @@
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
 
 /// A selectable value and everything the UI draws for it, straight from the option's remote
@@ -45,9 +46,10 @@ class ProfileOption {
 
   /// This option's contribution to the system prompt: one English sentence telling the
   /// model what picking it means (`metadata.prompt` on an option, `prompt` on a slider
-  /// stop). Forwarded with every AI request under that same name; when it is null the
-  /// backend falls back to its own table for this id. Never shown in the UI and never
-  /// localized — see AI_INTEGRATION.md.
+  /// stop). Forwarded with every AI request on the answer it describes; when it is null the
+  /// answer reaches the model as silence and the backend logs it — there is no server-side
+  /// sentence left to cover for it. Never shown in the UI and never localized — see
+  /// AI_INTEGRATION.md.
   final String? prompt;
 
   /// "$lo–hi", or null when the stop configures no savings.
@@ -55,21 +57,43 @@ class ProfileOption {
       savingsLow != null && savingsHigh != null ? '\$$savingsLow–$savingsHigh' : null;
 }
 
-/// What one AI request carries about the buyer: the `{field: value}` answers the functions
-/// read, and — keyed the same way — the `prompt` sentence behind each answer, so the
-/// backend can render what the person actually picked instead of keeping its own copy of
-/// the option list. Both halves come out of one traversal ([UserProfileService.snapshot]),
-/// which is what stops a per-request override describing the wrong option.
-class ProfileSnapshot {
-  const ProfileSnapshot(this.fields, this.prompt);
+/// One thing the buyer tapped, and the line remote config writes for it. One of these per
+/// *pick*, so a multi-select becomes several answers sharing a [key].
+///
+/// The sentence rides on the answer it describes, which is what stops a per-request override
+/// describing the wrong option: there is nowhere to put a line for something not being sent.
+class ProfileAnswer {
+  const ProfileAnswer(this.key, this.value, this.prompt);
 
-  /// `{answer key: value}` — exactly what [UserProfileService.payload] returns.
+  /// `answer_structure.answer_key_name` — whatever remote config named the question.
+  final String key;
+
+  /// The picked option's value: one option id, one slider stop, or a text answer.
+  final dynamic value;
+
+  /// This option's `metadata.prompt`, or null when nothing describes it — the backend then
+  /// renders no line for it and logs the miss. Never localized, never shown in the UI.
+  final String? prompt;
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'value': value,
+        if (prompt != null) 'prompt': prompt,
+      };
+}
+
+/// What one AI request carries about the buyer, out of a single traversal
+/// ([UserProfileService.snapshot]) so the two views can never disagree.
+class ProfileSnapshot {
+  const ProfileSnapshot(this.fields, this.answers);
+
+  /// `{answer key: value}` — exactly what [UserProfileService.payload] returns, and what
+  /// `PATCH /profile` stores. A record wants a map; the prompt wants an order.
   final Map<String, dynamic> fields;
 
-  /// `{answer key: {option id: sentence}}` for the answers in [fields] that describe
-  /// themselves, under the same name remote config gives it on the option. An option with
-  /// no `prompt` is simply absent; the backend falls back to its own table for that id.
-  final Map<String, Map<String, String>> prompt;
+  /// The same answers as an ordered list, one entry per pick, each with its own sentence.
+  /// Order is onboarding screen order, and it is the order the buyer block reads in.
+  final List<ProfileAnswer> answers;
 }
 
 /// How an answer is edited: one chip, several chips, or a text field.
@@ -87,6 +111,8 @@ class ProfileField {
     this.placeholder,
     this.uppercase = false,
     this.defaultValue,
+    this.template,
+    this.conversationScoped = false,
   });
 
   /// `answer_structure.answer_key_name` — the key the answer is stored under.
@@ -116,6 +142,16 @@ class ProfileField {
   /// `default_value` / `default_index`, else the first option. Null for text fields and for
   /// a screen that offers nothing. Used to fill the profile sent with an AI request.
   final dynamic defaultValue;
+
+  /// The type of the screen this answer came from. The Profile screen picks its widget
+  /// from it, so a question added remotely draws itself without the template having to name
+  /// a control this build might not have.
+  final OnboardingScreenType? template;
+
+  /// `scope: "conversation"` on the screen (or the `select_group` group): this answer
+  /// describes the *deal*, not the person, so a conversation may carry its own value and a
+  /// chip in the deal header edits it. Everything else is global — see CONVERSATIONS.md.
+  final bool conversationScoped;
 
   /// The option [value] belongs to, or null when the config no longer offers it.
   ProfileOption? optionFor(dynamic value) {
@@ -147,10 +183,6 @@ class ProfileFields {
   /// (`referral.code`) instead of carrying it with the preferences.
   static const String referralKey = 'referral_code';
 
-  /// Reserved on the wire, next to the answers: the `prompt` sentences describing the
-  /// answers being sent (AI_INTEGRATION.md). No screen may name an `answer_key_name` after it.
-  static const String promptKey = 'prompt';
-
   /// Answers onboarding collects once and nothing may re-set afterwards. A referral code
   /// credits whoever brought this person in, so re-entering it later would re-attribute an
   /// install that is already credited: the Profile screen leaves these rows out and they
@@ -159,13 +191,13 @@ class ProfileFields {
   /// see PROFILE_SYNC.md.
   static const Set<String> lockedKeys = {referralKey};
 
-  /// The answers the app draws itself instead of as a settings row — the tone the wizard
-  /// writes in (chips in Express, Pro and Profile), how hard it pushes (a meter) and where
-  /// the deal is (saved with a conversation). Remote config still owns their options, labels,
-  /// colours and defaults; only the key is named here.
-  static const String vibeKey = 'vibe';
-  static const String pushKey = 'push';
-  static const String marketplaceKey = 'marketplace';
+  /// `scope` marking an answer as the deal's rather than the person's.
+  static const String conversationScope = 'conversation';
+
+  /// The answers a conversation may override, in onboarding order — the ones the template
+  /// marks `scope: "conversation"`. These are what the deal header offers as chips.
+  static List<ProfileField> conversationScoped(List<ProfileField> fields) =>
+      [for (final f in fields) if (f.conversationScoped) f];
 
   /// Fields for [screens], in onboarding order. Empty when nothing is configured: the keys
   /// are remote config's to name, so there is nothing to fall back to.
@@ -178,17 +210,6 @@ class ProfileFields {
           for (final field in _fieldsOf(screen))
             if (!skip.contains(field.key)) field,
       ];
-
-  /// The row label for [key] (`profile_label`, else the screen title), or null when no
-  /// screen writes that key. Lets the bespoke cards take their titles from the same place.
-  static dynamic labelForKey(List<OnboardingModel> screens, String key) {
-    for (final screen in screens) {
-      for (final field in _fieldsOf(screen)) {
-        if (field.key == key) return field.label;
-      }
-    }
-    return null;
-  }
 
   /// What the settings row shows on the right: the picked option's label, `N selected` for
   /// several picks, the code for a text answer, [emptyValue] when unanswered.
@@ -263,6 +284,8 @@ class ProfileFields {
             kind: ProfileFieldKind.single,
             options: _options(s.options),
             defaultValue: _firstValue(_options(s.options)),
+            template: s.type,
+            conversationScoped: _scoped(s.answerStructure?.scope),
           ),
         ];
       case final MultiSelectScreenModel s when key.isNotEmpty:
@@ -273,6 +296,8 @@ class ProfileFields {
             kind: ProfileFieldKind.multi,
             options: _options(s.options),
             minSelected: s.minSelected,
+            template: s.type,
+            conversationScoped: _scoped(s.answerStructure?.scope),
           ),
         ];
       case final SelectGroupScreenModel s:
@@ -285,6 +310,8 @@ class ProfileFields {
                 kind: ProfileFieldKind.single,
                 options: _options(group.options),
                 defaultValue: _firstValue(_options(group.options)),
+                template: s.type,
+                conversationScoped: _scoped(group.scope),
               ),
         ];
       case final SliderScreenModel s when key.isNotEmpty:
@@ -303,6 +330,8 @@ class ProfileFields {
                     prompt: o.prompt),
             ],
             defaultValue: s.sortedOptions.isEmpty ? null : s.sortedOptions[s.defaultIndex].intValue,
+            template: s.type,
+            conversationScoped: _scoped(s.answerStructure?.scope),
           ),
         ];
       case final SliderLottieScreenModel s when key.isNotEmpty:
@@ -318,6 +347,8 @@ class ProfileFields {
                     subtext: stop.subtext, emoji: stop.emoji, colorHex: stop.colorHex, prompt: stop.prompt),
             ],
             defaultValue: s.defaultValue,
+            template: s.type,
+            conversationScoped: _scoped(s.answerStructure?.scope),
           ),
         ];
       case final ReferralCodeScreenModel s when key.isNotEmpty:
@@ -328,12 +359,15 @@ class ProfileFields {
             kind: ProfileFieldKind.text,
             placeholder: s.placeholder,
             uppercase: true,
+            template: s.type,
           ),
         ];
       default:
         return const [];
     }
   }
+
+  static bool _scoped(String? scope) => scope?.toLowerCase() == conversationScope;
 
   static dynamic _label(OnboardingModel screen) =>
       screen.metadata?.raw?[labelKey] ?? screen.title;

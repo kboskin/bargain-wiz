@@ -11,11 +11,18 @@ import 'package:appwizard/features/express_dealmaker/domain/repositories/express
 
 /// One recorded `getDealReply` call.
 class ReplyRequest {
-  const ReplyRequest({required this.ids, required this.locale, this.keyword, this.vibe, this.conversationId});
+  const ReplyRequest({
+    required this.ids,
+    required this.locale,
+    this.keyword,
+    this.overrides = const {},
+    this.conversationId,
+  });
   final List<String> ids;
   final String locale;
   final String? keyword;
-  final String? vibe;
+  /// The conversation-scoped answers the call carried.
+  final Map<String, dynamic> overrides;
   /// null = the call created a deal; set = it regenerated that one.
   final String? conversationId;
 }
@@ -60,14 +67,14 @@ class FakeExpressRepository implements ExpressDealmakerRepository {
     required final List<String> uploadedIds,
     required final String locale,
     final String? keyword,
-    final String? vibe,
+    final Map<String, dynamic> overrides = const {},
     final String? conversationId,
   }) async {
     replyRequests.add(ReplyRequest(
       ids: uploadedIds,
       locale: locale,
       keyword: keyword,
-      vibe: vibe,
+      overrides: overrides,
       conversationId: conversationId,
     ));
     lastConversationId = conversationId;

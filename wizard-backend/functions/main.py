@@ -72,7 +72,7 @@ def conversation_service() -> ConversationService:
 def _described(profile) -> int:
     """How many answers the client described. Zero at steady state on a shipped app means
     the Remote Config template lost its `prompt` keys (AI_INTEGRATION.md)."""
-    return sum(len(table) for table in profile.prompt.values())
+    return sum(1 for answer in profile.answers if answer.prompt)
 
 
 def _dispatcher() -> Dispatcher:
@@ -117,7 +117,7 @@ def express_dealmaker(req: https_fn.Request) -> dict:
     raw = generator.generate_json(system=system_prompt(request.profile), parts=express_parts(request), schema=EXPRESS_SCHEMA)
     logger.info(
         "express_dealmaker uid=%s images=%d text=%s prompts=%d",
-        auth and auth.uid, len(request.images), bool(request.text), _described(request),
+        auth and auth.uid, len(request.images), bool(request.text), _described(request.profile),
     )
     return {**express_result(raw), "model": generator.model}
 
@@ -134,7 +134,7 @@ def pro_deal_closer(req: https_fn.Request) -> dict:
     raw = generator.generate_json(system=system_prompt(request.profile), parts=pro_parts(request), schema=schema)
     logger.info(
         "pro_deal_closer uid=%s mode=%s messages=%d prompts=%d",
-        auth and auth.uid, request.mode, len(request.messages), _described(request),
+        auth and auth.uid, request.mode, len(request.messages), _described(request.profile),
     )
     result = options_result(raw) if request.mode == "options" else reply_result(raw)
     return {**result, "model": generator.model}

@@ -23,7 +23,7 @@ class _FakeRemoteConfig implements RemoteConfigService {
     OnboardingModel.fromJson({
       'type': 'select',
       'title': {'en': 'Who negotiates for you?'},
-      'answer_structure': {'answer_key_name': ProfileFields.vibeKey},
+      'answer_structure': {'answer_key_name': 'vibe'},
       'options': [
         {
           'label': {'en': 'Friendly'},
@@ -63,7 +63,7 @@ class _FakeRemoteConfig implements RemoteConfigService {
         OnboardingModel.fromJson({
           'type': 'slider_lottie',
           'title': {'en': 'How hard do you push?'},
-          'answer_structure': {'answer_key_name': ProfileFields.pushKey},
+          'answer_structure': {'answer_key_name': 'push'},
           'metadata': {
             'default_value': 60,
             'options': [
@@ -132,42 +132,42 @@ void main() {
 
   test('reads the stored answers by key', () async {
     repository.stored = OnboardingDataEntity(
-      answers: [_answer(ProfileFields.vibeKey, 'tactical'), _answer('shoe_size', 44)],
+      answers: [_answer('vibe', 'tactical'), _answer('shoe_size', 44)],
       isCompleted: true,
     );
 
     await service.ensureLoaded();
 
-    expect(service.answers, {ProfileFields.vibeKey: 'tactical', 'shoe_size': 44});
+    expect(service.answers, {'vibe': 'tactical', 'shoe_size': 44});
     expect(service.answer('shoe_size'), 44);
     expect(service.answer('nope'), isNull);
-    expect(service.answerKeys, [ProfileFields.vibeKey, 'shoe_size']);
+    expect(service.answerKeys, ['vibe', 'shoe_size']);
     expect(service.isOnboardingCompleted, isTrue);
   });
 
   test('an unanswered screen falls back to its configured default', () async {
     await service.ensureLoaded();
 
-    expect(service.answer(ProfileFields.vibeKey), isNull);
-    expect(service.valueOf(ProfileFields.vibeKey), 'friendly'); // the screen's first option
+    expect(service.answer('vibe'), isNull);
+    expect(service.valueOf('vibe'), 'friendly'); // the screen's first option
     expect(service.valueOf('nope'), isNull);
-    expect(service.optionFor(ProfileFields.vibeKey)?.value, 'friendly');
+    expect(service.optionFor('vibe')?.value, 'friendly');
   });
 
   test('payload carries every configured answer, with overrides and exceptions', () async {
     repository.stored = OnboardingDataEntity(
-      answers: [_answer(ProfileFields.vibeKey, 'tactical'), _answer('shoe_size', 44)],
+      answers: [_answer('vibe', 'tactical'), _answer('shoe_size', 44)],
       isCompleted: true,
     );
 
     await service.ensureLoaded();
 
-    expect(service.payload(), {ProfileFields.vibeKey: 'tactical', 'shoe_size': 44});
+    expect(service.payload(), {'vibe': 'tactical', 'shoe_size': 44});
     expect(
-      service.payload(overrides: const {ProfileFields.vibeKey: 'friendly'}),
-      {ProfileFields.vibeKey: 'friendly', 'shoe_size': 44},
+      service.payload(overrides: const {'vibe': 'friendly'}),
+      {'vibe': 'friendly', 'shoe_size': 44},
     );
-    expect(service.payload(except: const {'shoe_size'}), {ProfileFields.vibeKey: 'tactical'});
+    expect(service.payload(except: const {'shoe_size'}), {'vibe': 'tactical'});
   });
 
   group('snapshot: the answers and what they mean to the model', () {
@@ -176,7 +176,7 @@ void main() {
     test('carries one sentence per described answer, keyed the way the answers are', () async {
       repository.stored = OnboardingDataEntity(
         answers: [
-          _answer(ProfileFields.vibeKey, 'tactical'),
+          _answer('vibe', 'tactical'),
           _answer('shoe_size', 44),
           _answer('hurdles', ['fair_price', 'starting']),
         ],
@@ -187,57 +187,63 @@ void main() {
       final snapshot = service.snapshot();
 
       expect(snapshot.fields, {
-        ProfileFields.vibeKey: 'tactical',
+        'vibe': 'tactical',
         'shoe_size': 44,
         'hurdles': ['fair_price', 'starting'],
-        ProfileFields.pushKey: 60, // the slider's configured default
+        'push': 60, // the slider's configured default
       });
-      expect(snapshot.prompt, {
-        ProfileFields.vibeKey: {'tactical': 'uses comparables as leverage.'},
-        'hurdles': {'fair_price': 'cannot judge a price.', 'starting': 'hesitates to open.'},
-        ProfileFields.pushKey: {'60': 'a fair anchor, ready to walk away.'},
-      });
-      // `shoe_size` is answered but describes nothing: the field travels, the note does not.
-      expect(snapshot.prompt.containsKey('shoe_size'), isFalse);
+      // One entry per pick, in screen order, each carrying its own sentence. `shoe_size` is
+      // answered but describes nothing: the answer travels, with no sentence on it.
+      expect(
+        [for (final a in snapshot.answers) (a.key, a.value, a.prompt)],
+        [
+          ('vibe', 'tactical', 'uses comparables as leverage.'),
+          ('shoe_size', 44, null),
+          ('hurdles', 'fair_price', 'cannot judge a price.'),
+          ('hurdles', 'starting', 'hesitates to open.'),
+          ('push', 60, 'a fair anchor, ready to walk away.'),
+        ],
+      );
     });
 
     test('an override describes the option actually being sent', () async {
       repository.stored = OnboardingDataEntity(
-        answers: [_answer(ProfileFields.vibeKey, 'tactical')],
+        answers: [_answer('vibe', 'tactical')],
         isCompleted: true,
       );
 
       await service.ensureLoaded();
-      final snapshot = service.snapshot(overrides: const {ProfileFields.vibeKey: 'friendly'});
+      final snapshot = service.snapshot(overrides: const {'vibe': 'friendly'});
 
-      expect(snapshot.fields[ProfileFields.vibeKey], 'friendly');
-      expect(snapshot.prompt[ProfileFields.vibeKey], {'friendly': 'warm and polite, still anchors low.'});
+      expect(snapshot.fields['vibe'], 'friendly');
+      final vibe = snapshot.answers.firstWhere((a) => a.key == 'vibe');
+      expect((vibe.value, vibe.prompt), ('friendly', 'warm and polite, still anchors low.'));
     });
 
     test('an answer the config no longer offers contributes no sentence', () async {
       repository.stored = OnboardingDataEntity(
-        answers: [_answer(ProfileFields.vibeKey, 'retired_tone')],
+        answers: [_answer('vibe', 'retired_tone')],
         isCompleted: true,
       );
 
       await service.ensureLoaded();
       final snapshot = service.snapshot();
 
-      expect(snapshot.fields[ProfileFields.vibeKey], 'retired_tone');
-      expect(snapshot.prompt.containsKey(ProfileFields.vibeKey), isFalse);
+      expect(snapshot.fields['vibe'], 'retired_tone');
+      expect(snapshot.answers.firstWhere((a) => a.key == 'vibe').prompt, isNull);
     });
 
     test('except drops the field and its sentence together', () async {
       repository.stored = OnboardingDataEntity(
-        answers: [_answer(ProfileFields.vibeKey, 'tactical')],
+        answers: [_answer('vibe', 'tactical')],
         isCompleted: true,
       );
 
       await service.ensureLoaded();
-      final snapshot = service.snapshot(except: const {ProfileFields.vibeKey});
+      final snapshot = service.snapshot(except: const {'vibe'});
 
-      expect(snapshot.fields.containsKey(ProfileFields.vibeKey), isFalse);
-      expect(snapshot.prompt.containsKey(ProfileFields.vibeKey), isFalse);
+      expect(snapshot.fields.containsKey('vibe'), isFalse);
+      expect(snapshot.answers.any((a) => a.key == 'vibe'), isFalse);
     });
 
     test('payload is the fields half of the same resolution', () async {
@@ -250,10 +256,10 @@ void main() {
     var notified = 0;
     service.addListener(() => notified++);
 
-    await service.setAnswer(ProfileFields.vibeKey, 'tactical');
+    await service.setAnswer('vibe', 'tactical');
 
     final saved = repository.stored!.answers.single;
-    expect(saved.answerKey, ProfileFields.vibeKey);
+    expect(saved.answerKey, 'vibe');
     expect(saved.answer, 'tactical');
     expect(saved.screenIndex, 0);
     expect(saved.screenTitle, 'Who negotiates for you?');
@@ -265,17 +271,17 @@ void main() {
   test('a failed save changes nothing and sends nothing', () async {
     repository.fail = true;
 
-    await service.setAnswer(ProfileFields.vibeKey, 'tactical');
+    await service.setAnswer('vibe', 'tactical');
 
     expect(service.answers, isEmpty);
     expect(pushes, 0);
   });
 
   test('replacing an answer keeps one entry per key, and a batch travels once', () async {
-    await service.setAnswer(ProfileFields.vibeKey, 'friendly');
-    await service.setAnswers({ProfileFields.vibeKey: 'tactical', 'shoe_size': 44});
+    await service.setAnswer('vibe', 'friendly');
+    await service.setAnswers({'vibe': 'tactical', 'shoe_size': 44});
 
-    expect(service.answers, {ProfileFields.vibeKey: 'tactical', 'shoe_size': 44});
+    expect(service.answers, {'vibe': 'tactical', 'shoe_size': 44});
     expect(repository.stored!.answers.length, 2);
     expect(repository.saves, 2);
     expect(pushes, 2);

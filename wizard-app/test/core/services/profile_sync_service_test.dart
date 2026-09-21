@@ -40,9 +40,9 @@ class _FakeProfile implements UserProfileService {
   /// The answers the configured screens collect, keyed as they are sent.
   @override
   List<ProfileField> get fields => const [
-        ProfileField(key: ProfileFields.vibeKey, label: 'Vibe', kind: ProfileFieldKind.single),
-        ProfileField(key: ProfileFields.pushKey, label: 'Push', kind: ProfileFieldKind.single),
-        ProfileField(key: ProfileFields.marketplaceKey, label: 'Marketplace', kind: ProfileFieldKind.single),
+        ProfileField(key: 'vibe', label: 'Vibe', kind: ProfileFieldKind.single),
+        ProfileField(key: 'push', label: 'Push', kind: ProfileFieldKind.single),
+        ProfileField(key: 'marketplace', label: 'Marketplace', kind: ProfileFieldKind.single),
         ProfileField(key: 'deals_per_month', label: 'Deals', kind: ProfileFieldKind.single),
         ProfileField(key: 'deal_size', label: 'Deal size', kind: ProfileFieldKind.single),
         ProfileField(key: 'hurdles', label: 'Leaks', kind: ProfileFieldKind.multi),

@@ -17,16 +17,15 @@ class ConversationDocuments {
       type: data['type'] == 'express' ? ConversationType.express : ConversationType.proDealCloser,
       screenshotPaths: [for (final ref in attachments(express?['images'])) ref.storagePath],
       replyLines: lines(express?['lines']),
-      keyword: string(express?['keyword'] ?? data['keyword']),
       createdAt: createdAt ?? date(data['updated_at']) ?? DateTime.now(),
       updatedAt: date(data['updated_at']),
       title: string(data['title']),
-      marketplace: string(data['marketplace']),
       status: ConversationStatus.fromString(string(data['status'])),
       priceBefore: string(data['price_before']),
       priceAfter: string(data['price_after']),
       seeing: string(express?['seeing']),
-      vibe: string(data['vibe']),
+      keyword: string(express?['keyword'] ?? data['keyword']),
+      overrides: _map(data['overrides']),
       preview: string(data['preview']),
       thumbnailStoragePath: thumbnail?.storagePath,
       messageCount: (data['message_count'] as num?)?.toInt() ?? 0,
@@ -35,6 +34,11 @@ class ConversationDocuments {
     );
   }
 
+  /// The seq-0 record of the system prompt the conversation started with. The app never
+  /// renders it — see `watchMessages` — but it is part of the stored transcript so a deal
+  /// can be read back as the model saw it (CONVERSATIONS.md).
+  static bool isSystem(Map<String, dynamic> data) => data['role'] == 'system';
+
   static ProDealCloserMessage message(String id, Map<String, dynamic> data) {
     final error = _map(data['error']);
     final optionsError = _map(data['options_error']);
@@ -42,7 +46,9 @@ class ConversationDocuments {
       id: id,
       text: string(data['text']) ?? '',
       attachments: attachments(data['images']),
-      isWizard: data['role'] == 'wizard',
+      // The wire uses Gemini's role vocabulary ('user' | 'model'); the UI keeps the
+      // product's word for the same thing.
+      isWizard: data['role'] == 'model',
       options: lines(data['lines']),
       status: MessageStatus.fromString(string(data['status'])),
       revision: (data['revision'] as num?)?.toInt() ?? 0,

@@ -4,25 +4,32 @@ import 'package:appwizard/features/express_dealmaker/data/datasources/express_de
 
 void main() {
   group('MockExpressDealmakerRemoteDataSource.buildReply', () {
-    test('returns the vibe-specific set with intents and why', () {
-      final reply = MockExpressDealmakerRemoteDataSource.buildReply(vibe: 'tactical');
-      expect(reply.lines, hasLength(3));
-      expect(reply.lines.map((final l) => l.intent), ['opener', 'counter', 'close']);
-      expect(reply.lines.first.text, startsWith('Two identical Kallax units'));
-      expect(reply.lines.every((final l) => (l.why ?? '').isNotEmpty), isTrue);
+    test('every canned set has three lines with intents and a why', () {
+      for (var i = 0; i < MockExpressDealmakerRemoteDataSource.replySets.length; i++) {
+        final reply = MockExpressDealmakerRemoteDataSource.buildReply(set: i);
+        expect(reply.lines, hasLength(3));
+        expect(reply.lines.map((final l) => l.intent), ['opener', 'counter', 'close']);
+        expect(reply.lines.every((final l) => (l.why ?? '').isNotEmpty), isTrue);
+      }
     });
 
-    test('has a distinct set for each of the four vibes', () {
-      final openers = ['friendly', 'no_nonsense', 'tactical', 'quiet_closer']
-          .map((final v) => MockExpressDealmakerRemoteDataSource.buildReply(vibe: v).lines.first.text)
-          .toSet();
-      expect(openers, hasLength(4));
+    test('consecutive sets differ, so a re-request visibly changes the result', () {
+      final openers = List.generate(
+        MockExpressDealmakerRemoteDataSource.replySets.length,
+        (final i) => MockExpressDealmakerRemoteDataSource.buildReply(set: i).lines.first.text,
+      ).toSet();
+      expect(openers, hasLength(MockExpressDealmakerRemoteDataSource.replySets.length));
     });
 
-    test('falls back to friendly for unknown or missing vibes', () {
-      final friendly = MockExpressDealmakerRemoteDataSource.replySets['friendly']!;
-      expect(MockExpressDealmakerRemoteDataSource.buildReply(vibe: 'zen').lines, friendly);
-      expect(MockExpressDealmakerRemoteDataSource.buildReply().lines, friendly);
+    test('the set index wraps, so no call can land out of range', () {
+      final first = MockExpressDealmakerRemoteDataSource.replySets.first;
+      expect(MockExpressDealmakerRemoteDataSource.buildReply().lines, first);
+      expect(
+        MockExpressDealmakerRemoteDataSource.buildReply(
+          set: MockExpressDealmakerRemoteDataSource.replySets.length,
+        ).lines,
+        first,
+      );
     });
 
     test('seeing line appends the keyword in parentheses when provided', () {

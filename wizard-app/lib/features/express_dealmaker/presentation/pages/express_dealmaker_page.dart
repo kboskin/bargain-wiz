@@ -25,6 +25,15 @@ import 'package:appwizard/features/paywall/presentation/paywall_launcher.dart';
 import 'package:appwizard/features/profile/domain/profile_fields.dart';
 
 /// Route `extra` for [AppRoutes.express].
+/// What a new deal starts from: the stored answer for each conversation-scoped question,
+/// else the screen's configured default. A reopened deal ignores this and keeps its own,
+/// so a thread stays in the voice it was written in.
+Map<String, dynamic> _defaults(final UserProfileService profile) => {
+      for (final field in ProfileFields.conversationScoped(profile.fields))
+        if ((profile.valueOf(field.key) ?? field.defaultValue) case final value?) field.key: value,
+    };
+
+
 class ExpressDealmakerArgs {
   const ExpressDealmakerArgs({this.conversationId, this.initialPaths = const []});
 
@@ -51,9 +60,8 @@ class ExpressDealmakerPage extends StatelessWidget {
         final profile = di.sl<UserProfileService>();
         return di.sl<ExpressDealmakerCubit>(
           param1: ExpressDealmakerCubitParams(
-            vibeId: profile.valueOf(ProfileFields.vibeKey)?.toString() ?? '',
+            overrides: _defaults(profile),
             locale: languageCode,
-            marketplace: profile.valueOf(ProfileFields.marketplaceKey)?.toString(),
           ),
         );
       },
@@ -100,9 +108,12 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
     final args = widget.args;
     final conversationId = args?.conversationId;
     final initialPaths = args?.initialPaths ?? const <String>[];
-    final vibeId = profile.valueOf(ProfileFields.vibeKey)?.toString();
-    if (conversationId == null && vibeId != null && _cubit.state.vibeId != vibeId) {
-      await _cubit.changeVibe(vibeId);
+    // A new deal starts from the profile defaults; a reopened one keeps what it was saved
+    // with, so the thread stays in the voice it was written in.
+    if (conversationId == null) {
+      for (final entry in _defaults(profile).entries) {
+        await _cubit.setOverride(entry.key, entry.value);
+      }
     }
     if (conversationId == null && initialPaths.isEmpty) {
       unawaited(_cubit.start());
@@ -118,10 +129,9 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
     _cubit.addPaths(picked.map((final x) => x.path).toList());
   }
 
-  Future<void> _changeVibe(final String vibeId) async {
-    unawaited(di.sl<UserProfileService>().setAnswer(ProfileFields.vibeKey, vibeId));
-    await _cubit.changeVibe(vibeId);
-  }
+  /// Changing a chip changes **this deal only**. The profile default is deliberately left
+  /// alone — the Profile screen is where that is edited (CONVERSATIONS.md).
+  Future<void> _setOverride(final String key, final dynamic value) => _cubit.setOverride(key, value);
 
   /// Back (chevron / system): save to history, then pop.
   Future<void> _onBack() async {
@@ -144,8 +154,8 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
   Widget build(final BuildContext context) {
     final config = di.sl<RemoteConfigService>().getMainPageConfig();
     final copy = ExpressCopy.resolve(context, config);
-    // The tone options as the onboarding screen offers them (labels, colours, glyphs).
-    final tones = di.sl<UserProfileService>().fieldFor(ProfileFields.vibeKey)?.options ?? const [];
+    // The answers this deal may override, as onboarding offers them (labels, colours, glyphs).
+    final scoped = ProfileFields.conversationScoped(di.sl<UserProfileService>().fields);
 
     return PopScope(
       canPop: false,
@@ -158,7 +168,9 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
           bottom: false,
           child: BlocBuilder<ExpressDealmakerCubit, ExpressDealmakerState>(
             builder: (final context, final state) {
-              final tone = tones.where((o) => o.value == state.vibeId).firstOrNull;
+              // The header tag shows the first overridable answer — the tone, as configured.
+              final primary = scoped.firstOrNull;
+              final tone = primary == null ? null : primary.optionFor(state.overrides[primary.key]);
               final toneStyle = OptionStyle.of(tone);
               return Column(
                 children: [
@@ -187,7 +199,7 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
                       ),
                       child: KeyedSubtree(
                         key: ValueKey(state.loadingConversation ? 'loading' : state.phase),
-                        child: _buildStage(state, copy, tones),
+                        child: _buildStage(state, copy, scoped),
                       ),
                     ),
                   ),
@@ -203,7 +215,7 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
   Widget _buildStage(
     final ExpressDealmakerState state,
     final ExpressCopy copy,
-    final List<ProfileOption> tones,
+    final List<ProfileField> scoped,
   ) {
     if (state.loadingConversation) {
       return const Center(
@@ -239,11 +251,11 @@ class _ExpressDealmakerViewState extends State<_ExpressDealmakerView> {
         return ExpressResultsStage(
           state: state,
           copy: copy,
-          tones: tones,
+          scoped: scoped,
           onPick: _pickScreenshots,
           onRetryUpload: (final i) => unawaited(_cubit.retryUpload(i)),
           onKeywordChanged: _cubit.setKeyword,
-          onVibeSelected: (final id) => unawaited(_changeVibe(id)),
+          onOverride: (final key, final value) => unawaited(_setOverride(key, value)),
           onGetMore: () => unawaited(_cubit.requestReply()),
         );
     }

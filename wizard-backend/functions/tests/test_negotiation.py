@@ -12,51 +12,62 @@ from features.negotiation.presentation import requests
 PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 100).decode()
 
 
-# The app always sends the buyer's tone and push level, so every request body here does too;
-# `test_the_profile_must_come_from_the_client` covers what happens when one is missing.
-PROFILE = {"vibe": "friendly", "push": 60}
+# A typical buyer profile, as the app sends it: one entry per pick, each with the line the
+# template wrote for it. Bodies below nest it under `profile`.
+PROFILE = {"answers": [{"key": "vibe", "value": "friendly", "prompt": "Tone: Friendly Collaborator."}]}
+
+
+def profile_body(*answers: dict) -> dict:
+    return {"answers": list(answers)}
 
 
 def parse_profile(body: dict):
-    return requests.parse_profile({**PROFILE, **body})
+    return requests.parse_profile(body)
 
 
 def parse_express(body: dict):
-    return requests.parse_express_request({**PROFILE, **body})
+    return requests.parse_express_request({"profile": PROFILE, **body})
 
 
 def parse_pro(body: dict):
-    return requests.parse_pro_request({**PROFILE, **body})
+    return requests.parse_pro_request({"profile": PROFILE, **body})
 
 
-def test_parse_profile_reads_the_client_values_and_clamps_them():
-    p = parse_profile({})
-    assert (p.vibe, p.push, p.marketplace, p.deal_size, p.locale) == ("friendly", 60, None, None, "en")
-    p = parse_profile({"vibe": "tactical", "push": 250, "marketplace": "facebook", "deal_size": 550, "locale": "es"})
-    assert p.vibe == "tactical" and p.push == 100 and p.deal_size == 550.0 and p.locale == "es"
-    with pytest.raises(BadRequest):
-        parse_profile({"push": "high"})
+def test_parse_profile_keeps_every_answer_whole_and_in_order():
+    """No key is recognised and none is coerced: an answer is a key, a leaf and its line."""
+    p = parse_profile(profile_body(
+        {"key": "Vibe", "value": "tactical", "prompt": "Tone: Tactical."},
+        {"key": "push", "value": 250},
+        {"key": "deal_size", "value": 550},
+    ))
+    assert [(a.key, a.value, a.prompt) for a in p.answers] == [
+        ("vibe", "tactical", "Tone: Tactical."),
+        ("push", 250, None),     # not clamped: a range is the template's business, not this end's
+        ("deal_size", 550, None),
+    ]
+    assert p.locale == "en"
 
 
-def test_the_profile_must_come_from_the_client():
-    """Tone and push are the buyer's, not a server default: a request without them is a 400."""
-    for missing in ("vibe", "push"):
-        body = {k: v for k, v in PROFILE.items() if k != missing}
-        with pytest.raises(BadRequest, match=missing):
-            requests.parse_profile(body)
-    with pytest.raises(BadRequest):
-        requests.parse_express_request({"text": "no tone here"})
+def test_a_profile_is_never_required():
+    """Nothing is mandatory any more. A request with no answers is valid and simply produces
+    no buyer block — better than inventing a tone the buyer never picked."""
+    empty = requests.parse_profile({})
+    assert empty.answers == [] and empty.locale == "en"
+    assert "<buyer_profile>" not in prompts.system_prompt(empty)
+    assert requests.parse_express_request({"text": "no profile here"}).profile.answers == []
 
 
-def test_an_unknown_vibe_does_not_break_generation():
-    """The app's tone list is remote-configurable, so a new id must not break generation. It
-    no longer falls back to a known tone either: with nothing describing it the prompt simply
-    carries no Tone line, and the miss is logged."""
-    profile = parse_profile({"vibe": "Brand New Tone"})
-    assert profile.vibe == "brand new tone"
+def test_an_unknown_answer_does_not_break_generation():
+    """The app's option lists are remote-configurable, so a new id must not break generation.
+    There is no fallback either: with nothing describing it the prompt carries no line for
+    that answer, and the miss is logged."""
+    profile = parse_profile(profile_body({"key": "vibe", "value": "Brand New Tone"}))
+    assert profile.answers[0].value == "Brand New Tone"
     assert "<buyer_profile>" not in prompts.system_prompt(profile)
 
-    described = parse_profile({"vibe": "Brand New Tone", "prompt": {"vibe": {"brand new tone": "Tone: brand new, bold."}}})
+    described = parse_profile(profile_body(
+        {"key": "vibe", "value": "Brand New Tone", "prompt": "Tone: brand new, bold."}
+    ))
     assert "Tone: brand new, bold." in prompts.system_prompt(described)
 
 
@@ -88,7 +99,7 @@ def test_a_client_cannot_name_a_storage_uri():
 
 def test_a_stored_screenshot_reaches_the_model_as_a_uri_part():
     stored = models.StoredImage(uri="gs://bucket/users/u1/conversations/c1/a.jpg", mime_type="image/jpeg")
-    req = models.ExpressRequest(vibe="friendly", push=60, images=[stored], text="Kallax $180")
+    req = models.ExpressRequest(images=[stored], text="Kallax $180")
     parts = prompts.express_parts(req)
     assert parts[0] == {"type": "image", "mime_type": "image/jpeg",
                         "uri": "gs://bucket/users/u1/conversations/c1/a.jpg"}
@@ -116,15 +127,12 @@ def test_express_parts_put_images_first_and_mention_keyword():
 
 
 def test_system_prompt_reflects_profile():
-    prompt = prompts.system_prompt(models.Profile(
-        vibe="no_nonsense", push=90, marketplace="ebay", deal_size=550, locale="es",
-        prompt={
-            "vibe": {"no_nonsense": "Tone: No-Nonsense Buyer — direct and brief."},
-            "push": {"90": "Push level: Hard bargainer — the lowest credible price or no deal."},
-            "marketplace": {"ebay": "Marketplace etiquette on eBay: shipping cost is a lever."},
-            "deal_size": {"550": "Typical deal of $100-1000 — real room to move."},
-        },
-    ))
+    prompt = prompts.system_prompt(parse_profile({"locale": "es", "answers": [
+        {"key": "vibe", "value": "no_nonsense", "prompt": "Tone: No-Nonsense Buyer — direct and brief."},
+        {"key": "push", "value": 90, "prompt": "Push level: Hard bargainer — the lowest credible price or no deal."},
+        {"key": "marketplace", "value": "ebay", "prompt": "Marketplace etiquette on eBay: shipping cost is a lever."},
+        {"key": "deal_size", "value": 550, "prompt": "Typical deal of $100-1000 — real room to move."},
+    ]}))
     assert "locale tag es" in prompt
     for line in ("Tone: No-Nonsense Buyer", "Push level: Hard bargainer",
                  "Marketplace etiquette on eBay", "Typical deal of $100-1000"):
@@ -144,25 +152,19 @@ def test_any_language_reaches_the_model_and_nothing_else_does():
         parse_profile({"locale": 7})
 
 
-def test_hurdles_and_frequency_reach_the_prompt():
-    profile = parse_profile({
-        "hurdles": ["Being_Rude", "unknown", "holding_ground"],
-        "deals_per_month": "6_plus",
-        "prompt": {
-            "hurdles": {
-                "being_rude": "Weak spot — fears sounding rude.",
-                "holding_ground": "Weak spot — holds the position.",
-            },
-            "deals_per_month": {"6_plus": "Deal frequency: a frequent buyer, be efficient."},
-        },
-    })
-    assert profile.hurdles == ("being_rude", "unknown", "holding_ground")
+def test_a_multi_select_is_several_answers_sharing_a_key():
+    """Each pick is its own entry, so the sentences keep the order they were picked in and an
+    undescribed pick contributes nothing while the ones around it still land."""
+    profile = parse_profile(profile_body(
+        {"key": "hurdles", "value": "being_rude", "prompt": "Weak spot — fears sounding rude."},
+        {"key": "hurdles", "value": "unknown"},
+        {"key": "hurdles", "value": "holding_ground", "prompt": "Weak spot — holds the position."},
+        {"key": "deals_per_month", "value": "6_plus", "prompt": "Deal frequency: a frequent buyer, be efficient."},
+    ))
+    assert [a.value for a in profile.answers if a.key == "hurdles"] == ["being_rude", "unknown", "holding_ground"]
     prompt = prompts.system_prompt(profile)
-    # In the order they were picked, and the undescribed one contributes nothing.
     assert "Weak spot — fears sounding rude.\nWeak spot — holds the position." in prompt
     assert "frequent buyer" in prompt
-    with pytest.raises(BadRequest):
-        parse_profile({"hurdles": "starting"})
 
 
 def test_pro_request_keeps_newest_images_within_budget_and_orders_messages():
@@ -170,13 +172,13 @@ def test_pro_request_keeps_newest_images_within_budget_and_orders_messages():
     body = {
         "messages": [
             {"role": "user", "text": "Kallax $180", "images": [img] * 4},
-            {"role": "wizard", "text": "Open at $140."},
+            {"role": "model", "text": "Open at $140."},
             {"role": "user", "text": "They said $170", "images": [img] * 4},
         ],
         "mode": "options",
     }
     req = parse_pro(body)
-    assert [m.role for m in req.messages] == ["user", "wizard", "user"]
+    assert [m.role for m in req.messages] == ["user", "model", "user"]
     assert len(req.messages[2].images) == 4  # newest message keeps all its images
     assert len(req.messages[0].images) == config.MAX_IMAGES.value - 4  # oldest gets what is left
     parts = prompts.pro_parts(req)

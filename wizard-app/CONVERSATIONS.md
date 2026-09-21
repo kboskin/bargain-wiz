@@ -150,7 +150,7 @@ and the profile through the `profile` function.
 | --- | --- | --- |
 | `type` | `"express" \| "pro"` | drives the UI |
 | `title` | string | server-derived (`ProConversationTitle` logic moves server-side) unless the user renames |
-| `marketplace`, `vibe` | string? | snapshot at creation; `vibe` updated when the tone chip changes |
+| `overrides` | map | `{answer key: value}` for the answers this deal carries rather than the person — the ones a screen marks `scope: "conversation"`, today `vibe` and `marketplace`. Snapshotted at creation from the profile, re-stamped by any turn or `redo` that sends them, and what reopening the deal coaches from, so a thread keeps the voice it was written in. It replaced the typed `marketplace` / `vibe` columns: which answers are the deal's is the template's to say, not this schema's |
 | `status` | `"open" \| "won" \| "lost"` | user-set via PATCH |
 | `active`, `archived_at` | bool, timestamp? | `false` once the user removes the deal (soft delete). The app's listener queries `active == true` (composite index with `updated_at`) |
 | `price_before`, `price_after` | string? | free text, user-set |
@@ -165,9 +165,9 @@ and the profile through the `profile` function.
 
 | field | type | notes |
 | --- | --- | --- |
-| `seq` | int | monotonic per conversation, assigned in a transaction; client orders by it |
-| `role` | `"user" \| "wizard"` | |
-| `text` | string | user text or wizard reply |
+| `seq` | int | monotonic per conversation, assigned in a transaction; client orders by it. `0` is the `system` record, which is written outside that transaction and never shifts a turn |
+| `role` | `"system" \| "user" \| "model"` | `user`/`model` are Gemini's vocabulary (`Content.role`); the UI still calls the model the wizard. `system` is ours — see below |
+| `text` | string | user text, model reply, or the system prompt |
 | `images` | `[{path, width, height, bytes}]` | Cloud Storage object paths, never inline bytes |
 | `seeing` | string? | express only |
 | `lines` | `[{intent, text, why}]`? | express lines or "Give me options" result |
@@ -176,6 +176,29 @@ and the profile through the `profile` function.
 | `revision` | int | incremented on Redo; the previous text is not kept |
 | `model`, `latency_ms` | string?, int? | telemetry, safe to expose |
 | `created_at`, `updated_at` | timestamp | |
+
+**The `system` record.** `POST /conversations` writes one message at `seq` 0 holding the
+system prompt the deal's first turn was configured with, so the transcript stores *how the
+model was set up*, not only what was said. This matters more than it used to: the prompt is
+assembled from the sentences the app forwards out of Remote Config (`AI_INTEGRATION.md`),
+which change without a deploy, so without this row an old conversation cannot be read back
+as the model saw it.
+
+Three things to know about it:
+
+- **The client ignores it.** `watchMessages` drops `role == "system"` before anything is
+  rendered (`ConversationDocuments.isSystem`); it is configuration, not something the buyer
+  said or was told. `GET /conversations/{cid}` does *not* hide it — the API returns the whole
+  transcript.
+- **It is not a turn.** It is excluded from `message_count`, so it never counts against
+  `MAX_MESSAGES_PER_CONVERSATION`, and `seq` 0 keeps the first user turn at 1.
+- **It is not replayed to the model.** Gemini has no `system` content role — the text reaches
+  it as `system_instruction` — so the generation worker filters this row out of the history
+  it builds. Sending it as a chat turn would say everything twice.
+
+It is a snapshot of the conversation's start, not a log: the prompt is rebuilt per turn from
+the answers that request carries, so a later turn can differ (a tone change, a template
+edit). Recording every turn's prompt would be the next step if that gap ever matters.
 
 ### Cloud Storage
 
@@ -213,24 +236,35 @@ One 2nd-gen function `conversations` (60 s timeout, 512 MB) routes on `req.path`
 
 | method and path | body | effect |
 | --- | --- | --- |
-| `POST /conversations` | `{type, text?, images?, keyword?, …profile}` | the first turn opens the conversation |
-| `POST /conversations/{cid}/messages` | `{text?, images?, …profile}` | appends the user turn, generates the wizard reply (pro only) |
-| `POST /conversations/{cid}/options` | `{message_id?, …profile}` | queues three lines for that wizard turn (default: the latest); `pending_options` marks it meanwhile |
-| `POST /conversations/{cid}/redo` | `{message_id?, keyword?, …profile}` | regenerates that wizard turn in place, `revision + 1`; for express this is "Get More" / a tone change |
-| `PATCH /conversations/{cid}` | `{title?, status?, price_before?, price_after?, vibe?}` | history metadata; nulls delete |
+| `POST /conversations` | `{type, text?, images?, keyword?, overrides?, profile}` | the first turn opens the conversation |
+| `POST /conversations/{cid}/messages` | `{text?, images?, overrides?, profile}` | appends the user turn, generates the wizard reply (pro only) |
+| `POST /conversations/{cid}/options` | `{message_id?, overrides?, profile}` | queues three lines for that wizard turn (default: the latest); `pending_options` marks it meanwhile |
+| `POST /conversations/{cid}/redo` | `{message_id?, keyword?, overrides?, profile}` | regenerates that wizard turn in place, `revision + 1`; for express this is "Get More" / a chip or keyword change |
+| `PATCH /conversations/{cid}` | `{title?, status?, price_before?, price_after?, overrides?}` | history metadata; nulls delete |
 | `DELETE /conversations/{cid}` | | **archives** (`active: false`): gone from the app's list, kept; idempotent |
 
 Requests carry `Authorization: Bearer <ID token>` (required) and `X-Firebase-AppCheck` (required
-in production). Bodies are pydantic models validated through `validation.validate_model`; `…profile` means the
-buyer profile fields the AI functions already take (vibe, push, locale, marketplace, …) — the app
-sends every answer the onboarding screens collect, under the keys remote config gave them, plus
-the device locale, so the set follows the funnel rather than a client release
-(`PROFILE_SYNC.md`); a function ignores what its contract does not define. It also carries
-`prompt`, `{answer key: {option id: sentence}}` — what each of those answers contributes to
-the system prompt, under the same name the option carries in remote config
-(`metadata.prompt`), so a new option reaches the prompt without a deploy
-(`AI_INTEGRATION.md`). `prompt` is reserved: no screen may
-use it as an `answer_key_name`.
+in production). Bodies are pydantic models validated through `validation.validate_model`. `profile` is the
+buyer profile the AI functions take, nested under that name:
+`{"answers": [{"key", "value", "prompt"?}], "locale"}` — one entry per *pick*, so a
+multi-select is several entries sharing a key, in onboarding screen order, each carrying the
+sentence remote config writes for the option that was picked (`metadata.prompt`), so a new
+option reaches the prompt without a deploy (`AI_INTEGRATION.md`). The app sends every answer
+the onboarding screens collect, under the keys remote config gave them, plus the device
+locale, so the set follows the funnel rather than a client release (`PROFILE_SYNC.md`).
+Nothing in it is required and no key is named on the server, so a question added to the funnel
+needs neither release nor deploy, and an empty profile is a valid request.
+
+`overrides` is the other half: `{answer key: value}` for the answers that belong to this
+**deal** rather than the person — the ones a screen marks `scope: "conversation"`, today
+`vibe` and `marketplace`. The app sends them twice on a turn, resolved into `profile.answers`
+(that is what the model reads) and again as this flat map, which is what the conversation
+document stores; the function only checks the shape, because which keys may appear is the
+template's call. `create`, a turn and `redo` re-stamp it, `PATCH` sets it on its own, and
+`options` accepts it and stores nothing — it re-asks about a reply that already exists. So a
+chip inside a deal changes **that deal only**: nothing writes back to the stored profile, and
+reopening the deal sends what it was saved with rather than today's default. The Profile
+screen is the only place that moves the default.
 
 ### Lifecycle of a chat turn
 

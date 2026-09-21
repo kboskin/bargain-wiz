@@ -17,49 +17,20 @@ from .models import ExpressRequest, Material, Profile, ProRequest, StoredImage
 
 logger = logging.getLogger("negotiation")
 
-# The answer fields a request carries, derived from the model rather than listed again here:
-# `locale` is a device fact and `prompt` is the descriptions themselves. Used only to notice
-# an answer nobody described — the prompt itself needs no list of fields.
-ANSWER_FIELDS = tuple(f for f in Profile.model_fields if f not in ("locale", "prompt"))
-
-# Answers the funnel collects that describe nothing to the model: the referral code is an
-# attribution fact, not something the coach should read.
-SKIP_KEYS = ("referral_code",)
-
-
-def option_id(value: object) -> str:
-    """A whole number reads as `550`, never `550.0` — the template writes stop ids that way,
-    so this is what makes the client's key and ours match."""
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    return str(value)
-
-
-def answered(profile: Profile) -> list[tuple[str, list[str]]]:
-    """`(field, option ids)` for every answer this request carries, multi-selects expanded."""
-    out = []
-    for field in ANSWER_FIELDS:
-        value = getattr(profile, field, None)
-        if value is None or value == ():
-            continue
-        picks = value if isinstance(value, tuple | list) else [value]
-        out.append((field, [option_id(v) for v in picks]))
-    return out
-
-
 def buyer_block(profile: Profile) -> list[str]:
     """The lines the template wrote for this buyer, in the order the app sent them — which is
     onboarding screen order, because that is the order it resolves its answers in.
 
     Nothing here knows what any answer means: a line is rendered exactly as written, with no
-    label to fit and no field this function has to recognise. The only judgement left is the
-    warning for an answer nobody described, which is the drift signal (AI_INTEGRATION.md)."""
-    for field, ids in answered(profile):
-        described = profile.prompt.get(field, {})
-        for option in ids:
-            if option not in described:
-                logger.warning("undescribed onboarding answer field=%s value=%s", field, option)
-    return [sentence for table in profile.prompt.values() for sentence in table.values()]
+    label to fit and no key this function has to recognise. The only judgement left is the
+    warning for an answer nobody described, which is the drift signal (AI_INTEGRATION.md).
+
+    A sentence travels on the answer it describes, so there is nothing to cross-reference and
+    no way for a line to arrive for an option the buyer did not pick."""
+    for answer in profile.answers:
+        if not answer.prompt:
+            logger.warning("undescribed onboarding answer field=%s value=%s", answer.key, answer.value)
+    return [answer.prompt for answer in profile.answers if answer.prompt]
 
 
 def system_prompt(profile: Profile) -> str:
@@ -121,7 +92,7 @@ def pro_parts(request: ProRequest) -> list[dict]:
     transcript = []
     images: list[Material] = []
     for message in request.messages:
-        speaker = "Wizard" if message.role == "wizard" else "Buyer"
+        speaker = "Wizard" if message.role == "model" else "Buyer"
         note = "(screenshot attached)" if message.images else ""
         transcript.append(" ".join(part for part in (f"{speaker}:", message.text, note) if part))
         images.extend(message.images)

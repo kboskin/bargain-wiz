@@ -52,7 +52,10 @@ class _CountingAuth implements AuthService {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-const _profile = ConversationProfile({'vibe': 'friendly', 'push': 60}, locale: 'en');
+const _profile = ConversationProfile([
+  ProfileAnswer('vibe', 'friendly', null),
+  ProfileAnswer('push', 60, null),
+], locale: 'en');
 
 void main() {
   late FakeConversationsBackend backend;
@@ -70,36 +73,47 @@ void main() {
   tearDown(() => repo.dispose());
 
   group('the profile on the wire', () {
-    test('carries the answers, the locale and — only when there are any — their descriptions', () {
-      expect(_profile.toJson(), {'vibe': 'friendly', 'push': 60, 'locale': 'en'});
+    test('is an ordered list of answers, each carrying its own sentence', () {
+      expect(_profile.toJson(), {
+        'answers': [
+          {'key': 'vibe', 'value': 'friendly'},
+          {'key': 'push', 'value': 60},
+        ],
+        'locale': 'en',
+      });
 
       const described = ConversationProfile(
-        {'vibe': 'friendly'},
+        [ProfileAnswer('vibe', 'friendly', 'warm and polite.')],
         locale: 'en',
-        prompt: {
-          'vibe': {'friendly': 'warm and polite.'},
-        },
       );
       expect(described.toJson(), {
-        'vibe': 'friendly',
+        'answers': [
+          {'key': 'vibe', 'value': 'friendly', 'prompt': 'warm and polite.'},
+        ],
         'locale': 'en',
-        ProfileFields.promptKey: {
-          'vibe': {'friendly': 'warm and polite.'},
-        },
       });
     });
 
-    test('.of keeps the fields and the descriptions from one resolution together', () {
+    test('a multi-select is several answers sharing a key, in the order picked', () {
+      const profile = ConversationProfile([
+        ProfileAnswer('hurdles', 'fair_price', 'cannot judge a price.'),
+        ProfileAnswer('hurdles', 'starting', 'hesitates to open.'),
+      ], locale: 'en');
+
+      expect(
+        (profile.toJson()['answers']! as List).map((dynamic a) => (a as Map)['value']).toList(),
+        ['fair_price', 'starting'],
+      );
+    });
+
+    test('.of takes the answers straight from one resolution', () {
       const snapshot = ProfileSnapshot(
         {'vibe': 'tactical'},
-        {
-          'vibe': {'tactical': 'uses comparables as leverage.'},
-        },
+        [ProfileAnswer('vibe', 'tactical', 'uses comparables as leverage.')],
       );
       final profile = ConversationProfile.of(snapshot, locale: 'es');
 
-      expect(profile.fields, snapshot.fields);
-      expect(profile.prompt, snapshot.prompt);
+      expect(profile.answers, snapshot.answers);
       expect(profile.toJson()['locale'], 'es');
     });
   });

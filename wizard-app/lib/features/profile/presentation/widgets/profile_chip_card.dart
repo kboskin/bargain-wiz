@@ -13,13 +13,13 @@ const TextStyle profileCardTitle = WizType.cardTitle;
 /// "Negotiation vibe": compact chips with the vibe dot, ink when selected + description.
 /// [title] and [options] both come from the onboarding screen that asks the question, so the
 /// card follows remote copy, colours and glyphs.
-class ProfileVibeCard extends StatelessWidget {
-  const ProfileVibeCard({
+class ProfileChipCard extends StatelessWidget {
+  const ProfileChipCard({
     super.key,
     required this.options,
     required this.selectedValue,
     required this.onSelect,
-    this.title = 'Negotiation vibe',
+    required this.title,
   });
 
   final String title;

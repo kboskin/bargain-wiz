@@ -5,38 +5,29 @@ import 'package:json_annotation/json_annotation.dart';
 part 'conversation_api_models.g.dart';
 
 /// Request/response models of the `conversations` Cloud Function (CONVERSATIONS.md).
-/// Requests carry the buyer profile flat at the top level, like the AI functions do.
+/// Requests nest the buyer profile under `profile`, like the AI functions do.
 
-/// Buyer profile sent with every write (it drives the prompt): the `{field: value}` pairs the
-/// onboarding screens declare a `key` for, plus the device locale. The app copies the fields
-/// remote config declares; the backend owns their meaning and ignores what its contract does
-/// not define (AI_INTEGRATION.md).
+/// Buyer profile sent with every write, because it drives the prompt: the answers the
+/// onboarding screens collect, in screen order, each carrying the sentence remote config
+/// writes for the option that was picked. The app copies what the template declares; the
+/// backend renders the sentences and knows nothing about the keys (AI_INTEGRATION.md).
 class ConversationProfile {
-  const ConversationProfile(this.fields, {required this.locale, this.prompt = const {}});
+  const ConversationProfile(this.answers, {required this.locale});
 
-  /// The fields and their descriptions from one resolution, so the two cannot disagree.
+  /// Straight from one resolution, so the values and their sentences cannot disagree.
   factory ConversationProfile.of(ProfileSnapshot snapshot, {required String locale}) =>
-      ConversationProfile(snapshot.fields, locale: locale, prompt: snapshot.prompt);
+      ConversationProfile(snapshot.answers, locale: locale);
 
-  /// Profile fields as remote config maps them (`vibe`, `push`, `marketplace`, …).
-  final Map<String, dynamic> fields;
+  /// One entry per pick, in onboarding screen order — which is the order the buyer block
+  /// reads in, so the template controls the prompt's shape as well as its words.
+  final List<ProfileAnswer> answers;
 
   /// Language of the lines to generate; a device fact, not an answer.
   final String locale;
 
-  /// `{field: {option id: sentence}}` — what each answer above means to the model, under
-  /// the same name the option carries in remote config. The backend renders these and falls
-  /// back to its own table for an id that arrives undescribed. Omitted from the body when
-  /// empty, so an app whose config carries no `prompt` sends exactly what it does today.
-  final Map<String, Map<String, String>> prompt;
-
-  /// One field of the profile, however remote config named the answer behind it.
-  dynamic operator [](String field) => fields[field];
-
   Map<String, dynamic> toJson() => {
-        ...fields,
+        'answers': [for (final a in answers) a.toJson()],
         'locale': locale,
-        if (prompt.isNotEmpty) ProfileFields.promptKey: prompt,
       };
 }
 
@@ -46,6 +37,7 @@ class CreateConversationRequest {
   const CreateConversationRequest({
     required this.type,
     required this.profile,
+    this.overrides = const {},
     this.text,
     this.images,
     this.keyword,
@@ -57,39 +49,54 @@ class CreateConversationRequest {
   final List<AiImagePayload>? images;
   /// Express only: what the buyer wants to focus on.
   final String? keyword;
+
+  /// The conversation-scoped answers this deal carries; stored on the conversation so
+  /// reopening it restores them (CONVERSATIONS.md).
+  final Map<String, dynamic> overrides;
   @JsonKey(includeToJson: false)
   final ConversationProfile profile;
 
-  Map<String, dynamic> toJson() => {...profile.toJson(), ..._$CreateConversationRequestToJson(this)};
+  Map<String, dynamic> toJson() => {'profile': profile.toJson(), ..._$CreateConversationRequestToJson(this)};
 }
 
 /// `POST /conversations/{cid}/messages`.
 @JsonSerializable(createFactory: false, explicitToJson: true, includeIfNull: false)
 class SendMessageRequest {
-  const SendMessageRequest({required this.profile, this.text, this.images});
+  const SendMessageRequest({required this.profile, this.overrides = const {}, this.text, this.images});
 
   final String? text;
   final List<AiImagePayload>? images;
+
+  /// As on [CreateConversationRequest]: re-stamped on the conversation with every turn.
+  final Map<String, dynamic> overrides;
   @JsonKey(includeToJson: false)
   final ConversationProfile profile;
 
-  Map<String, dynamic> toJson() => {...profile.toJson(), ..._$SendMessageRequestToJson(this)};
+  Map<String, dynamic> toJson() => {'profile': profile.toJson(), ..._$SendMessageRequestToJson(this)};
 }
 
 /// `POST /conversations/{cid}/options` and `POST /conversations/{cid}/redo`.
 @JsonSerializable(createFactory: false, includeIfNull: false)
 class ConversationActionRequest {
-  const ConversationActionRequest({required this.profile, this.messageId, this.keyword});
+  const ConversationActionRequest({
+    required this.profile,
+    this.overrides = const {},
+    this.messageId,
+    this.keyword,
+  });
 
   /// Target wizard message; the latest one when omitted.
   @JsonKey(name: 'message_id')
   final String? messageId;
   /// Express only: the focus keyword for a regenerated result.
   final String? keyword;
+
+  /// As on [CreateConversationRequest]: a redo is how an override change is applied.
+  final Map<String, dynamic> overrides;
   @JsonKey(includeToJson: false)
   final ConversationProfile profile;
 
-  Map<String, dynamic> toJson() => {...profile.toJson(), ..._$ConversationActionRequestToJson(this)};
+  Map<String, dynamic> toJson() => {'profile': profile.toJson(), ..._$ConversationActionRequestToJson(this)};
 }
 
 /// `PATCH /conversations/{cid}`: history metadata; only the fields sent change.
@@ -100,8 +107,7 @@ class ConversationPatchRequest {
     this.status,
     this.priceBefore,
     this.priceAfter,
-    this.vibe,
-    this.marketplace,
+    this.overrides,
   });
 
   final String? title;
@@ -111,8 +117,10 @@ class ConversationPatchRequest {
   final String? priceBefore;
   @JsonKey(name: 'price_after')
   final String? priceAfter;
-  final String? vibe;
-  final String? marketplace;
+
+  /// The conversation-scoped answers this deal carries, `{answer key: value}` — the ones
+  /// the template marks `scope: "conversation"`. Null leaves them untouched.
+  final Map<String, dynamic>? overrides;
 
   Map<String, dynamic> toJson() => _$ConversationPatchRequestToJson(this);
 }

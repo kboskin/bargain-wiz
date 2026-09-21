@@ -38,7 +38,7 @@ class ExpressDealmakerRepositoryImpl implements ExpressDealmakerRepository {
     required final List<String> uploadedIds,
     required final String locale,
     final String? keyword,
-    final String? vibe,
+    final Map<String, dynamic> overrides = const {},
     final String? conversationId,
   }) async {
     try {
@@ -46,7 +46,7 @@ class ExpressDealmakerRepositoryImpl implements ExpressDealmakerRepository {
         uploadedIds: uploadedIds,
         keyword: keyword,
         locale: locale,
-        vibe: vibe,
+        overrides: overrides,
         conversationId: conversationId,
       );
       return Right(_dealReplyMapper.toEntity(dto));

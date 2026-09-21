@@ -116,7 +116,7 @@ class ProDealCloserState extends Equatable {
     this.conversationStatus = ConversationStatus.open,
     this.messages = const [],
     this.isTyping = false,
-    this.vibe = '',
+    this.overrides = const {},
     this.locale = 'en',
     this.failure,
     this.errorCount = 0,
@@ -131,8 +131,10 @@ class ProDealCloserState extends Equatable {
   final List<ProChatMessage> messages;
   /// Wizard typing indicator visible.
   final bool isTyping;
-  /// Current tone id used for requests.
-  final String vibe;
+  /// The conversation-scoped answers this deal overrides, `{answer key: value}`. Sent with
+  /// every request and saved with the deal, so reopening it coaches in the voice it was
+  /// written in rather than in whatever the profile default has since become.
+  final Map<String, dynamic> overrides;
   final String locale;
   /// Last failure; [errorCount] increments on each new one so listeners can react.
   final Failure? failure;
@@ -149,7 +151,7 @@ class ProDealCloserState extends Equatable {
     ConversationStatus? conversationStatus,
     List<ProChatMessage>? messages,
     bool? isTyping,
-    String? vibe,
+    Map<String, dynamic>? overrides,
     String? locale,
     Object? failure = _unset,
     int? errorCount,
@@ -161,7 +163,7 @@ class ProDealCloserState extends Equatable {
         conversationStatus: conversationStatus ?? this.conversationStatus,
         messages: messages ?? this.messages,
         isTyping: isTyping ?? this.isTyping,
-        vibe: vibe ?? this.vibe,
+        overrides: overrides ?? this.overrides,
         locale: locale ?? this.locale,
         failure: failure == _unset ? this.failure : failure as Failure?,
         errorCount: errorCount ?? this.errorCount,
@@ -175,7 +177,7 @@ class ProDealCloserState extends Equatable {
         conversationStatus,
         messages,
         isTyping,
-        vibe,
+        overrides,
         locale,
         failure,
         errorCount,

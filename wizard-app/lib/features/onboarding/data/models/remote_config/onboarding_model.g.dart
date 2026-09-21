@@ -85,12 +85,14 @@ AnswerStructure _$AnswerStructureFromJson(Map<String, dynamic> json) =>
     AnswerStructure(
       answerKeyName: json['answer_key_name'] as String,
       multi: json['multi'] as bool? ?? false,
+      scope: json['scope'] as String?,
     );
 
 Map<String, dynamic> _$AnswerStructureToJson(AnswerStructure instance) =>
     <String, dynamic>{
       'answer_key_name': instance.answerKeyName,
       'multi': instance.multi,
+      'scope': instance.scope,
     };
 
 EngagementScreenModel _$EngagementScreenModelFromJson(
@@ -239,12 +241,14 @@ SelectGroup _$SelectGroupFromJson(Map<String, dynamic> json) => SelectGroup(
   options: (json['options'] as List<dynamic>)
       .map((e) => OnboardingOption.fromJson(e as Map<String, dynamic>))
       .toList(),
+  scope: json['scope'] as String?,
 );
 
 Map<String, dynamic> _$SelectGroupToJson(SelectGroup instance) =>
     <String, dynamic>{
       'label': ?instance.label,
       'answer_key_name': instance.answerKeyName,
+      'scope': ?instance.scope,
       'options': instance.options.map((e) => e.toJson()).toList(),
     };
 

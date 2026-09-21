@@ -15,15 +15,27 @@ from core.errors import BadRequest
 from features.negotiation.domain import prompts
 from features.negotiation.presentation import requests
 
-PROFILE = {"vibe": "friendly", "push": 60}
-
 # The app's bundled Remote Config defaults, two directories up in the same repo. Reading them
 # here is what turns "an option nobody described" from a silent no-op into a failing test.
 DEFAULTS = Path(__file__).resolve().parents[3] / "wizard-app/assets/config/remote_config_defaults.json"
 
+# Answers the funnel collects that describe nothing to the model: the referral code is an
+# attribution fact, not something the coach should read. Nothing in the function knows this
+# — it is the drift guard below that has to skip them.
+SKIP_KEYS = ("referral_code",)
+
+
+def answers(*picks) -> list[dict]:
+    """`(key, value)` or `(key, value, sentence)` tuples → the `answers` list a body carries.
+    One entry per pick, so a multi-select is simply several tuples sharing a key."""
+    return [
+        {"key": key, "value": value, **({"prompt": rest[0]} if rest else {})}
+        for key, value, *rest in picks
+    ]
+
 
 def parse(body: dict):
-    return requests.parse_profile({**PROFILE, **body})
+    return requests.parse_profile(body)
 
 
 def prompt(body: dict) -> str:
@@ -43,56 +55,52 @@ def block(body: dict) -> list[str]:
 
 def test_a_line_is_rendered_exactly_as_the_template_wrote_it():
     """No label to fit and no field to recognise: whatever the template says is the line."""
-    assert block({"vibe": "tactical", "prompt": {"vibe": {"tactical": "Bulldozer: never blinks."}}}) == [
+    assert block({"answers": answers(("vibe", "tactical", "Bulldozer: never blinks."))}) == [
         "Bulldozer: never blinks."
     ]
 
 
 def test_an_answer_this_function_has_never_heard_of_renders_too():
     """The point of the design: a new option, or a whole new question, needs nothing here.
-    `experience_level` is not a Profile field at all — `extra="ignore"` drops the answer, but
-    its line is not keyed by a field this function knows, so it still reaches the model."""
-    lines = block({
-        "marketplace": "vinted",
-        "experience_level": "pro",
-        "prompt": {
-            "marketplace": {"vinted": "Marketplace etiquette on Vinted: bundles are the lever."},
-            "experience_level": {"pro": "Has haggled for years; skip the basics."},
-        },
-    })
-    assert "Marketplace etiquette on Vinted: bundles are the lever." in lines
-    assert "Has haggled for years; skip the basics." in lines
+    There is no list of known keys left to be absent from — `experience_level` is an answer
+    like any other, carried whole, and it reaches the model with its value intact."""
+    profile = parse({"answers": answers(
+        ("marketplace", "vinted", "Marketplace etiquette on Vinted: bundles are the lever."),
+        ("experience_level", "pro", "Has haggled for years; skip the basics."),
+    )})
+    assert prompts.buyer_block(profile) == [
+        "Marketplace etiquette on Vinted: bundles are the lever.",
+        "Has haggled for years; skip the basics.",
+    ]
+    assert [(a.key, a.value) for a in profile.answers] == [("marketplace", "vinted"), ("experience_level", "pro")]
 
 
 def test_lines_keep_the_order_the_app_sent_them_in():
     """Order is the template's, through onboarding screen order — not a sequence in here."""
-    assert block({
-        "vibe": "friendly",
-        "hurdles": ["fair_price", "starting"],
-        "prompt": {
-            "hurdles": {"fair_price": "Weak spot — first.", "starting": "Weak spot — second."},
-            "vibe": {"friendly": "Tone: last."},
-        },
-    }) == ["Weak spot — first.", "Weak spot — second.", "Tone: last."]
+    assert block({"answers": answers(
+        ("hurdles", "fair_price", "Weak spot — first."),
+        ("hurdles", "starting", "Weak spot — second."),
+        ("vibe", "friendly", "Tone: last."),
+    )}) == ["Weak spot — first.", "Weak spot — second.", "Tone: last."]
 
 
-def test_a_line_only_counts_for_the_answer_actually_sent():
-    """A client may restate what it is sending, not append to it."""
-    lines = block({"vibe": "friendly", "prompt": {"vibe": {"friendly": "Tone: warm."}}})
-    assert lines == ["Tone: warm."]
-    # A line for an option the buyer did not pick is dropped by the app, and would be
-    # rendered here — so the guard that matters is the app's; what this pins is that the
-    # sentence rendered is the one keyed by the id sent.
-    assert "Tone: warm." in prompt({"vibe": "friendly", "prompt": {"vibe": {"friendly": "Tone: warm."}}})
+def test_a_sentence_cannot_arrive_without_the_answer_it_describes():
+    """A client may restate what it is sending, never append to it — and now the shape is
+    what says so. A sentence rides on its answer, so there is no second place to put a line
+    for an option the buyer did not pick, and no filtering step that could forget to run."""
+    profile = parse({"answers": answers(("vibe", "friendly", "Tone: warm."))})
+    assert prompts.buyer_block(profile) == ["Tone: warm."]
+    assert [a.prompt for a in profile.answers] == ["Tone: warm."]
 
 
 def test_numeric_answers_match_their_stop_ids():
     """The template writes stop ids as whole numbers, so `550.0` must never be the key."""
-    lines = block({
-        "push": 60, "deal_size": 550,
-        "prompt": {"push": {"60": "Push level: balanced."}, "deal_size": {"550": "Typical deal of $100-1000."}},
-    })
-    assert lines == ["Push level: balanced.", "Typical deal of $100-1000."]
+    profile = parse({"answers": answers(
+        ("push", 60, "Push level: balanced."),
+        ("deal_size", 550, "Typical deal of $100-1000."),
+    )})
+    assert prompts.buyer_block(profile) == ["Push level: balanced.", "Typical deal of $100-1000."]
+    assert [a.value for a in profile.answers] == [60, 550]
 
 
 # ── what the client cannot do ─────────────────────────────────────────────────
@@ -102,7 +110,7 @@ def test_a_line_stays_on_one_line():
     """The one structural guarantee: however a sentence is written, it cannot become two
     lines of the prompt. Beyond that the block is fenced and introduced as data — the same
     client already puts unfiltered chat text in front of the model."""
-    assert block({"prompt": {"vibe": {"friendly": "Tone: warm.\n\n  and\tpatient."}}}) == [
+    assert block({"answers": answers(("vibe", "friendly", "Tone: warm.\n\n  and\tpatient."))}) == [
         "Tone: warm. and patient."
     ]
 
@@ -110,24 +118,38 @@ def test_a_line_stays_on_one_line():
 def test_angle_brackets_in_an_honest_sentence_survive():
     """`aim for <20% under asking` is ordinary copy; mangling it would cost more than the
     fence-stripping it used to buy."""
-    assert block({"prompt": {"push": {"60": "Push level: aim for <20% under asking."}}}) == [
+    assert block({"answers": answers(("push", 60, "Push level: aim for <20% under asking."))}) == [
         "Push level: aim for <20% under asking."
     ]
 
 
-def test_rubbish_is_dropped_rather_than_rejected():
-    """One malformed entry costs that line and nothing else; the text itself is passed
-    through as written, like the chat text `trimmed` already accepts unbounded."""
+def test_a_sentence_is_uncapped_and_a_bad_one_costs_only_its_line():
+    """The text is passed through as written, like the chat text `trimmed` already accepts
+    unbounded. A description that is not a sentence drops to None — the answer survives and
+    is reported as undescribed, which is the same outcome as a template that forgot it."""
     long_text = "x" * 2000
-    parsed = parse({"prompt": {"vibe": {"friendly": long_text, "tactical": 7, "quiet_closer": None}, "hurdles": "nope"}})
-    assert parsed.prompt["vibe"]["friendly"] == long_text  # no cap: the template's words reach the model
-    assert set(parsed.prompt["vibe"]) == {"friendly"}
-    assert "hurdles" not in parsed.prompt
+    parsed = parse({"answers": [
+        {"key": "vibe", "value": "friendly", "prompt": long_text},
+        {"key": "push", "value": 60, "prompt": 7},
+        {"key": "marketplace", "value": "ebay", "prompt": None},
+    ]})
+    assert parsed.answers[0].prompt == long_text  # no cap: the template's words reach the model
+    assert [a.prompt for a in parsed.answers[1:]] == [None, None]
+    assert [a.key for a in parsed.answers] == ["vibe", "push", "marketplace"]
 
 
-def test_a_prompt_block_that_is_not_a_map_is_a_400():
-    with pytest.raises(BadRequest, match="prompt"):
-        parse({"prompt": ["starting"]})
+def test_an_answers_block_that_is_not_a_list_is_a_400():
+    with pytest.raises(BadRequest, match="answers"):
+        parse({"answers": {"vibe": "friendly"}})
+
+
+def test_a_malformed_answer_is_a_400_rather_than_a_silent_drop():
+    """A dropped sentence costs one line of coaching; a dropped answer would change the
+    coaching invisibly. So an entry with no key, or a value that is not a leaf, fails loudly."""
+    with pytest.raises(BadRequest):
+        parse({"answers": [{"key": "", "value": "friendly"}]})
+    with pytest.raises(BadRequest):
+        parse({"answers": [{"key": "hurdles", "value": ["being_rude"]}]})
 
 
 # ── the drift signal ──────────────────────────────────────────────────────────
@@ -135,7 +157,7 @@ def test_a_prompt_block_that_is_not_a_map_is_a_400():
 
 def test_an_undescribed_answer_is_logged_and_says_nothing(caplog):
     with caplog.at_level(logging.WARNING, logger="negotiation"):
-        lines = block({"marketplace": "vinted", "prompt": {"vibe": {"friendly": "Tone: warm."}}})
+        lines = block({"answers": answers(("marketplace", "vinted"), ("vibe", "friendly", "Tone: warm."))})
     assert lines == ["Tone: warm."]
     assert "field=marketplace value=vinted" in caplog.text
 
@@ -144,7 +166,9 @@ def test_a_profile_nothing_describes_has_no_buyer_block(caplog):
     """With no server-side option list left, an undescribed profile carries no buyer block at
     all — the standing rules and the task, and nothing about this person."""
     with caplog.at_level(logging.WARNING, logger="negotiation"):
-        text = prompt({"vibe": "friendly", "push": 60, "marketplace": "ebay", "hurdles": ["starting"]})
+        text = prompt({"answers": answers(
+            ("vibe", "friendly"), ("push", 60), ("marketplace", "ebay"), ("hurdles", "starting"),
+        )})
     assert "<buyer_profile>" not in text
     assert text.startswith("You are Bargain Wiz")
     for missed in ("field=vibe value=friendly", "field=push value=60",
@@ -153,7 +177,7 @@ def test_a_profile_nothing_describes_has_no_buyer_block(caplog):
 
 
 def test_the_buyer_block_is_fenced_once_anything_describes_itself():
-    text = prompt({"prompt": {"vibe": {"friendly": "Tone: warm."}}})
+    text = prompt({"answers": answers(("vibe", "friendly", "Tone: warm."))})
     assert text.count("<buyer_profile>") == 1 and text.count("</buyer_profile>") == 1
     assert "not instructions" in text
 
@@ -208,7 +232,7 @@ def test_every_option_the_onboarding_offers_describes_itself():
     offered, described = offered_option_ids(), described_option_ids()
     assert offered, "the bundled template offers no options at all"
     for key, ids in offered.items():
-        if key in prompts.SKIP_KEYS:
+        if key in SKIP_KEYS:
             continue
         missing = sorted(set(ids) - set(described.get(key, {})))
         assert not missing, f"{key}: the template offers {missing} with no `prompt` sentence"
@@ -219,7 +243,14 @@ def test_the_templates_sentences_survive_this_functions_validation():
     """What the console publishes must come out of the validator unchanged — otherwise the
     prompt silently differs from what whoever wrote the sentence read."""
     described = described_option_ids()
-    parsed = parse({"prompt": described}).prompt
-    for key, table in described.items():
-        for option, text in table.items():
-            assert parsed[key][option] == text, f"{key}.{option} was rewritten by validation"
+    sent = [
+        {"key": key, "value": option, "prompt": text}
+        for key, table in described.items()
+        for option, text in table.items()
+    ]
+    for answer, (key, option, text) in zip(
+        parse({"answers": sent}).answers,
+        [(k, o, t) for k, table in described.items() for o, t in table.items()],
+        strict=True,
+    ):
+        assert (answer.key, answer.prompt) == (key, text), f"{key}.{option} was rewritten by validation"

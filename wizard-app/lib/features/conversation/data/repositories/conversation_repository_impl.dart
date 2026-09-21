@@ -67,7 +67,7 @@ class ConversationRepositoryImpl implements ConversationRepository {
     }
   }
 
-  /// History metadata only (status, prices, title, vibe, marketplace): the messages already
+  /// History metadata only (status, prices, title, the deal's overrides): the messages already
   /// live on the server.
   @override
   Future<Either<Failure, void>> saveConversation(Conversation conversation) async {
@@ -79,8 +79,7 @@ class ConversationRepositoryImpl implements ConversationRepository {
           status: conversation.status.name,
           priceBefore: conversation.priceBefore,
           priceAfter: conversation.priceAfter,
-          vibe: conversation.vibe,
-          marketplace: conversation.marketplace,
+          overrides: conversation.overrides,
         ),
       );
       _cache = [for (final c in _cache) c.id == conversation.id ? conversation : c];

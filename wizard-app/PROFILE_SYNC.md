@@ -22,8 +22,8 @@ after the field: `answer_structure.answer_key_name` (a `select_group` group carr
 **is** the field name, so there is no mapping to keep in step, and wiring a new question to
 the backend is a config edit, not a client release.
 
-The fields the functions read (`vibe`, `push`, `marketplace`, `deals_per_month`, `deal_size`,
-`hurdles`, `locale`) are typed and coerced; every other answer is stored as sent, so a
+The fields `PATCH /profile` names (`vibe`, `push`, `marketplace`, `deals_per_month`,
+`deal_size`, `hurdles`, `locale`) are typed and coerced; every other answer is stored as sent, so a
 question added in Remote Config is recorded without a backend deploy. Beside it sits
 **`onboarding_status`** — `completed_at`, stamped by the server when a client first reports
 the funnel finished.
@@ -42,17 +42,20 @@ version that produced it, and the template is versioned in git.
 So the app names almost no key: `RemoteConfigService.getProfileFields()` turns the screens into
 [`ProfileField`]s — key, kind, options and every attribute the UI draws (label, colour, icon,
 subtext, emoji, savings, default) — and the profile services copy `{key: value}` pairs out of
-local storage. `ProfileFields` spells out four keys only, and says why: `referral_code` (its
-own wire section, and the one answer the Profile screen never re-opens —
-`ProfileFields.lockedKeys`), `vibe`, `push` (chips and a meter instead of a settings row) and
-`marketplace` (saved with a conversation).
+local storage. `ProfileFields` spells out one key only, and says why: `referral_code` has a
+wire section of its own and is the one answer the Profile screen never re-opens
+(`ProfileFields.lockedKeys`). `vibe`, `push` and `marketplace` used to be named beside it;
+they are not any more. Which answer gets a card instead of a settings row comes from the
+template its screen used (`slider_lottie` → the meter, `select` → the chips, anything else →
+a row), and which answer a single deal may carry its own value for comes from the screen's
+`scope` — so both are the template's to decide and neither is a list in Dart.
 
 An answer that no function reads simply rides along and is ignored; a field the funnel stops
-asking for stops being sent. Two consequences worth knowing: the AI functions **require**
-`vibe` and `push`, so keep screens asking for them (an unanswered screen falls back to its
-configured `default_value` / first option, never to a Dart constant), and **renaming a key
-orphans the answers already stored under the old one** — they stay in `preferences` under the
-old key and read as unanswered.
+asking for stops being sent. Two consequences worth knowing: an unanswered screen falls back
+to its configured `default_value` / first option, never to a Dart constant — nothing is
+required any more, the AI functions name no answer and so have none to demand, but what is
+not sent is not coached on — and **renaming a key orphans the answers already stored under
+the old one**: they stay in `preferences` under the old key and read as unanswered.
 
 Validation is deliberately loose: known preference fields are type-checked and clamped,
 answers accept any JSON leaf, unknown top-level sections are ignored (and logged), never
@@ -108,24 +111,36 @@ arm through the Analytics export on uid, and to the question that produced it th
 
 ## Preferences into the model
 
-`preferences` is the block the AI functions consume. Today the app sends the same
-`{key: value}` pairs with every `express_dealmaker` / `pro_deal_closer` request, plus the
-locale; `features/negotiation/domain/prompts.py` turns hurdles and deal frequency into coaching hints in the system
-prompt. The referral code is the one answer that stays out of `preferences`: it has a section
-of its own (`referral.code`, stamped with `entered_at`), which the client keeps sending — the
-device cannot change it and the function keeps the first one, so a retried first push still
-credits it. The next step, once profiles are populated, is to let
-the functions read `users/{id}` themselves and drop the fields from the request body.
+`preferences` is the record; an AI request carries the same answers in a different shape. A
+request nests them under `profile`: `{"answers": [{"key", "value", "prompt"?}], "locale"}` —
+one entry per *pick*, so a multi-select is several entries sharing a key, in onboarding screen
+order, which is the order the buyer block reads in. A map is what a record wants; an order is
+what a prompt wants, and `UserProfileService.snapshot()` produces both from one traversal
+(`ProfileSnapshot(fields, answers)`), so the two views can never describe different options.
+Nothing is required: the backend names no key, so an empty `answers` list is a valid request
+that simply produces a prompt with no buyer block — keep the screens asking, because an
+answer that is not sent is not coached on. The referral code is the one answer that stays out
+of `preferences`, and out of `answers` too: it has a section of its own (`referral.code`,
+stamped with `entered_at`), which the client keeps sending — the device cannot change it and
+the function keeps the first one, so a retried first push still credits it. The next step,
+once profiles are populated, is to let the functions read `users/{id}` themselves and drop
+the profile from the request body.
 
-Alongside those values each AI request carries `prompt` — `{answer key: {option id:
-sentence}}`, the `metadata.prompt` text remote config writes next to each option, which is what
-the prompt renders instead of the backend keeping its own copy of the option list
-(`AI_INTEGRATION.md`). It is **not** part of `preferences` and is never stored: it is copy
-belonging to a template version, it would go stale in the document the moment someone edits
-it, and the template version in git records which options a screen offered. Mechanically there
-is nothing to do — `ProfileSyncService.buildPatch` builds `preferences` from the configured
-fields and the stored answers, never from `payload()`/`snapshot()`. `prompt` is also a reserved
-wire key (`ProfileFields.promptKey`): no screen may use it as an `answer_key_name`.
+Each entry carries the `metadata.prompt` sentence remote config writes next to the option that
+was picked, which is what the prompt renders instead of the backend keeping its own copy of
+the option list (`AI_INTEGRATION.md`). Those sentences are **not** part of `preferences` and
+are never stored: they are copy belonging to a template version, they would go stale in the
+document the moment someone edits one, and the template version in git records which options a
+screen offered. Mechanically there is nothing to do — `ProfileSyncService.buildPatch` builds
+`preferences` from the configured fields and the stored answers, never from
+`payload()`/`snapshot()`.
+
+A deal's own answers travel beside the profile rather than inside it. A conversation write
+also carries `overrides`, `{answer key: value}` for the answers a screen marks
+`scope: "conversation"` (`CONVERSATIONS.md`); the app resolves them into the `answers` it
+sends, so a chip in a deal's header describes the option actually being sent. They change that
+deal only — nothing writes them back here, and this document keeps the default the Profile
+screen sets.
 
 ## Endpoint
 
@@ -162,10 +177,15 @@ Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUN
 
 The Profile screen edits the same answers onboarding collected, and it reads the list from the
 same place: `ProfileFields.fromScreens` walks the `onboarding_screens` templates and turns every
-screen that writes an answer into a row — `select` / `select_group` groups and both slider
-templates into a one-chip sheet, `multi_select` into tick rows, a text screen into a text
-field. Screens that ask nothing are skipped, and so are the `vibe` and `push` answers, which
-keep their own vibe chips and push meter, and every key in `ProfileFields.lockedKeys` — today
+screen that writes an answer into a field — `select` / `select_group` groups and both slider
+templates single-choice, `multi_select` multi-choice, a text screen a text field. **Which
+widget an answer gets comes from the template its screen used**, not from a list of keys and
+not from a config key naming a control: `slider_lottie` becomes the meter card, `select` the
+chip card, and everything else a settings row that opens a sheet — a one-chip sheet, tick
+rows, or a text field, by kind. So the push meter and the tone chips are just what those two
+screens' templates draw, and a question added remotely draws itself with a control this build
+already has. Screens that ask nothing are skipped, and so is every key in
+`ProfileFields.lockedKeys` — today
 just `referral_code`. A referral code is an attribution, not a preference: it is asked for once
 during onboarding, so the screen offers no row for it and a profile push leaves it out of
 `preferences` (the function's write-once rule is what stops any client re-setting it). A screen

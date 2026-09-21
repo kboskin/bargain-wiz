@@ -61,6 +61,34 @@ has no `prompt`. Fixing a bad sentence is a Remote Config publish, no deploy —
 the key does not restore anything, it removes that answer from the prompt, so edit rather
 than delete.
 
+## `scope` — whose answer it is, the person's or the deal's
+
+Beside `answer_key_name`, an answer may declare **`scope`**. `"conversation"` says the answer
+describes the *deal* rather than the person: a conversation carries its own value for it, a
+chip in the deal's header changes it **for that deal only**, and reopening the deal coaches
+from the value it was saved with rather than from today's profile. Anything else — including
+leaving it out, which is the default — makes the answer the person's: it lives in the profile,
+and the Profile screen is the only place that changes it.
+
+Where it goes, per screen type:
+
+| Screen type | Path |
+|---|---|
+| `select`, `multi_select`, `slider`, `slider_lottie` | `answer_structure.scope` |
+| `select_group` | `groups[].scope` (each group asks its own question, so it carries its own) |
+
+```json
+{"type": "select", "answer_structure": {"answer_key_name": "vibe", "scope": "conversation"},
+ "options": [ … ]}
+```
+
+Two answers carry it today: `vibe` (the tone chip on an Express result and on a Pro chat) and
+the `marketplace` group of the "Where do you deal?" screen. Both still travel with every AI
+request like any other answer; what `scope` adds is that they also travel as `overrides`, the
+map the conversation document stores, and that the deal header offers a chip for each of them,
+in onboarding order (`CONVERSATIONS.md`). Marking a third answer is a Remote Config publish:
+nothing in the app names these keys.
+
 ## Engagement Screen
 
 Informational/warmup screens that display content with optional visual elements.
@@ -128,10 +156,14 @@ Multiple choice selection screen with predefined options.
     at the top)
 - `answer_structure` (required): Answer storage configuration
   - `answer_key_name` (required): Unique key for storing the answer
-  - `answer_key_name` is also the field the answer is sent to the backend as, so name it after
-    the field the functions read — `vibe`, `push`, `marketplace`, `deals_per_month`,
-    `deal_size`, `hurdles`, `referral_code`. Any other key rides along and is ignored; keep
-    screens asking for `vibe` and `push`, which the AI functions require (`PROFILE_SYNC.md`)
+  - `answer_key_name` is also the key the answer is sent to the backend under and the one the
+    profile records it as — today the funnel asks for `vibe`, `push`, `marketplace`,
+    `deals_per_month`, `deal_size`, `hurdles` and `referral_code`. No key is required and none
+    is special: an answer reaches the model through the `prompt` sentence it carries, so a new
+    question coaches without a release and one the funnel drops simply stops being sent
+    (`PROFILE_SYNC.md`)
+  - `scope` (optional): `"conversation"` marks the answer as the deal's rather than the
+    person's — see "`scope` — whose answer it is" at the top; absent means the person's
 - `next_button_text` (optional): Custom button text
 - `show_top_bar` (optional): Controls visibility of progress bar and back button (defaults to `true`)
 
@@ -186,10 +218,14 @@ Slider with predefined labeled positions:
     - `animation` (optional): Lottie animation path for this option (displayed above the slider)
 - `answer_structure` (required): Answer storage configuration
   - `answer_key_name` (required): Unique key for storing the answer
-  - `answer_key_name` is also the field the answer is sent to the backend as, so name it after
-    the field the functions read — `vibe`, `push`, `marketplace`, `deals_per_month`,
-    `deal_size`, `hurdles`, `referral_code`. Any other key rides along and is ignored; keep
-    screens asking for `vibe` and `push`, which the AI functions require (`PROFILE_SYNC.md`)
+  - `answer_key_name` is also the key the answer is sent to the backend under and the one the
+    profile records it as — today the funnel asks for `vibe`, `push`, `marketplace`,
+    `deals_per_month`, `deal_size`, `hurdles` and `referral_code`. No key is required and none
+    is special: an answer reaches the model through the `prompt` sentence it carries, so a new
+    question coaches without a release and one the funnel drops simply stops being sent
+    (`PROFILE_SYNC.md`)
+  - `scope` (optional): `"conversation"` marks the answer as the deal's rather than the
+    person's — see "`scope` — whose answer it is" at the top; absent means the person's
 - `next_button_text` (optional): Custom button text
 - `show_top_bar` (optional): Controls visibility of progress bar and back button (defaults to `true`)
 

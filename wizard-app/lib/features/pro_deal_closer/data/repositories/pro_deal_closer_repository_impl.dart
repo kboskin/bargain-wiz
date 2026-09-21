@@ -56,17 +56,18 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
     String? conversationId,
     String? text,
     List<String> attachmentPaths = const [],
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   }) async {
     try {
       final images = await _encodeAll(attachmentPaths);
-      final profile = _profileFields(vibe, locale);
+      final profile = _profileFields(overrides, locale);
       final payloadText = (text ?? '').trim().isEmpty ? null : text!.trim();
       final response = conversationId == null
           ? await _api.create(CreateConversationRequest(
               type: 'pro',
               profile: profile,
+              overrides: overrides,
               text: payloadText,
               images: images.isEmpty ? null : images,
             ))
@@ -74,6 +75,7 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
               conversationId,
               SendMessageRequest(
                 profile: profile,
+                overrides: overrides,
                 text: payloadText,
                 images: images.isEmpty ? null : images,
               ),
@@ -93,13 +95,17 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
   Future<Either<Failure, void>> requestOptions({
     required String conversationId,
     required String messageId,
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   }) async {
     try {
       await _api.requestOptions(
         conversationId,
-        ConversationActionRequest(messageId: messageId, profile: _profileFields(vibe, locale)),
+        ConversationActionRequest(
+          messageId: messageId,
+          profile: _profileFields(overrides, locale),
+          overrides: overrides,
+        ),
       );
       return const Right(null);
     } on Object catch (e, stackTrace) {
@@ -112,13 +118,17 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
   Future<Either<Failure, void>> redo({
     required String conversationId,
     required String messageId,
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   }) async {
     try {
       await _api.redo(
         conversationId,
-        ConversationActionRequest(messageId: messageId, profile: _profileFields(vibe, locale)),
+        ConversationActionRequest(
+          messageId: messageId,
+          profile: _profileFields(overrides, locale),
+          overrides: overrides,
+        ),
       );
       return const Right(null);
     } on Object catch (e, stackTrace) {
@@ -127,11 +137,12 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
     }
   }
 
-  ConversationProfile _profileFields(String vibe, String locale) => ConversationProfile.of(
-        _profile.snapshot(
-          overrides: {ProfileFields.vibeKey: vibe},
-          except: const {ProfileFields.referralKey},
-        ),
+  /// The buyer profile for one request: the stored answers with this deal's
+  /// conversation-scoped [overrides] applied, resolved in one pass so each sentence
+  /// describes the option actually being sent.
+  ConversationProfile _profileFields(Map<String, dynamic> overrides, String locale) =>
+      ConversationProfile.of(
+        _profile.snapshot(overrides: overrides, except: const {ProfileFields.referralKey}),
         locale: locale,
       );
 

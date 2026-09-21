@@ -68,19 +68,19 @@ class CloudExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteDat
     required final List<String> uploadedIds,
     required final String locale,
     final String? keyword,
-    final String? vibe,
+    final Map<String, dynamic> overrides = const {},
     final String? conversationId,
   }) async {
     final profile = ConversationProfile.of(
-      _profile.snapshot(
-        overrides: vibe == null ? const {} : {ProfileFields.vibeKey: vibe},
-        except: const {ProfileFields.referralKey},
-      ),
+      _profile.snapshot(overrides: overrides, except: const {ProfileFields.referralKey}),
       locale: locale,
     );
     if (conversationId != null) {
       try {
-        await _api.redo(conversationId, ConversationActionRequest(profile: profile, keyword: keyword));
+        await _api.redo(
+          conversationId,
+          ConversationActionRequest(profile: profile, overrides: overrides, keyword: keyword),
+        );
       } on CloudFunctionException catch (e) {
         // A retry after the wait ran out: the turn we gave up on is still generating, so wait
         // for that one instead of queueing a second.
@@ -97,6 +97,7 @@ class CloudExpressDealmakerRemoteDataSource implements ExpressDealmakerRemoteDat
     final response = await _api.create(CreateConversationRequest(
       type: 'express',
       profile: profile,
+      overrides: overrides,
       keyword: keyword,
       images: images,
     ));

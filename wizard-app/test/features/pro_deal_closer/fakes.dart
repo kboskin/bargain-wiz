@@ -14,13 +14,13 @@ class SendCall {
     required this.conversationId,
     required this.text,
     required this.attachmentPaths,
-    required this.vibe,
+    required this.overrides,
   });
 
   final String? conversationId;
   final String? text;
   final List<String> attachmentPaths;
-  final String vibe;
+  final Map<String, dynamic> overrides;
 }
 
 /// In-memory stand-in for the backend + listener: `send` stores the user turn and a wizard
@@ -53,14 +53,14 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
     String? conversationId,
     String? text,
     List<String> attachmentPaths = const [],
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   }) async {
     sendCalls.add(SendCall(
       conversationId: conversationId,
       text: text,
       attachmentPaths: attachmentPaths,
-      vibe: vibe,
+      overrides: overrides,
     ));
     final f = failure;
     if (f != null) return Left(f);
@@ -77,7 +77,7 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
       ))
       ..add(ProDealCloserMessage(
         id: replyId,
-        text: autoReply ? 'Reply for $vibe' : '',
+        text: autoReply ? 'Reply for ${overrides['vibe']}' : '',
         isWizard: true,
         status: autoReply ? MessageStatus.done : MessageStatus.pending,
         seq: list.length + 2,
@@ -98,7 +98,7 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
   Future<Either<Failure, List<DealLine>>> requestOptions({
     required String conversationId,
     required String messageId,
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   }) async {
     optionsCalls.add(messageId);
@@ -112,7 +112,7 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
   Future<Either<Failure, void>> redo({
     required String conversationId,
     required String messageId,
-    required String vibe,
+    required Map<String, dynamic> overrides,
     required String locale,
   }) async {
     redoCalls.add(messageId);
@@ -121,7 +121,7 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
     _update(
       conversationId,
       (m) => m.id == messageId
-          ? m.copyWith(text: 'Reply for $vibe (Regenerated)', revision: m.revision + 1, options: const [])
+          ? m.copyWith(text: 'Reply for ${overrides['vibe']} (Regenerated)', revision: m.revision + 1, options: const [])
           : m,
     );
     return const Right(null);

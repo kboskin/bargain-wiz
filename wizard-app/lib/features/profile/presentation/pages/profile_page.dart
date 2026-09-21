@@ -25,9 +25,10 @@ import 'package:appwizard/features/profile/presentation/widgets/profile_account_
 import 'package:appwizard/features/profile/presentation/widgets/profile_answer_sheets.dart';
 import 'package:appwizard/features/profile/presentation/widgets/profile_developer_card.dart';
 import 'package:appwizard/features/profile/presentation/widgets/profile_plan_card.dart';
-import 'package:appwizard/features/profile/presentation/widgets/profile_push_card.dart';
+import 'package:appwizard/features/profile/presentation/widgets/profile_meter_card.dart';
 import 'package:appwizard/features/profile/presentation/widgets/profile_settings_card.dart';
-import 'package:appwizard/features/profile/presentation/widgets/profile_vibe_card.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
+import 'package:appwizard/features/profile/presentation/widgets/profile_chip_card.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_product.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
@@ -42,6 +43,9 @@ import 'package:appwizard/features/subscription/domain/repositories/subscription
 /// screen offers exactly what onboarding asked — a screen added remotely shows up here too.
 /// Vibe and push keep their own cards and are left out of the rows, and so are the answers
 /// onboarding locks ([ProfileFields.lockedKeys]): a referral code is entered once.
+/// How the Profile screen draws one answer.
+enum _Card { chips, meter, row }
+
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
@@ -127,19 +131,19 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  /// Answers with a card of their own (chips and a meter), kept out of the settings rows.
-  static const Set<String> _cardKeys = {ProfileFields.vibeKey, ProfileFields.pushKey};
+  /// Which widget an answer gets, from the template its screen used — so a question added
+  /// in Remote Config draws itself without naming a control this build might not have.
+  /// Anything unrecognised, including a template added later, becomes a settings row.
+  static _Card _cardOf(ProfileField field) => switch (field.template) {
+        OnboardingScreenType.sliderLottie => _Card.meter,
+        OnboardingScreenType.select => _Card.chips,
+        _ => _Card.row,
+      };
 
-  /// Answers this screen never offers: the ones with a card of their own and the
-  /// [ProfileFields.lockedKeys] onboarding sets once (the referral code).
-  static const Set<String> _hiddenKeys = {..._cardKeys, ...ProfileFields.lockedKeys};
-
-  /// Editable answers in onboarding order, minus the hidden ones.
+  /// Editable answers in onboarding order: the ones with a card of their own first, then
+  /// the settings rows. [ProfileFields.lockedKeys] never appear (the referral code).
   List<ProfileField> _fields(List<OnboardingModel> screens) =>
-      ProfileFields.fromScreens(screens, skip: _hiddenKeys);
-
-  /// The options of the answer [key], as its screen offers them.
-  List<ProfileOption> _optionsOf(String key) => _profile.fieldFor(key)?.options ?? const [];
+      ProfileFields.fromScreens(screens, skip: ProfileFields.lockedKeys);
 
   Future<void> _openPaywall() async {
     await PaywallLauncher.open(context, entry: PaywallEntry.profile);
@@ -238,12 +242,9 @@ class _ProfilePageState extends State<ProfilePage> {
           final locale = Localizations.maybeLocaleOf(context) ?? const Locale('en');
           String resolve(dynamic v) => TemplateText.textOf(context, v);
           final screens = _remoteConfig.getOnboardingScreens();
-          final fields = _fields(screens);
-          String cardTitle(String key, String fallback) => TemplateText.textOf(
-                context,
-                ProfileFields.labelForKey(screens, key),
-                fallback: fallback,
-              );
+          final all = _fields(screens);
+          final cards = [for (final f in all) if (_cardOf(f) != _Card.row) f];
+          final rows = [for (final f in all) if (_cardOf(f) == _Card.row) f];
 
           return SafeArea(
             bottom: false,
@@ -264,21 +265,24 @@ class _ProfilePageState extends State<ProfilePage> {
                   ctaLabel: ProfilePlanCopy.cta(_tier),
                   onCta: _openPaywall,
                 ),
-                ProfileVibeCard(
-                  title: cardTitle(ProfileFields.vibeKey, 'Negotiation vibe'),
-                  options: _optionsOf(ProfileFields.vibeKey),
-                  selectedValue: _profile.valueOf(ProfileFields.vibeKey)?.toString(),
-                  onSelect: (value) => _profile.setAnswer(ProfileFields.vibeKey, value),
-                ),
-                ProfilePushCard(
-                  title: cardTitle(ProfileFields.pushKey, 'How hard you push'),
-                  options: _optionsOf(ProfileFields.pushKey),
-                  selectedValue: _profile.valueOf(ProfileFields.pushKey)?.toString(),
-                  onSelect: (value) => _profile.setAnswer(ProfileFields.pushKey, value),
-                ),
+                for (final field in cards)
+                  if (_cardOf(field) == _Card.chips)
+                    ProfileChipCard(
+                      title: TemplateText.textOf(context, field.label, fallback: field.key),
+                      options: field.options,
+                      selectedValue: _profile.valueOf(field.key)?.toString(),
+                      onSelect: (value) => _profile.setAnswer(field.key, value),
+                    )
+                  else
+                    ProfileMeterCard(
+                      title: TemplateText.textOf(context, field.label, fallback: field.key),
+                      options: field.options,
+                      selectedValue: _profile.valueOf(field.key)?.toString(),
+                      onSelect: (value) => _profile.setAnswer(field.key, value),
+                    ),
                 ProfileSettingsCard(
                   rows: [
-                    for (final field in fields)
+                    for (final field in rows)
                       ProfileSettingsRow(
                         label: TemplateText.textOf(context, field.label, fallback: field.key),
                         value: ProfileFields.displayValue(

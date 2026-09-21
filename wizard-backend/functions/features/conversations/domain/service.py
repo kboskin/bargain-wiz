@@ -73,8 +73,28 @@ def _preview(text: str) -> str:
     return _clip_words(text, config.PREVIEW_CHARS.value)
 
 
-def _profile_fields(model: Profile) -> dict:
-    return model.model_dump(include=set(Profile.model_fields))
+# Firestore keeps the whole transcript, the configuration included, so a turn can be read
+# back as the model saw it. Gemini has no `system` content role — it takes the text as
+# `system_instruction` — so this row is a record, not something replayed as a turn, and the
+# app skips it (CONVERSATIONS.md).
+SYSTEM_ROLE = "system"
+
+
+def _system_message(profile: Profile) -> dict:
+    """The conversation's opening record: the system prompt its first turn was configured
+    with. `seq` 0 puts it before every turn without shifting them, and it stays out of
+    `message_count` because it is not a turn and must not count against the chat's cap.
+
+    A snapshot, deliberately: the prompt is rebuilt per turn from the answers that request
+    carries, so a later turn can differ (a tone change, or a Remote Config edit). What this
+    records is how the conversation started."""
+    return {
+        "role": SYSTEM_ROLE,
+        "text": system_prompt(profile),
+        "seq": 0,
+        "status": "done",
+        "created_at": SERVER_TIME,
+    }
 
 
 def _ids(cid: str, message_id: str, reply_id: str | None) -> dict:
@@ -118,9 +138,8 @@ class ConversationService:
                 "type": turn.type,
                 "active": True,
                 "status": "open",
-                "vibe": turn.vibe,
-                "marketplace": turn.marketplace,
-                "locale": turn.locale,
+                "overrides": turn.overrides or {},
+                "locale": turn.profile.locale,
                 "keyword": turn.keyword if turn.type == "express" else None,
                 "title": derive_title(text=turn.text, has_images=bool(turn.images)),
                 "preview": "",
@@ -130,6 +149,7 @@ class ConversationService:
                 "last_message_at": SERVER_TIME,
             },
         )
+        self._store.set_message(auth.uid, cid, self._store.new_id(), _system_message(turn.profile))
         logger.info("conversation created uid=%s cid=%s type=%s", auth.uid, cid, turn.type)
         return self._turn(auth.uid, cid, turn.type, turn)
 
@@ -156,7 +176,7 @@ class ConversationService:
             merge=True,
         )
         self._store.set_conversation(uid, cid, {"updated_at": SERVER_TIME}, merge=True)
-        self._enqueue(uid, cid, target["id"], kind="pro", profile=action, action="options")
+        self._enqueue(uid, cid, target["id"], kind="pro", profile=action.profile, action="options")
         return {"conversation_id": cid, "message_id": target["id"]}
 
     def redo(self, auth: AuthInfo, cid: str, body: dict) -> dict:
@@ -180,12 +200,13 @@ class ConversationService:
         patch: dict[str, Any] = {
             "active_turn": {"message_id": target["id"], "since": SERVER_TIME},
             "updated_at": SERVER_TIME,
-            "vibe": action.vibe,
         }
+        if action.overrides is not None:
+            patch["overrides"] = action.overrides
         if kind == "express":
             patch["keyword"] = keyword
         self._store.set_conversation(uid, cid, patch, merge=True)
-        self._enqueue(uid, cid, target["id"], kind=kind, profile=action, regenerate=True, keyword=keyword)
+        self._enqueue(uid, cid, target["id"], kind=kind, profile=action.profile, regenerate=True, keyword=keyword)
         return _ids(cid, target["id"], target["id"])
 
     def patch(self, auth: AuthInfo, cid: str, body: dict) -> dict:
@@ -222,7 +243,7 @@ class ConversationService:
             "created_at": SERVER_TIME,
         }
         wizard_message = {
-            "role": "wizard",
+            "role": "model",
             "text": "",
             "status": "pending",
             "revision": 0,
@@ -231,18 +252,19 @@ class ConversationService:
         }
         patch: dict[str, Any] = {
             "preview": _preview(turn.text) if turn.text else "Screenshot",
-            "vibe": turn.vibe,
             "updated_at": SERVER_TIME,
             "last_message_at": SERVER_TIME,
         }
+        if turn.overrides is not None:
+            patch["overrides"] = turn.overrides
         if refs and not conversation.get("thumbnail"):
             patch["thumbnail"] = refs[0]
         keyword = turn.keyword if kind == "express" else None
         mid, reply_id = self._store.begin_turn(uid, cid, user_message, wizard_message, patch)
-        self._enqueue(uid, cid, reply_id, kind=kind, profile=turn, keyword=keyword)
+        self._enqueue(uid, cid, reply_id, kind=kind, profile=turn.profile, keyword=keyword)
         logger.info(
             "turn queued uid=%s cid=%s kind=%s images=%d prompts=%d",
-            uid, cid, kind, len(refs), sum(len(t) for t in turn.prompt.values()),
+            uid, cid, kind, len(refs), sum(1 for answer in turn.profile.answers if answer.prompt),
         )
         return _ids(cid, mid, reply_id)
 
@@ -267,7 +289,7 @@ class ConversationService:
                 action=action,
                 regenerate=regenerate,
                 keyword=keyword,
-                profile=Profile(**_profile_fields(profile)),
+                profile=profile,
             )
         )
 
@@ -295,7 +317,12 @@ class ConversationService:
         history = [
             m
             for m in messages
-            if m.get("status", "done") == "done" and (m["seq"] <= limit if task.action == "options" else m["seq"] < limit)
+            # The system record is not a turn: it is what the model was configured with, and
+            # it already reaches Gemini as `system_instruction`. Replaying it as chat would
+            # say everything twice.
+            if m.get("role") != SYSTEM_ROLE
+            and m.get("status", "done") == "done"
+            and (m["seq"] <= limit if task.action == "options" else m["seq"] < limit)
         ]
         started = time.monotonic()
         try:
@@ -401,7 +428,7 @@ class ConversationService:
 
     def _pro_request(self, history: list[dict], profile: Profile, *, mode: str, regenerate: bool) -> ProRequest:
         try:
-            return ProRequest(messages=self._material(history), mode=mode, regenerate=regenerate, **_profile_fields(profile))
+            return ProRequest(messages=self._material(history), mode=mode, regenerate=regenerate, profile=profile)
         except ValueError as exc:
             raise BadRequest(f"nothing to answer yet: {exc}") from exc
 
@@ -409,7 +436,7 @@ class ConversationService:
         material = self._material(history)
         text = "\n\n".join(m.text for m in material if m.role == "user" and m.text) or None
         try:
-            return ExpressRequest(images=[img for m in material for img in m.images], text=text, keyword=keyword, **_profile_fields(profile))
+            return ExpressRequest(images=[img for m in material for img in m.images], text=text, keyword=keyword, profile=profile)
         except ValueError as exc:
             raise BadRequest(f"nothing to analyse: {exc}") from exc
 
@@ -435,7 +462,7 @@ class ConversationService:
 
     @staticmethod
     def _wizard(messages: list[dict], message_id: str | None) -> dict:
-        wizards = [m for m in messages if m.get("role") == "wizard"]
+        wizards = [m for m in messages if m.get("role") == "model"]
         target = next((m for m in wizards if m["id"] == message_id), None) if message_id else (wizards[-1] if wizards else None)
         if target is None:
             raise NotFound("No such wizard message")

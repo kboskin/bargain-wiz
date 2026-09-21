@@ -5,19 +5,20 @@ import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
 import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:flutter/material.dart';
 
-/// Header tone chip button "{glyph} {Tone short} ▾": a soft tint of the colour the tone option
-/// configures, with a text colour that reads on it; tapping cycles to the next tone.
-class ToneChipButton extends StatelessWidget {
-  const ToneChipButton({super.key, required this.tone, required this.onTap});
+/// Header chip button "{glyph} {short label} ▾" for one conversation-scoped answer: a soft
+/// tint of the colour the picked option configures, with a text colour that reads on it;
+/// tapping cycles to the next option. Knows nothing about which answer it is showing.
+class ProfileChipButton extends StatelessWidget {
+  const ProfileChipButton({super.key, required this.option, required this.onTap});
 
-  /// The configured option for the stored tone; null renders nothing.
-  final ProfileOption? tone;
+  /// The configured option for the value this deal carries; null renders nothing.
+  final ProfileOption? option;
 
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final option = tone;
+    final option = this.option;
     if (option == null) return const SizedBox.shrink();
     final style = OptionStyle.of(option);
     final label = TemplateText.textOf(context, option.shortLabel ?? option.label);

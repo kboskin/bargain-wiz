@@ -55,13 +55,13 @@ class _HistoryViewState extends State<HistoryView> {
   /// Cap the stagger so long lists do not keep late rows invisible.
   static const int _maxStaggerIndex = 10;
 
-  /// The label the onboarding option configures for a stored marketplace value, localized;
-  /// null when the config no longer offers it (the row then shows the raw value).
-  String? _marketplaceLabel(BuildContext context, String? value) {
-    final option = di
-        .sl<UserProfileService>()
-        .fieldFor(ProfileFields.marketplaceKey)
-        ?.optionFor(value);
+  /// The meta line's label for one deal: the first conversation-scoped answer it carries,
+  /// as its onboarding option names it. Null when nothing is scoped to a conversation, or
+  /// the config no longer offers that option — the row then falls back to its own copy.
+  String? _scopedLabel(BuildContext context, Conversation conversation) {
+    final field = ProfileFields.conversationScoped(di.sl<UserProfileService>().fields).firstOrNull;
+    if (field == null) return null;
+    final option = field.optionFor(conversation.overrides?[field.key]);
     return option == null ? null : TemplateText.textOf(context, option.label);
   }
 
@@ -189,7 +189,7 @@ class _HistoryViewState extends State<HistoryView> {
             delay: WizMotion.historyStagger * math.min(index, _maxStaggerIndex),
             child: HistoryRow(
               conversation: c,
-              marketplaceLabel: _marketplaceLabel(context, c.marketplace),
+              scopedLabel: _scopedLabel(context, c),
               onTap: () => _open(c),
               onLongPress: () => _editStatus(c),
               onDismissed: () => _delete(c),
