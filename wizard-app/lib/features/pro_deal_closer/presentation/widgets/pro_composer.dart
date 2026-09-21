@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/speech_locale.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_text_field.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
@@ -50,6 +51,9 @@ class _ProComposerState extends State<ProComposer> {
   /// Head start the OS audio unit needs to tear down before a new session.
   static const Duration _micReleaseDelay = Duration(milliseconds: 120);
 
+  /// Longest the first hold waits for the recognizer's locale list.
+  static const Duration _localeLookupTimeout = Duration(milliseconds: 600);
+
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focus = FocusNode();
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -57,6 +61,10 @@ class _ProComposerState extends State<ProComposer> {
   bool _isListening = false;
   bool _speechAvailable = false;
   bool _isPointerDown = false;
+
+  /// Recognizer locale matched to the device languages, resolved once after
+  /// `initialize()`. Null means no match — the plugin picks for itself.
+  String? _localeId;
 
   /// The plugin is not re-entrant. Its native `listen` checks "am I already
   /// listening?" and only sets the flag much later, so two overlapping calls
@@ -139,9 +147,28 @@ class _ProComposerState extends State<ProComposer> {
         WizToast.show(context, widget.speechUnavailableText);
         return;
       }
+      await _resolveLocale();
     }
 
     await _enqueue(_startListening);
+  }
+
+  /// Asks the recognizer what it speaks and keeps the best match for the
+  /// device's language list. A failure here is not fatal: dictation still runs
+  /// on whatever locale the platform defaults to — which is why the lookup is
+  /// capped. The Android 13+ path answers through a callback that reports
+  /// errors by never calling back at all, and the hold is waiting on us.
+  Future<void> _resolveLocale() async {
+    try {
+      final supported = await _speech.locales().timeout(_localeLookupTimeout);
+      if (!mounted) return;
+      _localeId = resolveSpeechLocaleId(
+        supported: supported.map((l) => l.localeId).toList(),
+        preferred: WidgetsBinding.instance.platformDispatcher.locales,
+      );
+    } on Exception {
+      _localeId = null;
+    }
   }
 
   Future<void> _onMicUp() async {
@@ -207,6 +234,7 @@ class _ProComposerState extends State<ProComposer> {
   Future<void> _startListening() async {
     if (!_isPointerDown || !mounted || _speech.isListening) return;
     await _speech.listen(
+      localeId: _localeId,
       onResult: (result) {
         if (!mounted) return;
         final words = result.recognizedWords.trim();

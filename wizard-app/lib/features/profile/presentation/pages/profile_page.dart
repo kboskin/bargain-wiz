@@ -204,19 +204,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  /// Chip glyph: whatever the option configures, nothing when it configures none.
-
-  static String localeName(Locale locale) {
-    switch (locale.languageCode) {
-      case 'en':
-        return 'English';
-      case 'es':
-        return 'Español';
-      default:
-        return locale.toLanguageTag();
-    }
-  }
-
   // ── build ────────────────────────────────────────────────────────────────
 
   @override
@@ -239,7 +226,6 @@ class _ProfilePageState extends State<ProfilePage> {
               locale: Localizations.maybeLocaleOf(context)?.toLanguageTag(),
             ),
           );
-          final locale = Localizations.maybeLocaleOf(context) ?? const Locale('en');
           String resolve(dynamic v) => TemplateText.textOf(context, v);
           final screens = _remoteConfig.getOnboardingScreens();
           final all = _fields(screens);
@@ -280,24 +266,21 @@ class _ProfilePageState extends State<ProfilePage> {
                       selectedValue: _profile.valueOf(field.key)?.toString(),
                       onSelect: (value) => _profile.setAnswer(field.key, value),
                     ),
-                ProfileSettingsCard(
-                  rows: [
-                    for (final field in rows)
-                      ProfileSettingsRow(
-                        label: TemplateText.textOf(context, field.label, fallback: field.key),
-                        value: ProfileFields.displayValue(
-                          field,
-                          _profile.answer(field.key),
-                          resolve,
+                if (rows.isNotEmpty)
+                  ProfileSettingsCard(
+                    rows: [
+                      for (final field in rows)
+                        ProfileSettingsRow(
+                          label: TemplateText.textOf(context, field.label, fallback: field.key),
+                          value: ProfileFields.displayValue(
+                            field,
+                            _profile.answer(field.key),
+                            resolve,
+                          ),
+                          onTap: () => _edit(field),
                         ),
-                        onTap: () => _edit(field),
-                      ),
-                    ProfileSettingsRow(
-                      label: 'Language',
-                      value: '${localeName(locale)} · System',
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 if (_gate.canOverride)
                   ProfileDeveloperCard(
                     tierOverride: _gate.debugOverride,
