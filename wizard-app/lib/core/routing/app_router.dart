@@ -1,3 +1,4 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +16,7 @@ import 'package:appwizard/features/pro_deal_closer/presentation/pages/pro_deal_c
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_bloc.dart';
 import 'package:appwizard/core/app/app_splash.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
+import 'package:appwizard/core/services/analytics_service.dart';
 import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
 import 'app_routes.dart';
 
@@ -54,12 +56,18 @@ class _HomeEntryState extends State<_HomeEntry> {
 class AppRouter {
   late final GoRouter router = GoRouter(
     initialLocation: AppRoutes.home,
+    // `screen_view` per route, from `route.settings.name` — which is why every page built
+    // here carries a `name`; go_router only fills it in for the pages it builds itself.
+    // Onboarding is one route with a PageView, so its steps report themselves as well
+    // (`onboarding/<step>` screen views, see OnboardingFlowPage).
+    observers: [FirebaseAnalyticsObserver(analytics: di.sl<AnalyticsService>().analytics)],
     routes: [
       GoRoute(
         path: AppRoutes.home,
         name: AppRoutes.homeName,
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
+          name: state.name ?? state.path,
           child: const _HomeEntry(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
               SlideTransition(
@@ -75,6 +83,7 @@ class AppRouter {
         name: AppRoutes.onboardingName,
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
+          name: state.name ?? state.path,
           child: const OnboardingFlowPage(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
               SlideTransition(
@@ -164,6 +173,7 @@ class AppRouter {
   }) =>
       CustomTransitionPage<T>(
         key: state.pageKey,
+        name: state.name ?? state.path,
         fullscreenDialog: fullscreenDialog,
         child: child,
         transitionDuration: const Duration(milliseconds: 300),

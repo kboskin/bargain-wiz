@@ -1,12 +1,14 @@
-import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 /// Analytics service for logging events
 /// Provides a centralized, injectable service for analytics tracking
+///
+/// Collection itself is not switched here: `FirebaseService` turns it off in the SDK for the
+/// `local` flavor, and every call below simply logs what it is given.
 class AnalyticsService {
   final FirebaseAnalytics _analytics;
   final AppLogger _logger;
-  bool _isEnabled = true;
 
   AnalyticsService({
     required AppLogger logger,
@@ -19,71 +21,51 @@ class AnalyticsService {
     required String name,
     Map<String, dynamic>? parameters,
   }) async {
-    if (!_isEnabled) {
-      _logger.d('Analytics disabled, skipping event: $name');
-      return;
-    }
-
     try {
       _logger.i('Analytics: $name with params: $parameters');
-      
-      // Convert parameters to the correct type (String or num values only)
-      Map<String, Object>? convertedParams;
-      if (parameters != null) {
-        convertedParams = {};
-        for (final entry in parameters.entries) {
-          convertedParams[entry.key] = 
-              entry.value is String || entry.value is num 
-                  ? entry.value 
-                  : entry.value.toString();
-        }
-      }
-
       await _analytics.logEvent(
         name: name,
-        parameters: convertedParams,
+        parameters: _wireParameters(parameters),
       );
     } catch (e, stackTrace) {
       _logger.e('Error logging analytics event: $name', e, stackTrace);
     }
   }
 
-  /// Log screen view
+  /// Log screen view. [parameters] ride along on the `screen_view` itself — a screen that is
+  /// one of several the same class draws (the onboarding steps, drawn by one route) says
+  /// which one it is here rather than in a second event beside it.
   Future<void> logScreenView({
     required String screenName,
     String? screenClass,
+    Map<String, dynamic>? parameters,
   }) async {
-    if (!_isEnabled) {
-      _logger.d('Analytics disabled, skipping screen view: $screenName');
-      return;
-    }
-
     try {
-      _logger.i('Analytics: Screen view - $screenName');
+      _logger.i('Analytics: Screen view - $screenName with params: $parameters');
       await _analytics.logScreenView(
         screenName: screenName,
         screenClass: screenClass,
+        parameters: _wireParameters(parameters),
       );
     } catch (e, stackTrace) {
       _logger.e('Error logging screen view: $screenName', e, stackTrace);
     }
   }
 
-  /// Enable or disable analytics
-  Future<void> setEnabled(bool enabled) async {
-    try {
-      _isEnabled = enabled;
-      await _analytics.setAnalyticsCollectionEnabled(enabled);
-      _logger.i('Analytics ${enabled ? 'enabled' : 'disabled'}');
-    } catch (e, stackTrace) {
-      _logger.e('Error setting analytics enabled state', e, stackTrace);
-    }
+  /// Parameters as the SDK takes them: String or num, everything else stringified.
+  static Map<String, Object>? _wireParameters(Map<String, dynamic>? parameters) {
+    if (parameters == null) return null;
+    return {
+      for (final entry in parameters.entries)
+        entry.key: entry.value is String || entry.value is num ? entry.value as Object : entry.value.toString(),
+    };
   }
 
-  /// Set user ID for analytics
+  /// Set user ID for analytics. `AppBootstrap.warmUp` calls this once with the uid the
+  /// launch signed in under — the only thing reported about the person, and what joins the
+  /// Analytics export to `users/{uid}` and to an A/B arm (PROFILE_SYNC.md). No user
+  /// properties are set anywhere.
   Future<void> setUserId(String? userId) async {
-    if (!_isEnabled) return;
-
     try {
       await _analytics.setUserId(id: userId);
       _logger.i('Analytics user ID set: $userId');
@@ -97,8 +79,6 @@ class AnalyticsService {
     required String name,
     required String? value,
   }) async {
-    if (!_isEnabled) return;
-
     try {
       await _analytics.setUserProperty(
         name: name,
@@ -118,8 +98,6 @@ class AnalyticsService {
     String? itemId,
     Map<String, dynamic>? additionalParams,
   }) async {
-    if (!_isEnabled) return;
-
     try {
       final params = {
         'transaction_id': transactionId,
@@ -183,9 +161,34 @@ class AnalyticsService {
     );
   }
 
+  // ─── onboarding funnel ─────────────────────────────────────────────────────
+
+  /// The person moved on from a screen: [answerKeys] are the answers it writes. Which
+  /// options they picked is not reported — the completed profile is the record of that
+  /// (PROFILE_SYNC.md); this says which questions a funnel got through, including the
+  /// funnels that never complete.
+  Future<void> logOnboardingStepAnswered({
+    required int index,
+    required String stepId,
+    required String stepType,
+    List<String> answerKeys = const [],
+  }) =>
+      logEvent(
+        name: 'onboarding_step_answered',
+        parameters: {
+          'step_index': index,
+          'step_id': stepId,
+          'step_type': stepType,
+          if (answerKeys.isNotEmpty) 'answer_keys': answerKeys.join(','),
+        },
+      );
+
+  /// The funnel finished — the moment the profile is pushed and the app opens.
+  Future<void> logOnboardingCompleted({required int total, required int answered}) => logEvent(
+        name: 'onboarding_completed',
+        parameters: {'step_count': total, 'answered_count': answered},
+      );
+
   /// Get the underlying Firebase Analytics instance
   FirebaseAnalytics get analytics => _analytics;
-
-  /// Check if analytics is enabled
-  bool get isEnabled => _isEnabled;
 }

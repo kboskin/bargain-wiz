@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
+import 'package:appwizard/core/services/analytics_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/template_text.dart';
@@ -70,6 +73,15 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   int? _uploadForIndex;
   bool _paywallOpen = false;
 
+  final AnalyticsService _analytics = di.sl<AnalyticsService>();
+
+  /// The step last reported as viewed, so a rebuild does not report it again.
+  int? _viewedIndex;
+
+  /// The last loaded state, for the counts on `onboarding_completed` (the completed state
+  /// carries no screens).
+  OnboardingConfigLoaded? _loaded;
+
   OnboardingBloc get _bloc => context.read<OnboardingBloc>();
 
   @override
@@ -83,6 +95,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   Future<void> _goTo(OnboardingConfigLoaded state, int target, {required bool forward}) async {
     final screens = state.screens;
     if (target >= screens.length) {
+      _logAnswer(state, _index);
       _bloc.add(const SubmitOnboardingRequested());
       return;
     }
@@ -99,7 +112,9 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       return;
     }
     if (!mounted) return;
+    if (forward) _logAnswer(state, _index);
     setState(() => _index = target);
+    _logStepView(state, target, forward: forward);
     final current = _pageController.hasClients ? (_pageController.page?.round() ?? _index) : _index;
     if (!_pageController.hasClients || (target - current).abs() > 1) {
       _pageController.jumpToPage(target);
@@ -136,6 +151,55 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
   void _answer(int index, dynamic value) =>
       _bloc.add(OnboardingAnswerChanged(screenIndex: index, answer: value));
+
+  // ─── funnel analytics ──────────────────────────────────────────────────────
+  //
+  // The funnel is the one flow the backend hears about only once, at the end (the profile
+  // is pushed from the data_upload screen, PROFILE_SYNC.md), so drop-off exists in
+  // Analytics or nowhere. Reported from the two points where a screen actually changes —
+  // never per keystroke or slider tick.
+
+  /// `screen_class` for every step: the flow is one route, and the class groups them.
+  static const String _screenClass = 'OnboardingFlowPage';
+
+  /// Screens carry no id of their own: the answer key names the question, and a screen that
+  /// asks nothing is named by its template.
+  static String _stepId(OnboardingModel screen) =>
+      screen.answerKeys.isNotEmpty ? screen.answerKeys.first : screen.type.name;
+
+  /// A step is a screen, so it is reported as one — `onboarding/vibe`, with where in the
+  /// funnel it is as the screen view's own parameters. The router's observer cannot see
+  /// these: the whole flow is a single route drawing a `PageView`.
+  void _logStepView(OnboardingConfigLoaded state, int index, {required bool forward}) {
+    if (_viewedIndex == index || index < 0 || index >= state.screens.length) return;
+    _viewedIndex = index;
+    final screen = state.screens[index];
+    final stepId = _stepId(screen);
+    unawaited(_analytics.logScreenView(
+      screenName: 'onboarding/$stepId',
+      screenClass: _screenClass,
+      parameters: {
+        'step_index': index,
+        'step_count': state.screens.length,
+        'step_id': stepId,
+        'step_type': screen.type.name,
+        'direction': forward ? 'forward' : 'back',
+      },
+    ));
+  }
+
+  /// The screen being left, named by the answers it writes — the picks themselves are the
+  /// profile's to record.
+  void _logAnswer(OnboardingConfigLoaded state, int index) {
+    if (index < 0 || index >= state.screens.length) return;
+    final screen = state.screens[index];
+    unawaited(_analytics.logOnboardingStepAnswered(
+      index: index,
+      stepId: _stepId(screen),
+      stepType: screen.type.name,
+      answerKeys: screen.answerKeys,
+    ));
+  }
 
   // ─── validation ────────────────────────────────────────────────────────────
 
@@ -186,7 +250,20 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
 
     final content = BlocConsumer<OnboardingBloc, OnboardingState>(
       listener: (context, state) {
-        if (state is OnboardingCompleted) context.go(AppRoutes.main);
+        if (state is OnboardingConfigLoaded && state.screens.isNotEmpty) {
+          _loaded = state;
+          _logStepView(state, _index, forward: true); // the first screen; later ones on move
+        }
+        if (state is OnboardingCompleted) {
+          final loaded = _loaded;
+          if (loaded != null) {
+            unawaited(_analytics.logOnboardingCompleted(
+              total: loaded.screens.length,
+              answered: loaded.answers.length,
+            ));
+          }
+          context.go(AppRoutes.main);
+        }
       },
       builder: (context, state) {
         if (state is OnboardingConfigLoaded) {

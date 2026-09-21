@@ -106,7 +106,8 @@ Onboarding experiments run in the Firebase console (A/B Testing on Remote Config
 serves its own `onboarding_screens`, and Firebase tracks the assignment through Analytics
 (`firebase_exp_<id>` user properties, exported to BigQuery). The profile does not duplicate
 that, and no longer records which screens or options a user was served: join an answer to its
-arm through the Analytics export on uid, and to the question that produced it through the
+arm through the Analytics export on uid — the uid is the Analytics user id, see
+[Funnel analytics](#funnel-analytics) — and to the question that produced it through the
 `onboarding_screens` template version in git.
 
 ## Preferences into the model
@@ -172,6 +173,53 @@ Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUN
 | Profile screen edit | `UserProfileService` stores the answer, then calls `schedulePush`: a debounced (1.5 s) push of the full current state, which the server merges. |
 | Sign-in (`authStateChanges`) | Push once (server merges the anonymous profile), then if the device has no local answers, `GET` the account profile and save its answers locally (`saveOnboardingData` + `refresh`), so the profile follows the user. |
 | Failure | Logged, retried once after 30 s; every later change pushes the full state again. |
+
+## Funnel analytics
+
+The backend hears about onboarding once, at the end, and the device only writes the answers to
+`SharedPreferences` on submit — so someone who drops out at screen four leaves no trace in
+either place. Where they stopped exists in Firebase Analytics or nowhere, and the flow reports
+itself (`core/services/analytics_service.dart`, called from
+`features/onboarding/presentation/pages/onboarding_screen.dart`):
+
+| Event | When | Parameters |
+|---|---|---|
+| `screen_view` | a screen comes into view | `screen_name` `onboarding/<step_id>`, `screen_class` `OnboardingFlowPage`, plus `step_index`, `step_count`, `step_id`, `step_type`, `direction` |
+| `onboarding_step_answered` | the person moves on from that screen | `step_index`, `step_id`, `step_type`, `answer_keys` (left out when the screen asks nothing) |
+| `onboarding_completed` | the funnel finishes, beside the profile push | `step_count`, `answered_count` |
+
+A step is a screen, so it is reported as one: the flow calls `AnalyticsService.logScreenView`
+with the funnel position as the screen view's own parameters, rather than a custom event
+repeating it beside the screen view.
+
+`step_id` is the screen's `answer_key_name`: screens have no id of their own, and the key is
+what survives the funnel being reordered — a screen that asks nothing is named by its template
+instead. **No answer values are reported**, only `answer_keys`, the questions the screen
+writes: what someone picked is `preferences`' job, and a funnel that never completes has
+nothing worth keeping beyond how far it got. Both events fire only where a screen actually
+changes, never per keystroke or slider tick.
+
+Screen views for the rest of the app come from a `FirebaseAnalyticsObserver` on the router.
+It reads `route.settings.name`, so every page built by a custom `pageBuilder` carries a
+`name` — go_router only fills that in for the pages it builds itself, and a page without one
+is silently skipped. Onboarding is a single route with a `PageView`, which is why its steps
+send their own `screen_view` instead.
+
+### Identity
+
+`AppBootstrap.warmUp` calls `AnalyticsService.setUserId` once, with the uid the launch signed
+in under, so every event is attributed to the uid this document is keyed by. It is never null
+there: `run` blocks the app until the anonymous sign-in succeeds. Linking a provider keeps
+that uid, so nothing has to be re-sent; signing into a credential that already has an account
+switches it, and that session keeps reporting under the uid it started with until the next
+launch — which the profile document and Firebase Auth both record properly anyway.
+
+The uid is the **only** thing reported about the person, and **no user properties are set at
+all**. Who that uid turned out to be lives on `identity.provider` above and in Firebase Auth;
+which build it was lives on `app` above; the answers live in `preferences` and on the funnel
+events. All of it joins to Analytics on the uid whenever it is actually wanted, and a user
+property would only be a second copy to keep true. (The `local` flavor turns collection off
+in the SDK, in `FirebaseService`, so emulator runs stay out of the data entirely.)
 
 ## What the Profile screen edits
 

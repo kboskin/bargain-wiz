@@ -80,6 +80,10 @@ Known blockers an agent cannot fix from here — surface them, don't work around
   deployed from this machine.
 - Also still pending in the dev project: Anonymous Auth enabled, Firestore database created,
   Storage bucket created, the `uploads/` lifecycle rule, App Check (`REQUIRE_APP_CHECK`).
+- **The iOS Simulator cannot transcribe speech.** Audio capture works, but
+  `localspeechrecognition` has no model asset (`UAF_Siri_Understanding` is a stub), so
+  `SFSpeechRecognizer` returns `error_assets_not_installed` (iOS 102) and the press-and-hold
+  mic in `ProComposer` yields no words. Verify dictation on a real device.
 - **iOS has no Push Notifications capability.** There is no `Runner.entitlements`, so nothing
   sets `aps-environment`: the paywall/onboarding permission prompt appears and is recorded, but
   APNs registration fails and FCM cannot deliver the trial reminder. Needs the capability added

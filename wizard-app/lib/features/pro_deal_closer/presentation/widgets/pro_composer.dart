@@ -35,6 +35,21 @@ class ProComposer extends StatefulWidget {
 }
 
 class _ProComposerState extends State<ProComposer> {
+  /// Failed `listen()` starts tolerated per hold before we surface the toast.
+  static const int _maxStartFailures = 3;
+
+  /// Errors no amount of retrying fixes: the recognizer itself is unusable, so
+  /// restarting just loops in silence. iOS Simulators report
+  /// `error_assets_not_installed` because they ship no speech model.
+  static const Set<String> _fatalSpeechErrors = {
+    'error_assets_not_installed',
+    'error_speech_recognizer_disabled',
+    'error_speech_recognizer_request_not_authorized',
+  };
+
+  /// Head start the OS audio unit needs to tear down before a new session.
+  static const Duration _micReleaseDelay = Duration(milliseconds: 120);
+
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focus = FocusNode();
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -43,15 +58,49 @@ class _ProComposerState extends State<ProComposer> {
   bool _speechAvailable = false;
   bool _isPointerDown = false;
 
+  /// The plugin is not re-entrant. Its native `listen` checks "am I already
+  /// listening?" and only sets the flag much later, so two overlapping calls
+  /// both pass, each build an `AVAudioEngine` over the same field, and the
+  /// loser reads a freed input node — a SIGSEGV in `AVAudioNode.inputFormat`
+  /// on iOS. Every call to `_speech` is chained here so only one is in flight.
+  Future<void> _micQueue = Future<void>.value();
+
+  /// Set while an end-of-session restart is already queued. One pause reaches
+  /// us as `notListening`, an error *and* `done`; without this each of the
+  /// three would start its own session.
+  bool _restartQueued = false;
+
+  /// Consecutive `error_listen_failed` reports; reset by any other outcome.
+  int _startFailures = 0;
+
   /// Text already in the field when the mic was pressed; recognition appends after it.
   String _baseText = '';
 
   @override
   void dispose() {
-    if (_speech.isListening) unawaited(_speech.cancel());
+    _isPointerDown = false;
+    unawaited(_enqueue(_speech.cancel));
     _controller.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  /// Runs [action] once every mic call queued before it has settled. Failures
+  /// are absorbed so one bad session cannot poison the chain.
+  Future<void> _enqueue(Future<void> Function() action) {
+    final queued = _micQueue.then((_) => action()).catchError(_onMicCallFailed);
+    _micQueue = queued;
+    return queued;
+  }
+
+  /// A plugin call threw — `listen()` raises `ListenFailedException` when the
+  /// platform side refuses outright. Drop out of dictation rather than retry.
+  void _onMicCallFailed(Object error) {
+    _isPointerDown = false;
+    _restartQueued = false;
+    if (!mounted) return;
+    setState(() => _isListening = false);
+    WizToast.show(context, widget.speechUnavailableText);
   }
 
   void _send() {
@@ -59,8 +108,8 @@ class _ProComposerState extends State<ProComposer> {
     if (text.isEmpty) return;
     _isPointerDown = false;
     if (_isListening) {
-      _isListening = false;
-      unawaited(_speech.stop());
+      setState(() => _isListening = false);
+      unawaited(_enqueue(_speech.stop));
     }
     _controller.clear();
     widget.onSend(text);
@@ -70,8 +119,9 @@ class _ProComposerState extends State<ProComposer> {
   // ── Press-and-hold dictation ──
 
   Future<void> _onMicDown() async {
-    if (_isListening) return;
+    if (_isPointerDown) return;
     _isPointerDown = true;
+    _startFailures = 0;
     _baseText = _controller.text;
     setState(() => _isListening = true);
 
@@ -91,17 +141,14 @@ class _ProComposerState extends State<ProComposer> {
       }
     }
 
-    if (!_isPointerDown) return;
-    // Clear any stuck session before starting a new one.
-    if (_speech.isListening) await _speech.cancel();
-    await _startListening();
+    await _enqueue(_startListening);
   }
 
   Future<void> _onMicUp() async {
     if (!_isPointerDown) return;
     _isPointerDown = false;
     if (mounted) setState(() => _isListening = false);
-    await _speech.stop();
+    await _enqueue(_speech.stop);
   }
 
   void _onSpeechStatus(String status) {
@@ -109,7 +156,7 @@ class _ProComposerState extends State<ProComposer> {
     // The OS ended the session (pause / length limit): keep going while the button is held.
     if (status == 'done' || status == 'notListening') {
       if (_isPointerDown) {
-        unawaited(_restartListening());
+        _queueRestart();
       } else if (_isListening) {
         setState(() => _isListening = false);
       }
@@ -118,35 +165,47 @@ class _ProComposerState extends State<ProComposer> {
 
   void _onSpeechError(SpeechRecognitionError error) {
     if (!mounted) return;
-    if (_isPointerDown) {
-      // Silence / timeout while holding: quietly restart.
-      unawaited(_restartListening());
+    final message = error.errorMsg;
+    if (message.contains('error_listen_failed')) {
+      _startFailures++;
+    } else {
+      _startFailures = 0;
+    }
+    // Silence, timeout or a lost audio session while holding: quietly restart.
+    final recoverable = !_fatalSpeechErrors.contains(message);
+    if (recoverable && _isPointerDown && _startFailures < _maxStartFailures) {
+      _queueRestart();
       return;
     }
     setState(() {
       _isListening = false;
       _isPointerDown = false;
     });
-    final message = error.errorMsg;
     if (!message.contains('error_no_match') && !message.contains('error_speech_timeout')) {
       WizToast.show(context, widget.speechUnavailableText);
     }
   }
 
+  /// Queues at most one restart; later reports of the same pause are dropped.
+  void _queueRestart() {
+    if (_restartQueued) return;
+    _restartQueued = true;
+    unawaited(_enqueue(_restartListening));
+  }
+
   Future<void> _restartListening() async {
+    _restartQueued = false;
     if (!_isPointerDown || !mounted) return;
-    if (_speech.isListening) {
-      await _speech.stop();
-      // Let the OS audio thread release the mic before requesting it again.
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
+    if (_speech.isListening) await _speech.stop();
+    // Let the OS audio unit release the mic before requesting it again.
+    await Future<void>.delayed(_micReleaseDelay);
     if (!_isPointerDown || !mounted) return;
     _baseText = _controller.text;
     await _startListening();
   }
 
   Future<void> _startListening() async {
-    if (!_isPointerDown || !mounted) return;
+    if (!_isPointerDown || !mounted || _speech.isListening) return;
     await _speech.listen(
       onResult: (result) {
         if (!mounted) return;
