@@ -262,9 +262,10 @@ needs neither release nor deploy, and an empty profile is a valid request.
 document stores; the function only checks the shape, because which keys may appear is the
 template's call. `create`, a turn and `redo` re-stamp it, `PATCH` sets it on its own, and
 `options` accepts it and stores nothing — it re-asks about a reply that already exists. So a
-chip inside a deal changes **that deal only**: nothing writes back to the stored profile, and
-reopening the deal sends what it was saved with rather than today's default. The Profile
-screen is the only place that moves the default.
+chip inside a deal (Express) changes **that deal only**: nothing writes back to the stored
+profile, and reopening the deal sends what it was saved with rather than today's default. Pro
+Deal Closer offers no such control — it carries the values it started with. The Profile screen
+is the only place that moves the default.
 
 ### Lifecycle of a chat turn
 

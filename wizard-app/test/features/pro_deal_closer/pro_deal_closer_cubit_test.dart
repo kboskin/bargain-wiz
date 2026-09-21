@@ -93,16 +93,15 @@ void main() {
       expect(cubit.state.overrides, {'vibe': 'friendly'});
     });
 
-    test('changing an answer mid-deal is this deal\'s business only', () async {
+    test('every request carries the answers the deal started with', () async {
+      // The chat has no route to the stored profile at all: what the deal starts from is the
+      // Profile screen's to change, and nothing in here moves it.
       await startFresh(vibe: 'friendly');
-      cubit.setOverride('vibe', 'quiet_closer');
 
-      // The cubit has no route to the stored profile at all — the next request carries the
-      // new value, and what a future deal starts from is the Profile screen's to change.
-      expect(cubit.state.overrides['vibe'], 'quiet_closer');
       await cubit.sendText('hello');
       await pumpEventQueue();
-      expect(repo.sendCalls.single.overrides['vibe'], 'quiet_closer');
+
+      expect(repo.sendCalls.single.overrides['vibe'], 'friendly');
     });
   });
 
@@ -265,12 +264,11 @@ void main() {
     });
 
     test('redo replaces the reply text in place', () async {
-      await startFresh(vibe: 'tactical');
+      await startFresh(vibe: 'quiet_closer');
       await cubit.sendText('hello');
       await pumpEventQueue();
       final reply = messages().last;
 
-      cubit.setOverride('vibe', 'quiet_closer');
       await cubit.redo(reply.id);
       await pumpEventQueue();
 

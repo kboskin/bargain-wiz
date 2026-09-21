@@ -18,7 +18,6 @@ import 'package:appwizard/features/pro_deal_closer/presentation/cubit/pro_deal_c
 import 'package:appwizard/features/pro_deal_closer/presentation/cubit/pro_deal_closer_state.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/widgets/pro_composer.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/widgets/pro_message_tile.dart';
-import 'package:appwizard/features/pro_deal_closer/presentation/widgets/profile_chip_button.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -63,12 +62,13 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
   late final MainPageConfig? _config = _remoteConfig.getMainPageConfig();
   bool _leaving = false;
 
-  /// The answers this deal may carry its own value for — whatever the template marks
+  /// The answers this deal carries its own value for — whatever the template marks
   /// `scope: "conversation"`, in onboarding order. Empty when no screen offers one.
   List<ProfileField> get _scoped => ProfileFields.conversationScoped(_profile.fields);
 
   /// What a new deal starts from: the stored answer for each of those, else the screen's
   /// configured default. A reopened deal ignores this and keeps what it was saved with.
+  /// Nothing in the chat changes them — the Profile screen owns every value.
   Map<String, dynamic> get _defaults => {
         for (final field in _scoped)
           if ((_profile.valueOf(field.key) ?? field.defaultValue) case final value?) field.key: value,
@@ -120,16 +120,6 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
     } else {
       context.go(AppRoutes.main);
     }
-  }
-
-  /// Cycles one conversation-scoped answer to its next option — **for this deal only**. The
-  /// profile default is deliberately not written: the Profile screen owns that, so changing
-  /// the tone mid-deal cannot silently re-home what every future deal starts from.
-  void _cycleOverride(final ProfileField field, final dynamic current) {
-    if (field.options.isEmpty) return;
-    final index = field.options.indexWhere((o) => o.value == '$current');
-    final next = field.options[(index + 1) % field.options.length];
-    context.read<ProDealCloserCubit>().setOverride(field.key, ProfileFields.storedValue(field, next.value));
   }
 
   Future<void> _attach() async {
@@ -200,21 +190,6 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
                   title: title,
                   onBack: _onBack,
                   horizontalPadding: 16,
-                  // One chip per conversation-scoped answer: the template decides how many
-                  // and what they offer, so a new one appears without a change here.
-                  trailing: BlocBuilder<ProDealCloserCubit, ProDealCloserState>(
-                    buildWhen: (a, b) => a.overrides != b.overrides,
-                    builder: (context, state) => Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final field in _scoped)
-                          ProfileChipButton(
-                            option: field.optionFor(state.overrides[field.key]),
-                            onTap: () => _cycleOverride(field, state.overrides[field.key]),
-                          ),
-                      ],
-                    ),
-                  ),
                 ),
                 Expanded(
                   child: Stack(

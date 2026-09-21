@@ -138,7 +138,7 @@ screen offered. Mechanically there is nothing to do — `ProfileSyncService.buil
 A deal's own answers travel beside the profile rather than inside it. A conversation write
 also carries `overrides`, `{answer key: value}` for the answers a screen marks
 `scope: "conversation"` (`CONVERSATIONS.md`); the app resolves them into the `answers` it
-sends, so a chip in a deal's header describes the option actually being sent. They change that
+sends, so what a deal shows is the option actually being sent. They change that
 deal only — nothing writes them back here, and this document keeps the default the Profile
 screen sets.
 

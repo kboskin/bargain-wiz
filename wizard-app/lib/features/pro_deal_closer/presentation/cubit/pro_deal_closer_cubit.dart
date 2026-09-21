@@ -88,13 +88,6 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
     _subscribe(conversationId);
   }
 
-  /// Changes one conversation-scoped answer for this deal only (a header chip). The profile
-  /// default is untouched, so the next deal still starts from it.
-  void setOverride(String key, dynamic value) {
-    if (state.overrides[key] == value) return;
-    emit(state.copyWith(overrides: {...state.overrides, key: value}));
-  }
-
   /// Sends a user text line; the wizard reply arrives through the listener.
   Future<void> sendText(String text) => _send(text: text.trim());
 

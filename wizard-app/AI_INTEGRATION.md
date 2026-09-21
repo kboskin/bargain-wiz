@@ -114,7 +114,7 @@ each entry of `profile.answers` is one pick, `{key, value, prompt}`. So adding a
 whole new question, changes the prompt with **no deploy on either side**: publish the template
 and every client that has fetched it starts describing the new answer.
 `UserProfileService.snapshot()` resolves the values and their sentences in one pass, which is
-what makes a header chip describe the tone actually being sent rather than the stored one.
+what makes the tone a screen shows the one actually being sent rather than the stored one.
 
 **The template writes the whole line; the backend renders it verbatim.** There is no
 server-side copy of the option list, no per-field label and no ordering sequence: `prompts.py`
@@ -196,7 +196,7 @@ Profile values come from `UserProfileService`, which copies the answers the onbo
 collect (`vibe`, `push`, `marketplace`, `deal_size`, `deals_per_month`, `hurdles`) straight out
 of local storage under the keys remote config gave them — the app has no mapping of its own,
 see `PROFILE_SYNC.md`. An unanswered screen contributes its configured default. A deal's own
-answers — the `overrides` behind the chips in its header, `CONVERSATIONS.md` — win over the
+answers — its `overrides`, `CONVERSATIONS.md` — win over the
 stored ones for that request; `locale` is the device's. `snapshot()` does both halves of that
 resolution in one pass and returns a `ProfileSnapshot`: `fields`, the `{key: value}` map
 `payload()` hands to `PATCH /profile`, and `answers`, the ordered list of
