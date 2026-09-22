@@ -1,9 +1,12 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:appwizard/features/shared/presentation/bloc/base_bloc.dart';
-import 'package:appwizard/features/subscription/domain/repositories/subscription_repository.dart';
+import 'package:appwizard/core/error/failures.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/features/shared/presentation/bloc/base_bloc.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_product.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
+import 'package:appwizard/features/subscription/domain/repositories/subscription_repository.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_event.dart';
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_state.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// Subscription BLoC for managing subscription state
 class SubscriptionBloc extends BaseBloc<SubscriptionEvent, SubscriptionState> {
@@ -33,24 +36,23 @@ class SubscriptionBloc extends BaseBloc<SubscriptionEvent, SubscriptionState> {
     emit(const SubscriptionLoading());
     try {
       final result = await _repository.getAvailableProducts();
-      result.fold(
+      final products = result.fold<List<SubscriptionProduct>?>(
         (failure) {
           _logger.e('Failed to load products', failure);
-          emit(ProductsLoaded(products: [], currentStatus: null));
+          return null;
         },
-        (products) async {
-          // Also get current status
-          final statusResult = await _repository.getSubscriptionStatus();
-          final status = statusResult.fold(
-            (failure) => null,
-            (status) => status,
-          );
-          emit(ProductsLoaded(products: products, currentStatus: status));
-        },
+        (products) => products,
       );
+      if (products == null) {
+        emit(const ProductsLoaded(products: []));
+        return;
+      }
+      // Also get current status
+      final status = await _currentStatus();
+      emit(ProductsLoaded(products: products, currentStatus: status));
     } catch (e, stackTrace) {
       _logger.e('Error loading products', e, stackTrace);
-      emit(ProductsLoaded(products: [], currentStatus: null));
+      emit(const ProductsLoaded(products: []));
     }
   }
 
@@ -61,25 +63,19 @@ class SubscriptionBloc extends BaseBloc<SubscriptionEvent, SubscriptionState> {
     emit(const PurchaseInProgress());
     try {
       final result = await _repository.purchaseSubscription(event.productId);
-      result.fold(
-        (failure) {
-          _logger.e('Purchase failed', failure);
-          emit(PurchaseError(failure.message));
-        },
-        (_) async {
-          // Get updated status after purchase
-          final statusResult = await _repository.getSubscriptionStatus();
-          final status = statusResult.fold(
-            (failure) => null,
-            (status) => status,
-          );
-          if (status != null) {
-            emit(PurchaseSuccess(status));
-          } else {
-            emit(const PurchaseError('Purchase completed but status not available'));
-          }
-        },
-      );
+      final failure = result.fold<Failure?>((failure) => failure, (_) => null);
+      if (failure != null) {
+        _logger.e('Purchase failed', failure);
+        emit(PurchaseError(failure.message));
+        return;
+      }
+      // Get updated status after purchase
+      final status = await _currentStatus();
+      if (status != null) {
+        emit(PurchaseSuccess(status));
+      } else {
+        emit(const PurchaseError('Purchase completed but status not available'));
+      }
     } catch (e, stackTrace) {
       _logger.e('Error purchasing subscription', e, stackTrace);
       emit(PurchaseError(e.toString()));
@@ -93,21 +89,14 @@ class SubscriptionBloc extends BaseBloc<SubscriptionEvent, SubscriptionState> {
     emit(const SubscriptionLoading());
     try {
       final result = await _repository.restorePurchases();
-      result.fold(
-        (failure) {
-          _logger.e('Failed to restore purchases', failure);
-          emit(PurchaseError(failure.message));
-        },
-        (_) async {
-          // Get updated status after restore
-          final statusResult = await _repository.getSubscriptionStatus();
-          final status = statusResult.fold(
-            (failure) => null,
-            (status) => status,
-          );
-          emit(StatusChecked(status));
-        },
-      );
+      final failure = result.fold<Failure?>((failure) => failure, (_) => null);
+      if (failure != null) {
+        _logger.e('Failed to restore purchases', failure);
+        emit(PurchaseError(failure.message));
+        return;
+      }
+      // Get updated status after restore
+      emit(StatusChecked(await _currentStatus()));
     } catch (e, stackTrace) {
       _logger.e('Error restoring purchases', e, stackTrace);
       emit(PurchaseError(e.toString()));
@@ -155,5 +144,11 @@ class SubscriptionBloc extends BaseBloc<SubscriptionEvent, SubscriptionState> {
       _logger.e('Error refreshing subscription status', e, stackTrace);
       emit(const StatusChecked(null));
     }
+  }
+
+  /// Current status, or null when it cannot be read.
+  Future<SubscriptionStatus?> _currentStatus() async {
+    final result = await _repository.getSubscriptionStatus();
+    return result.fold((failure) => null, (status) => status);
   }
 }
