@@ -19,10 +19,13 @@ class SubscriptionConfig {
   Map<String, dynamic> toJson() => _$SubscriptionConfigToJson(this);
 }
 
-/// Configuration for a single subscription product
+/// Configuration for a single subscription product (one billing period of a tier).
 @JsonSerializable()
 class SubscriptionProductConfig {
-  final String tier; // 'free', 'basic', 'premium'
+  /// Key a paywall option points at (`options[].id`), e.g. "monthly" / "weekly". Optional for
+  /// configs written before several products shared a tier; those still match by tier.
+  final String? id;
+  final String tier; // 'free', 'premium'
   @JsonKey(name: 'product_id')
   final ProductIdConfig productId; // Platform-specific product IDs
   @JsonKey(fromJson: _multilocaleFromJson)
@@ -34,6 +37,7 @@ class SubscriptionProductConfig {
   final int displayOrder;
 
   SubscriptionProductConfig({
+    this.id,
     required this.tier,
     required this.productId,
     required this.title,
@@ -50,16 +54,7 @@ class SubscriptionProductConfig {
   Map<String, dynamic> toJson() => _$SubscriptionProductConfigToJson(this);
 
   /// Get subscription tier enum
-  SubscriptionTier get tierEnum {
-    switch (tier.toLowerCase()) {
-      case 'basic':
-        return SubscriptionTier.basic;
-      case 'premium':
-        return SubscriptionTier.premium;
-      default:
-        return SubscriptionTier.free;
-    }
-  }
+  SubscriptionTier get tierEnum => SubscriptionTier.fromName(tier.toLowerCase());
 
   /// Get product ID for current platform
   String getPlatformProductId() {

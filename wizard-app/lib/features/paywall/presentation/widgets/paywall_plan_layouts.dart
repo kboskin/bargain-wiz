@@ -8,7 +8,6 @@ import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_mascot.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_layout.dart';
-import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 
 typedef PaywallPriceLookup = String? Function(PaywallOption option);
 typedef PaywallOptionSelected = void Function(PaywallOption option);
@@ -60,12 +59,15 @@ class PaywallPlanPicker extends StatelessWidget {
   }
 }
 
-bool _isTextPlan(PaywallOption o) =>
-    o.id == 'text' || (o.id != 'vision' && o.tierEnum == SubscriptionTier.basic);
+/// The plan the config preselects (the recommended one) gets the amber art block and the
+/// colour mascot; the others are mint with a greyscale mascot, as the handoff drew them.
+bool _isFeatured(PaywallOption o, PaywallMetadata? metadata) =>
+    metadata == null || o.id == metadata.defaultSelectedOptionId;
 
-Color _artBackground(PaywallOption o) => _isTextPlan(o) ? WizColors.mintSoft : WizColors.amberSoft;
+Color _artBackground(PaywallOption o, PaywallMetadata? metadata) =>
+    _isFeatured(o, metadata) ? WizColors.amberSoft : WizColors.mintSoft;
 
-/// Mascot (greyscale .7 for the text plan) or the remote visual when it is not a PNG.
+/// Mascot (greyscale .7 for non-featured plans) or the remote visual when it is not a PNG.
 class _PlanArt extends StatelessWidget {
   const _PlanArt({required this.option, required this.metadata, required this.size});
 
@@ -85,8 +87,8 @@ class _PlanArt extends StatelessWidget {
         repeat: metadata?.isAnimationLooped ?? true,
       );
     }
-    final text = _isTextPlan(option);
-    return WizMascot(width: size, greyscale: text, opacity: text ? 0.7 : 1);
+    final muted = !_isFeatured(option, metadata);
+    return WizMascot(width: size, greyscale: muted, opacity: muted ? 0.7 : 1);
   }
 }
 
@@ -195,7 +197,7 @@ class _PlanCard extends StatelessWidget {
                   width: double.infinity,
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
-                    color: _artBackground(option),
+                    color: _artBackground(option, metadata),
                     borderRadius: BorderRadius.circular(WizRadii.thumbLg),
                   ),
                   alignment: Alignment.center,

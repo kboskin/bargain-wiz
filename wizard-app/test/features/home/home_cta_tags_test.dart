@@ -8,21 +8,15 @@ import 'package:appwizard/features/subscription/domain/entities/subscription_tie
 
 void main() {
   group('HomeCtaTags.forTier', () {
-    test('free: Vision tag on Express and lock on Pro', () {
+    test('free: lock tags on Express and Pro', () {
       final t = HomeCtaTags.forTier(SubscriptionTier.free);
-      expect(t.showExpressVisionTag, isTrue);
+      expect(t.showExpressLockTag, isTrue);
       expect(t.showProLockTag, isTrue);
     });
 
-    test('basic (Text Wizard): Vision tag only', () {
-      final t = HomeCtaTags.forTier(SubscriptionTier.basic);
-      expect(t.showExpressVisionTag, isTrue);
-      expect(t.showProLockTag, isFalse);
-    });
-
-    test('premium (Vision Wizard): no tags', () {
+    test('premium: no tags', () {
       final t = HomeCtaTags.forTier(SubscriptionTier.premium);
-      expect(t.showExpressVisionTag, isFalse);
+      expect(t.showExpressLockTag, isFalse);
       expect(t.showProLockTag, isFalse);
     });
 
@@ -34,8 +28,7 @@ void main() {
   group('tierLabel', () {
     test('drawer footer labels', () {
       expect(tierLabel(SubscriptionTier.free), 'Free plan');
-      expect(tierLabel(SubscriptionTier.basic), 'Text Wizard');
-      expect(tierLabel(SubscriptionTier.premium), 'Vision Wizard');
+      expect(tierLabel(SubscriptionTier.premium), 'Premium');
       expect(tierLabel(null), 'Free plan');
     });
   });

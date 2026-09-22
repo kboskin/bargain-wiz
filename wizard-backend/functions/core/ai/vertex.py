@@ -22,6 +22,50 @@ logger = logging.getLogger("vertex")
 
 Response = TypeVar("Response", bound=BaseModel)
 
+THINKING_LEVELS = ("low", "medium", "high")
+MEDIA_RESOLUTIONS = ("low", "medium", "high")
+
+
+def _optional_choice(name: str, raw: str, allowed: tuple[str, ...]) -> str | None:
+    """A config choice: empty means "do not send"; anything else must be one of [allowed]."""
+    value = (raw or "").strip().lower()
+    if not value:
+        return None
+    if value not in allowed:
+        raise UpstreamError(f"{name} must be one of {', '.join(allowed)} (got {raw!r})")
+    return value
+
+
+def _optional_float(name: str, raw: str) -> float | None:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError as exc:
+        raise UpstreamError(f"{name} must be a number (got {raw!r})") from exc
+
+
+def log_usage(model: str, usage: Any) -> None:
+    """One INFO line per model call with the token counts that make up the bill: prompt,
+    cached prefix (implicit caching, billed at a fraction), visible output and thinking
+    (both billed as output). Cloud Logging turns these into a cost dashboard."""
+    if usage is None:
+        return
+
+    def count(field: str) -> int:
+        return int(getattr(usage, field, None) or 0)
+
+    logger.info(
+        "gemini usage model=%s prompt_tokens=%d cached_tokens=%d output_tokens=%d thought_tokens=%d total_tokens=%d",
+        model,
+        count("prompt_token_count"),
+        count("cached_content_token_count"),
+        count("candidates_token_count"),
+        count("thoughts_token_count"),
+        count("total_token_count"),
+    )
+
 
 class JsonGenerator(Protocol):
     model: str
@@ -46,9 +90,12 @@ class VertexGenerator:
         if not project:
             raise UpstreamError("Vertex AI: no Google Cloud project id available")
         self.model = config.VERTEX_MODEL.value
-        self._temperature = float(config.VERTEX_TEMPERATURE.value)
+        self._temperature = _optional_float("VERTEX_TEMPERATURE", config.VERTEX_TEMPERATURE.value)
         self._max_output_tokens = config.VERTEX_MAX_OUTPUT_TOKENS.value
-        self._thinking_budget = config.VERTEX_THINKING_BUDGET.value
+        self._thinking_level = _optional_choice("VERTEX_THINKING_LEVEL", config.VERTEX_THINKING_LEVEL.value, THINKING_LEVELS)
+        self._media_resolution = _optional_choice(
+            "VERTEX_MEDIA_RESOLUTION", config.VERTEX_MEDIA_RESOLUTION.value, MEDIA_RESOLUTIONS
+        )
         try:
             self._client = genai.Client(vertexai=True, project=project, location=config.VERTEX_LOCATION.value)
         except Exception as exc:
@@ -98,16 +145,32 @@ class VertexGenerator:
                 contents.append(types.Part.from_uri(file_uri=part["uri"], mime_type=part["mime_type"]))
             else:
                 contents.append(types.Part.from_bytes(data=part["data"], mime_type=part["mime_type"]))
+        generate_config = self._generation_config(system=system, schema=schema)
+        try:
+            response = self._client.models.generate_content(model=self.model, contents=contents, config=generate_config)
+        except Exception as exc:  # surfaced to the client as 502
+            raise UpstreamError(f"Gemini call failed: {exc}") from exc
+        log_usage(self.model, getattr(response, "usage_metadata", None))
+        return response
+
+    def _generation_config(self, *, system: str, schema: Any):
+        """JSON mode against [schema] plus the cost settings: thinking level, media resolution
+        and temperature are sent only when configured, so a model that lacks one is not
+        asked for it."""
+        from google.genai import types
+
         generate_config = types.GenerateContentConfig(
             system_instruction=system,
             response_mime_type="application/json",
             response_schema=schema,
-            temperature=self._temperature,
             max_output_tokens=self._max_output_tokens,
         )
-        if self._thinking_budget >= 0:
-            generate_config.thinking_config = types.ThinkingConfig(thinking_budget=self._thinking_budget)
-        try:
-            return self._client.models.generate_content(model=self.model, contents=contents, config=generate_config)
-        except Exception as exc:  # surfaced to the client as 502
-            raise UpstreamError(f"Gemini call failed: {exc}") from exc
+        if self._temperature is not None:
+            generate_config.temperature = self._temperature
+        if self._thinking_level:
+            generate_config.thinking_config = types.ThinkingConfig(
+                thinking_level=types.ThinkingLevel[self._thinking_level.upper()]
+            )
+        if self._media_resolution:
+            generate_config.media_resolution = types.MediaResolution[f"MEDIA_RESOLUTION_{self._media_resolution.upper()}"]
+        return generate_config

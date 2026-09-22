@@ -19,7 +19,7 @@ class PaywallConfig {
   final dynamic title;
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic description;
-  final List<PaywallOption> options; // Two subscription options
+  final List<PaywallOption> options; // Billing periods of the plan (monthly, weekly)
   final PaywallMetadata metadata; // Visual config, default selection, etc.
   @JsonKey(name: 'next_button_text', fromJson: _multilocaleFromJson)
   final dynamic nextButtonText;
@@ -35,7 +35,8 @@ class PaywallConfig {
   /// Payment provider to use for this paywall: "iap" or "stripe".
   @JsonKey(name: 'payment_provider')
   final String? paymentProvider;
-  /// Trial length in days (e.g. 3). Used for timeline and billing date copy.
+  /// Trial length in days (e.g. 3); 0 = no trial, which also hides the timeline unless
+  /// `trial_timeline` rows are configured.
   @JsonKey(name: 'trial_days')
   final int trialDays;
   /// Optional multi-step flow configuration. When non-empty, steps are shown
@@ -75,7 +76,7 @@ class PaywallConfig {
   // ── Redesign (design_handoff_bargain_wiz) ──
 
   /// Context hints shown above the plans when the paywall is opened from a locked feature.
-  /// Keys: "free", "basic_express". Values: multilocale text.
+  /// Keys: "free". Values: multilocale text.
   @JsonKey(name: 'context_hints', fromJson: _hintsFromJson)
   final Map<String, MultilocaleText> contextHints;
 
@@ -264,11 +265,12 @@ class PaywallStepConfig {
   Map<String, dynamic> toJson() => _$PaywallStepConfigToJson(this);
 }
 
-/// Paywall option (subscription tier)
+/// Paywall option: one billing period of the plan. `id` names the `subscription_config`
+/// product it buys ("monthly", "weekly"); `tier` is what that purchase unlocks.
 @JsonSerializable()
 class PaywallOption {
-  final String id; // e.g., "text", "vision"
-  final String tier; // "basic" or "premium"
+  final String id; // e.g., "monthly", "weekly"
+  final String tier; // "premium"
   @JsonKey(fromJson: _multilocaleFromJson)
   final dynamic title;
   @JsonKey(fromJson: _multilocaleFromJson)
@@ -284,6 +286,11 @@ class PaywallOption {
   @JsonKey(name: 'price_label', fromJson: _multilocaleFromJson)
   final dynamic priceLabel;
 
+  /// Billing-period suffix appended to the store price ("/mo", "/wk"), so the period is
+  /// always visible next to the amount as the stores require.
+  @JsonKey(name: 'price_suffix', fromJson: _multilocaleFromJson)
+  final dynamic priceSuffix;
+
   PaywallOption({
     required this.id,
     required this.tier,
@@ -292,6 +299,7 @@ class PaywallOption {
     this.badge,
     this.features = const [],
     this.priceLabel,
+    this.priceSuffix,
   });
 
   static List<MultilocaleText> _featuresFromJson(dynamic json) {
@@ -307,16 +315,7 @@ class PaywallOption {
   Map<String, dynamic> toJson() => _$PaywallOptionToJson(this);
 
   /// Get subscription tier enum
-  SubscriptionTier get tierEnum {
-    switch (tier.toLowerCase()) {
-      case 'basic':
-        return SubscriptionTier.basic;
-      case 'premium':
-        return SubscriptionTier.premium;
-      default:
-        return SubscriptionTier.free;
-    }
-  }
+  SubscriptionTier get tierEnum => SubscriptionTier.fromName(tier.toLowerCase());
 }
 
 /// Paywall metadata (visual config, default selection, etc.)

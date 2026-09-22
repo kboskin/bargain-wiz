@@ -167,7 +167,10 @@ def test_a_multi_select_is_several_answers_sharing_a_key():
     assert "frequent buyer" in prompt
 
 
-def test_pro_request_keeps_newest_images_within_budget_and_orders_messages():
+def test_pro_request_keeps_newest_images_within_budget_and_orders_messages(monkeypatch):
+    # The budget is pinned here rather than taken from the shipped default, so the test is
+    # about the walk-backwards rule and not about what MAX_IMAGES happens to be today.
+    monkeypatch.setenv("MAX_IMAGES", "6")
     img = {"mime_type": "image/png", "data": PNG}
     body = {
         "messages": [

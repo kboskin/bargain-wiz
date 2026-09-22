@@ -118,11 +118,23 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  PaywallOption? _optionFor(SubscriptionTier tier) =>
-      _paywall?.options.where((o) => o.tierEnum == tier).firstOrNull;
+  /// The paywall option (billing period) behind the active purchase: the option whose
+  /// product the store reported, else the config's default selection.
+  PaywallOption? _purchasedOption() {
+    final options = _paywall?.options ?? const <PaywallOption>[];
+    if (options.isEmpty) return null;
+    final productId = _status?.productId;
+    if (productId != null) {
+      final key = (_products ?? const []).where((p) => p.productId == productId).firstOrNull?.key;
+      final bought = options.where((o) => o.id == key).firstOrNull;
+      if (bought != null) return bought;
+    }
+    return options.where((o) => o.id == _paywall!.metadata.defaultSelectedOptionId).firstOrNull ??
+        options.first;
+  }
 
-  String? _priceFor(SubscriptionTier tier) {
-    final option = _optionFor(tier);
+  String? _planPrice() {
+    final option = _purchasedOption();
     if (option == null) return null;
     return PaywallPricing.priceFor(
       option,
@@ -210,17 +222,13 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) => ListenableBuilder(
         listenable: Listenable.merge([_profile, _gate]),
         builder: (context, _) {
-          final planOption = _optionFor(_tier);
-          final planName = ProfilePlanCopy.planName(
-            _tier,
-            optionTitle: planOption == null ? null : TemplateText.textOf(context, planOption.title),
-          );
+          final planName = ProfilePlanCopy.planName(_tier);
           final planSub = ProfilePlanCopy.planSub(
             tier: _tier,
             status: _status,
-            price: _priceFor(_tier),
+            price: _tier == SubscriptionTier.free ? null : _planPrice(),
             now: DateTime.now(),
-            trialDays: _paywall?.trialDays ?? 3,
+            trialDays: _paywall?.trialDays ?? 0,
             formatDate: (d) => PaywallDates.monthDay(
               d,
               locale: Localizations.maybeLocaleOf(context)?.toLanguageTag(),

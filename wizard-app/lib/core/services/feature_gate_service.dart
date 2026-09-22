@@ -12,8 +12,7 @@ export 'package:appwizard/core/config/feature_gate_policy.dart';
 /// Decides whether a feature is available for the current tier, per [FeatureGatePolicy].
 ///
 /// Free: Lines that land only; Express and Pro open the paywall.
-/// Basic (Text Wizard): Pro works; Express opens the paywall with the Vision hint.
-/// Premium (Vision Wizard): everything.
+/// Premium: everything.
 ///
 /// In debug / dev builds a tier override can be set (Profile → developer row) so QA can
 /// walk every gate without a store purchase.

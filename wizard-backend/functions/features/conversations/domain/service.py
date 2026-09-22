@@ -406,12 +406,12 @@ class ConversationService:
 
     def _material(self, history: list[dict]) -> list[ChatMessage]:
         """The stored turns as chat messages, screenshots referenced newest-first within the
-        budget.
+        MAX_IMAGES budget.
 
         The bytes are not read here: Vertex is given the `gs://` URI and fetches the object
         itself, so a long chat no longer re-downloads and re-uploads the same screenshots on
-        every turn. The budget still applies — it bounds what the model is asked to look at,
-        which was never about bandwidth."""
+        every turn. The budget bounds what the model is asked to look at — and pays for, since
+        every screenshot in the prompt is billed again on every turn."""
         budget = config.MAX_IMAGES.value
         loaded: dict[str, list[StoredImage]] = {}
         for message in reversed(history):

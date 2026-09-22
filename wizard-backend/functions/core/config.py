@@ -8,13 +8,26 @@ from firebase_functions import params
 
 # ── Vertex AI ────────────────────────────────────────────────────────────────
 VERTEX_LOCATION = params.StringParam("VERTEX_LOCATION", default="us-central1", description="Vertex AI region for Gemini calls.")
-VERTEX_MODEL = params.StringParam("VERTEX_MODEL", default="gemini-2.5-flash", description="Gemini model id.")
-VERTEX_THINKING_BUDGET = params.IntParam(
-    "VERTEX_THINKING_BUDGET",
-    default=0,
-    description="Thinking token budget for Gemini 2.5 models (0 = off; -1 = do not send the setting).",
+VERTEX_MODEL = params.StringParam("VERTEX_MODEL", default="gemini-3.8-flash", description="Gemini model id.")
+VERTEX_THINKING_LEVEL = params.StringParam(
+    "VERTEX_THINKING_LEVEL",
+    default="low",
+    description="Gemini 3 thinking level: low | medium | high. Thinking cannot be switched off on "
+    "3.x Flash (3.8 rejects `minimal`) and its tokens bill as output, so `low` is the cost floor. "
+    "Empty = do not send (the model then defaults to high).",
 )
-VERTEX_TEMPERATURE = params.StringParam("VERTEX_TEMPERATURE", default="0.7", description="Sampling temperature (float).")
+VERTEX_TEMPERATURE = params.StringParam(
+    "VERTEX_TEMPERATURE",
+    default="1.0",
+    description="Sampling temperature. Google strongly recommends leaving Gemini 3 at its default "
+    "of 1.0; lower values can loop or degrade. Empty = do not send.",
+)
+VERTEX_MEDIA_RESOLUTION = params.StringParam(
+    "VERTEX_MEDIA_RESOLUTION",
+    default="high",
+    description="Tokens Gemini 3 spends per screenshot: low 280, medium 560, high 1120. Chat "
+    "screenshots need high to read the bubbles; try medium for listing photos. Empty = model default (high).",
+)
 VERTEX_MAX_OUTPUT_TOKENS = params.IntParam("VERTEX_MAX_OUTPUT_TOKENS", default=2048, description="Max output tokens per call.")
 
 # ── Request limits (AI functions and conversations) ───────────────────────────

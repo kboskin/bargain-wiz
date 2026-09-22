@@ -276,7 +276,7 @@ Future<void> init() async {
     ),
   );
 
-  // 7. Feature gating (free / basic / premium rules + debug tier override)
+  // 7. Feature gating (free / premium rules + debug tier override)
   sl.registerLazySingleton<FeatureGateService>(
     () => FeatureGateService(
       sl<SubscriptionCheckerService>(),

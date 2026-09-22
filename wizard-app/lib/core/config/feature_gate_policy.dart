@@ -13,18 +13,18 @@ class GateDecision {
 
   final bool allowed;
 
-  /// Context hint for the paywall ("free", "basic_express"), when blocked.
+  /// Context hint for the paywall ("free"), when blocked.
   final String? hintKey;
 }
 
 /// The tier rules, fixed in code (they are part of the offer, not remote configuration):
 ///
-/// | feature          | free    | basic (Text Wizard)       | premium (Vision Wizard) |
-/// |------------------|---------|---------------------------|-------------------------|
-/// | Lines that land  | yes     | yes                       | yes                     |
-/// | Express Dealmaker| paywall | paywall (`basic_express`) | yes                     |
-/// | Pro Deal Closer  | paywall | yes                       | yes                     |
-/// | History, Profile | yes     | yes                       | yes                     |
+/// | feature          | free    | premium |
+/// |------------------|---------|---------|
+/// | Lines that land  | yes     | yes     |
+/// | Express Dealmaker| paywall | yes     |
+/// | Pro Deal Closer  | paywall | yes     |
+/// | History, Profile | yes     | yes     |
 class FeatureGatePolicy {
   FeatureGatePolicy._();
 
@@ -32,10 +32,6 @@ class FeatureGatePolicy {
     switch (tier) {
       case SubscriptionTier.premium:
         return const GateDecision.allowed();
-      case SubscriptionTier.basic:
-        return feature == GatedFeature.expressDealmaker
-            ? const GateDecision.paywall(hintKey: 'basic_express')
-            : const GateDecision.allowed();
       case SubscriptionTier.free:
         switch (feature) {
           case GatedFeature.expressDealmaker:

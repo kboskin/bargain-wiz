@@ -218,7 +218,7 @@ class _HomeTabState extends State<HomeTab> {
                           height: 58,
                           label: TemplateText.textOf(context, cfg?.primaryCtaButton, fallback: 'Express Dealmaker'),
                           leading: const Icon(Icons.photo_camera_outlined, size: 20, color: Colors.white),
-                          trailing: tags.showExpressVisionTag ? const WizTag(label: 'Vision') : null,
+                          trailing: tags.showExpressLockTag ? const WizTag(label: '🔒') : null,
                           onPressed: () => _start(GatedFeature.expressDealmaker, AppRoutes.express),
                         ),
                         const SizedBox(height: WizSpacing.stack),

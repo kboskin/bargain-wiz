@@ -14,13 +14,8 @@ void main() {
   final now = DateTime(2025, 9, 11, 10);
 
   group('ProfilePlanCopy.planName', () {
-    test('uses the paywall option title when present', () {
-      expect(ProfilePlanCopy.planName(SubscriptionTier.premium, optionTitle: 'Mago Visión'), 'Mago Visión');
-    });
-
-    test('falls back to constants per tier', () {
-      expect(ProfilePlanCopy.planName(SubscriptionTier.premium), 'Vision Wizard');
-      expect(ProfilePlanCopy.planName(SubscriptionTier.basic, optionTitle: '  '), 'Text Wizard');
+    test('one paid plan', () {
+      expect(ProfilePlanCopy.planName(SubscriptionTier.premium), 'Premium');
       expect(ProfilePlanCopy.planName(SubscriptionTier.free), 'Free plan');
     });
   });
@@ -33,7 +28,40 @@ void main() {
       );
     });
 
-    test('premium inside the trial window counts days and shows the price', () {
+    test('premium renews on the expiry date, even when it is days away (no trial)', () {
+      final soon = SubscriptionStatus(
+        tier: SubscriptionTier.premium,
+        isActive: true,
+        expiryDate: now.add(const Duration(days: 1, hours: 6)),
+      );
+      expect(
+        ProfilePlanCopy.planSub(
+          tier: SubscriptionTier.premium,
+          status: soon,
+          price: r'$6.99/wk',
+          now: now,
+          formatDate: _fmt,
+        ),
+        r'Renews Sep 12 · $6.99/wk',
+      );
+      final later = SubscriptionStatus(
+        tier: SubscriptionTier.premium,
+        isActive: true,
+        expiryDate: DateTime(2025, 10, 1),
+      );
+      expect(
+        ProfilePlanCopy.planSub(
+          tier: SubscriptionTier.premium,
+          status: later,
+          price: r'$19.99/mo',
+          now: now,
+          formatDate: _fmt,
+        ),
+        r'Renews Oct 1 · $19.99/mo',
+      );
+    });
+
+    test('trial copy appears only when a trial is configured', () {
       final status = SubscriptionStatus(
         tier: SubscriptionTier.premium,
         isActive: true,
@@ -43,58 +71,23 @@ void main() {
         ProfilePlanCopy.planSub(
           tier: SubscriptionTier.premium,
           status: status,
-          price: r'$7.99/wk',
+          price: r'$6.99/wk',
           now: now,
+          trialDays: 3,
           formatDate: _fmt,
         ),
-        r'Trial ends in 2 days · then $7.99/wk',
+        r'Trial ends in 2 days · then $6.99/wk',
       );
     });
 
-    test('premium past the trial window renews on the expiry date', () {
-      final status = SubscriptionStatus(
-        tier: SubscriptionTier.premium,
-        isActive: true,
-        expiryDate: DateTime(2025, 10, 1),
-      );
-      expect(
-        ProfilePlanCopy.planSub(
-          tier: SubscriptionTier.premium,
-          status: status,
-          price: r'$7.99/wk',
-          now: now,
-          formatDate: _fmt,
-        ),
-        r'Renews Oct 1 · $7.99/wk',
-      );
-    });
-
-    test('basic shows price then renewal date', () {
-      final status = SubscriptionStatus(
-        tier: SubscriptionTier.basic,
-        isActive: true,
-        expiryDate: DateTime(2025, 9, 18),
-      );
-      expect(
-        ProfilePlanCopy.planSub(
-          tier: SubscriptionTier.basic,
-          status: status,
-          price: r'$4.99/wk',
-          now: now,
-          formatDate: _fmt,
-        ),
-        r'$4.99/wk · renews Sep 18',
-      );
-    });
-
-    test('paid tiers without status or price still read sensibly (debug override)', () {
+    test('premium without status or price still reads sensibly (debug override)', () {
       expect(
         ProfilePlanCopy.planSub(tier: SubscriptionTier.premium, now: now),
         'Everything unlocked',
       );
       expect(
-        ProfilePlanCopy.planSub(tier: SubscriptionTier.basic, now: now, price: r'$4.99/wk'),
-        r'$4.99/wk · cancel anytime',
+        ProfilePlanCopy.planSub(tier: SubscriptionTier.premium, now: now, price: r'$19.99/mo'),
+        r'$19.99/mo · cancel anytime',
       );
     });
 
@@ -106,7 +99,6 @@ void main() {
 
     test('cta is Upgrade for free and Manage otherwise', () {
       expect(ProfilePlanCopy.cta(SubscriptionTier.free), 'Upgrade');
-      expect(ProfilePlanCopy.cta(SubscriptionTier.basic), 'Manage');
       expect(ProfilePlanCopy.cta(SubscriptionTier.premium), 'Manage');
     });
   });

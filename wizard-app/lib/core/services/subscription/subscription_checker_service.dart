@@ -14,53 +14,6 @@ class SubscriptionCheckerService {
     this._logger,
   );
 
-  /// Check if user can access image recognition feature
-  /// Requires premium tier and active subscription
-  Future<bool> canAccessImageRecognition() async {
-    try {
-      final result = await _repository.getSubscriptionStatus();
-      return result.fold(
-        (failure) {
-          _logger.w('Failed to check subscription for image recognition');
-          return false;
-        },
-        (status) {
-          if (status == null) return false;
-          return status.tier == SubscriptionTier.premium &&
-              status.isActive &&
-              !status.isExpired();
-        },
-      );
-    } catch (e, stackTrace) {
-      _logger.e('Error checking image recognition access', e, stackTrace);
-      return false;
-    }
-  }
-
-  /// Check if user can access text model feature
-  /// Requires basic or premium tier and active subscription
-  Future<bool> canAccessTextModel() async {
-    try {
-      final result = await _repository.getSubscriptionStatus();
-      return result.fold(
-        (failure) {
-          _logger.w('Failed to check subscription for text model');
-          return false;
-        },
-        (status) {
-          if (status == null) return false;
-          return (status.tier == SubscriptionTier.basic ||
-                  status.tier == SubscriptionTier.premium) &&
-              status.isActive &&
-              !status.isExpired();
-        },
-      );
-    } catch (e, stackTrace) {
-      _logger.e('Error checking text model access', e, stackTrace);
-      return false;
-    }
-  }
-
   /// Get current subscription tier
   /// Returns free if no active subscription
   Future<SubscriptionTier> getCurrentTier() async {

@@ -11,7 +11,7 @@ indexes, Storage rules. Repo-wide conventions: `../AGENTS.md`. Endpoint-by-endpo
 | Runtime | Python **3.12** on Cloud Functions **2nd gen** (`firebase-functions` ≥0.4) — `on_request`, `on_task_dispatched`, `on_schedule`; region `us-central1`, codebase `lines-that-land` |
 | Admin access | `firebase-admin` ≥6.6 — Firestore, Cloud Storage, Auth / App Check token verification (`initialize_app()` once in `main.py`) |
 | Validation | **pydantic v2** for every request/response model; no dataclasses |
-| Model | `google-genai` ≥1.0 against **Vertex AI** (`genai.Client(vertexai=True, …)`), default `gemini-2.5-flash`, `response_mime_type=application/json` + `response_schema`, thinking budget 0 by default |
+| Model | `google-genai` ≥1.0 against **Vertex AI** (`genai.Client(vertexai=True, …)`), default `gemini-3.8-flash`, `response_mime_type=application/json` + `response_schema`; Gemini 3 settings from `.env`: `VERTEX_THINKING_LEVEL=low` (3.x Flash cannot switch thinking off), `VERTEX_MEDIA_RESOLUTION=high` (1,120 tokens per screenshot), temperature left at 1.0. Every call logs `gemini usage …` with prompt / cached / output / thought token counts |
 | Images | Pillow — server-side re-encode to JPEG (`IMAGE_MAX_SIDE` 1600, quality 85) before upload |
 | Async | Cloud Tasks queue `generate` (`RateLimits` + `RetryConfig` = the rate limiter and retry policy) and a Cloud Scheduler `refresh_lines` job |
 | Config | `firebase_functions.params` (`StringParam`/`IntParam`/`BoolParam`) in `config.py`, values from `functions/.env` |

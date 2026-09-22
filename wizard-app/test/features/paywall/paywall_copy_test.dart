@@ -8,43 +8,46 @@ import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_product.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 
+/// The bundled offer: one premium plan, monthly (preselected) and weekly, no trial.
 PaywallConfig _config({
+  int trialDays = 0,
   List<Map<String, dynamic>>? trialTimeline,
   Map<String, dynamic> extra = const {},
 }) =>
     PaywallConfig.fromJson({
       'type': 'test',
       'title': {'en': 'Unlock Bargain Wiz'},
-      'description': {'en': 'Choose your negotiation power.'},
+      'description': {'en': 'One plan. Every wizard power.'},
       'options': [
         {
-          'id': 'text',
-          'tier': 'basic',
-          'title': {'en': 'Text Wizard'},
-          'description': {'en': 'Perfect for chat-based bargaining.'},
-          'price_label': r'$4.99/wk',
+          'id': 'monthly',
+          'tier': 'premium',
+          'title': {'en': 'Monthly'},
+          'description': {'en': 'One saved deal covers the month.'},
+          'badge': {'en': 'Best value'},
+          'price_label': {'en': r'$19.99/mo'},
+          'price_suffix': {'en': '/mo'},
         },
         {
-          'id': 'vision',
+          'id': 'weekly',
           'tier': 'premium',
-          'title': {'en': 'Vision Wizard'},
-          'description': {'en': 'Uses screenshots to find leverage.'},
-          'badge': {'en': 'Recommended'},
-          'price_label': r'$7.99/wk',
+          'title': {'en': 'Weekly'},
+          'description': {'en': 'Negotiating this week? One deal covers it.'},
+          'price_label': {'en': r'$6.99/wk'},
+          'price_suffix': {'en': '/wk'},
         },
       ],
       'metadata': {
-        'default_selected_option_id': 'vision',
+        'default_selected_option_id': 'monthly',
         'layout': 'cards',
         'option_visuals': <String, String>{},
       },
-      'next_button_text': {'en': 'Try for free'},
-      'note_text': {'en': 'Free trial, then {price}. Cancel anytime.'},
-      'trial_days': 3,
+      'next_button_text': {'en': 'Unlock Bargain Wiz'},
+      'note_text': {'en': '{price}, renews automatically. Cancel anytime.'},
+      'trial_days': trialDays,
       if (trialTimeline != null) 'trial_timeline': trialTimeline,
       'context_hints': {
-        'free': {'en': 'Your first 3 days are on us.'},
-        'basic_express': {'en': 'Screenshots need Vision Wizard.'},
+        'free': {'en': 'Express and Pro need the full wizard.'},
       },
       ...extra,
     });
@@ -67,11 +70,11 @@ const _remoteTimeline = [
   },
 ];
 
-SubscriptionProduct _product(SubscriptionTier tier, {String? price, String? id}) =>
-    SubscriptionProduct(
-      productId: id ?? 'store.${tier.name}',
-      tier: tier,
-      title: tier.name,
+SubscriptionProduct _product({String? key, String? price, String? id}) => SubscriptionProduct(
+      productId: id ?? 'store.${key ?? 'premium'}',
+      key: key,
+      tier: SubscriptionTier.premium,
+      title: key ?? 'premium',
       description: '',
       price: price,
       currency: price == null ? null : 'USD',
@@ -83,30 +86,41 @@ void main() {
   group('PaywallTimelineBuilder', () {
     final now = DateTime(2025, 9, 11, 15, 42);
 
+    test('shows nothing when there is no trial and no rows are configured', () {
+      final rows = PaywallTimelineBuilder.build(
+        config: _config(),
+        now: now,
+        plan: 'Premium',
+        price: r'$19.99/mo',
+        locale: 'en',
+      );
+      expect(rows, isEmpty);
+    });
+
     test('fills {date}, {plan} and {price} from trial_timeline', () {
       final rows = PaywallTimelineBuilder.build(
         config: _config(trialTimeline: _remoteTimeline),
         now: now,
-        plan: 'Vision Wizard',
-        price: r'$7.99/wk',
+        plan: 'Premium',
+        price: r'$6.99/wk',
         locale: 'en',
       );
 
       expect(rows, hasLength(3));
       expect(rows[0].title, 'Today · Sep 11');
-      expect(rows[0].subtitle, 'Unlock every feature of Vision Wizard');
+      expect(rows[0].subtitle, 'Unlock every feature of Premium');
       expect(rows[1].title, 'Day 2 · Sep 13');
       expect(rows[1].subtitle, 'We remind you before the trial ends');
       expect(rows[2].title, 'Day 3 · Sep 14');
-      expect(rows[2].subtitle, r'Billing starts at $7.99/wk unless cancelled');
+      expect(rows[2].subtitle, r'Billing starts at $6.99/wk unless cancelled');
     });
 
     test('assigns ink / purple / amber dots in order', () {
       final rows = PaywallTimelineBuilder.build(
         config: _config(trialTimeline: _remoteTimeline),
         now: now,
-        plan: 'Vision Wizard',
-        price: r'$7.99/wk',
+        plan: 'Premium',
+        price: r'$6.99/wk',
         locale: 'en',
       );
       expect(rows.map((r) => r.dotColor), [WizColors.ink, WizColors.purple, WizColors.amber]);
@@ -116,53 +130,52 @@ void main() {
       final rows = PaywallTimelineBuilder.build(
         config: _config(trialTimeline: _remoteTimeline),
         now: DateTime(2025, 9, 30),
-        plan: 'Vision Wizard',
-        price: r'$7.99/wk',
+        plan: 'Premium',
+        price: r'$6.99/wk',
         locale: 'en',
       );
       expect(rows[1].title, 'Day 2 · Oct 2');
       expect(rows[2].title, 'Day 3 · Oct 3');
     });
 
-    test('falls back to three default rows from trial_days when the list is empty', () {
+    test('falls back to three default rows from trial_days when a trial is configured', () {
       final rows = PaywallTimelineBuilder.build(
-        config: _config(),
+        config: _config(trialDays: 3),
         now: now,
-        plan: 'Text Wizard',
-        price: r'$4.99/wk',
+        plan: 'Premium',
+        price: r'$6.99/wk',
         locale: 'en',
       );
       expect(rows.map((r) => r.day), [0, 2, 3]);
       expect(rows[0].title, 'Today · Sep 11');
-      expect(rows[0].subtitle, 'Unlock every feature of Text Wizard');
+      expect(rows[0].subtitle, 'Unlock every feature of Premium');
       expect(rows[1].title, 'Day 2 · Sep 13');
       expect(rows[2].title, 'Day 3 · Sep 14');
-      expect(rows[2].subtitle, r'Billing starts at $4.99/wk unless cancelled');
+      expect(rows[2].subtitle, r'Billing starts at $6.99/wk unless cancelled');
     });
 
     test('prefers legacy timeline_* fields over the hardcoded defaults', () {
       final rows = PaywallTimelineBuilder.build(
-        config: _config(extra: {
-          'trial_days': 7,
+        config: _config(trialDays: 7, extra: {
           'timeline_today_text': {'en': 'Start · {date}'},
           'timeline_billing_subtitle': {'en': 'You pay {price} on {date}'},
         }),
         now: now,
-        plan: 'Vision Wizard',
-        price: r'$7.99/wk',
+        plan: 'Premium',
+        price: r'$6.99/wk',
         locale: 'en',
       );
       expect(rows.map((r) => r.day), [0, 6, 7]);
       expect(rows[0].title, 'Start · Sep 11');
       expect(rows[1].title, 'Day 6 · Sep 17');
-      expect(rows[2].subtitle, r'You pay $7.99/wk on Sep 18');
+      expect(rows[2].subtitle, r'You pay $6.99/wk on Sep 18');
     });
 
     test('tidies the copy when no price is available', () {
       final rows = PaywallTimelineBuilder.build(
         config: _config(trialTimeline: _remoteTimeline),
         now: now,
-        plan: 'Vision Wizard',
+        plan: 'Premium',
         price: null,
         locale: 'en',
       );
@@ -173,8 +186,8 @@ void main() {
       final rows = PaywallTimelineBuilder.build(
         config: _config(trialTimeline: _remoteTimeline),
         now: now,
-        plan: 'Vision Wizard',
-        price: r'$7.99/wk',
+        plan: 'Premium',
+        price: r'$6.99/wk',
         formatDate: (d) => '${d.day}/${d.month}',
       );
       expect(rows[2].title, 'Day 3 · 14/9');
@@ -196,14 +209,9 @@ void main() {
 
     test('free entries pick the "free" hint', () {
       expect(PaywallHints.hintFor(hints, PaywallEntry.expressFree)?.toJson(),
-          {'en': 'Your first 3 days are on us.'});
+          {'en': 'Express and Pro need the full wizard.'});
       expect(PaywallHints.hintFor(hints, PaywallEntry.proFree)?.toJson(),
-          {'en': 'Your first 3 days are on us.'});
-    });
-
-    test('basic → Express picks the "basic_express" hint', () {
-      expect(PaywallHints.hintFor(hints, PaywallEntry.expressBasic)?.toJson(),
-          {'en': 'Screenshots need Vision Wizard.'});
+          {'en': 'Express and Pro need the full wizard.'});
     });
 
     test('profile / onboarding / other show no hint', () {
@@ -219,33 +227,39 @@ void main() {
 
   group('PaywallPricing.priceFor', () {
     final config = _config();
-    final vision = config.options.firstWhere((o) => o.id == 'vision');
-    final text = config.options.firstWhere((o) => o.id == 'text');
+    final monthly = config.options.firstWhere((o) => o.id == 'monthly');
+    final weekly = config.options.firstWhere((o) => o.id == 'weekly');
 
-    test('prefers the store price for the matching tier', () {
+    test('uses the store product whose key is the option id and appends the period suffix', () {
       final products = [
-        _product(SubscriptionTier.basic, price: r'$4.49'),
-        _product(SubscriptionTier.premium, price: r'$8.49'),
+        _product(key: 'monthly', price: r'$19.99'),
+        _product(key: 'weekly', price: r'$6.99'),
       ];
-      expect(PaywallPricing.priceFor(vision, products), r'$8.49');
-      expect(PaywallPricing.priceFor(text, products), r'$4.49');
+      expect(PaywallPricing.priceFor(monthly, products), r'$19.99/mo');
+      expect(PaywallPricing.priceFor(weekly, products), r'$6.99/wk');
     });
 
-    test('falls back to price_label when the tier has no product', () {
-      final products = [_product(SubscriptionTier.basic, price: r'$4.49')];
-      expect(PaywallPricing.priceFor(vision, products), r'$7.99/wk');
+    test('a single product of the tier still matches when the config has no keys', () {
+      final products = [_product(price: r'$8.49')];
+      expect(PaywallPricing.priceFor(monthly, products), r'$8.49/mo');
+    });
+
+    test('falls back to price_label when several tier products carry no key', () {
+      final products = [_product(price: r'$19.99', id: 'a'), _product(price: r'$6.99', id: 'b')];
+      expect(PaywallPricing.priceFor(monthly, products), r'$19.99/mo');
+      expect(PaywallPricing.priceFor(weekly, products), r'$6.99/wk');
     });
 
     test('falls back to price_label when the store price is empty', () {
-      final products = [_product(SubscriptionTier.premium, price: '  ')];
-      expect(PaywallPricing.priceFor(vision, products), r'$7.99/wk');
+      final products = [_product(key: 'monthly', price: '  ')];
+      expect(PaywallPricing.priceFor(monthly, products), r'$19.99/mo');
     });
 
     test('returns null when neither a store price nor a label exists', () {
       final bare = PaywallOption(
-        id: 'vision',
+        id: 'monthly',
         tier: 'premium',
-        title: const MultilocaleText('Vision Wizard'),
+        title: const MultilocaleText('Monthly'),
         description: const MultilocaleText(''),
       );
       expect(PaywallPricing.priceFor(bare, const []), isNull);
@@ -253,32 +267,33 @@ void main() {
 
     test('resolves a multilocale price_label through the resolver', () {
       final option = PaywallOption(
-        id: 'vision',
+        id: 'monthly',
         tier: 'premium',
-        title: const MultilocaleText('Vision Wizard'),
+        title: const MultilocaleText('Monthly'),
         description: const MultilocaleText(''),
-        priceLabel: const MultilocaleText({'en': r'$7.99/wk', 'es': r'7,99 $/sem'}),
+        priceLabel: const MultilocaleText({'en': r'$19.99/mo', 'es': r'19,99 $/mes'}),
       );
-      expect(PaywallPricing.priceFor(option, const []), r'$7.99/wk');
+      expect(PaywallPricing.priceFor(option, const []), r'$19.99/mo');
       expect(
         PaywallPricing.priceFor(option, const [], resolve: (v) => (v as MultilocaleText).toJson()['es']),
-        r'7,99 $/sem',
+        r'19,99 $/mes',
       );
     });
   });
 
   group('PaywallPricing.productIdFor', () {
-    final vision = _config().options.firstWhere((o) => o.id == 'vision');
+    final weekly = _config().options.firstWhere((o) => o.id == 'weekly');
 
-    test('uses the store product id when loaded', () {
-      expect(
-        PaywallPricing.productIdFor(vision, [_product(SubscriptionTier.premium, id: 'store.vision')]),
-        'store.vision',
-      );
+    test('buys the store product matched by key', () {
+      final products = [
+        _product(key: 'monthly', id: 'store.monthly'),
+        _product(key: 'weekly', id: 'store.weekly'),
+      ];
+      expect(PaywallPricing.productIdFor(weekly, products), 'store.weekly');
     });
 
-    test('falls back to the tier constant when the store has nothing', () {
-      expect(PaywallPricing.productIdFor(vision, const []), 'com.bargain.wiz.premium');
+    test('is null until the products are loaded', () {
+      expect(PaywallPricing.productIdFor(weekly, const []), isNull);
     });
   });
 
@@ -301,18 +316,22 @@ void main() {
       expect(step.asksNotificationPermission, isFalse);
     });
 
-    test('the bundled reminder step asks for the permission', () {
+    test('a configured reminder step asks for the permission', () {
       final steps = _config(extra: {
         'steps': [
-          {'id': 'intro', 'button_text': {'en': r'Try for $0.00'}},
+          {'id': 'intro', 'button_text': {'en': 'Continue'}},
           {
             'id': 'reminder',
-            'button_text': {'en': 'Continue for FREE'},
+            'button_text': {'en': 'Continue'},
             'button_action': 'request_permission',
           },
         ],
       }).steps;
       expect(steps.map((s) => s.asksNotificationPermission), [false, true]);
+    });
+
+    test('the bundled offer has no explainer steps', () {
+      expect(_config().steps, isEmpty);
     });
   });
 }

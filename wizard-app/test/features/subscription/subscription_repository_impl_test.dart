@@ -83,9 +83,9 @@ void main() {
 
   test('a completed purchase becomes the entitlement and is persisted', () async {
     final r = await repo();
-    final pending = r.purchaseSubscription('com.bargain.wiz.premium');
+    final pending = r.purchaseSubscription('com.bargain.wiz.premium.monthly');
     await Future<void>.delayed(Duration.zero);
-    payment.controller.add(PurchaseUpdate.success(_purchase('com.bargain.wiz.premium')));
+    payment.controller.add(PurchaseUpdate.success(_purchase('com.bargain.wiz.premium.monthly')));
 
     expect((await pending).isRight(), isTrue);
     final status = (await r.getSubscriptionStatus()).getOrElse(() => null)!;
@@ -105,27 +105,28 @@ void main() {
   test('a confirmation that arrives before the initiating call returns is not lost', () async {
     payment.confirmImmediately = true;
     final r = await repo();
-    final result = await r.purchaseSubscription('com.bargain.wiz.basic');
+    final result = await r.purchaseSubscription('com.bargain.wiz.premium.weekly');
     expect(result.isRight(), isTrue);
-    expect((await r.getSubscriptionStatus()).getOrElse(() => null)?.tier, SubscriptionTier.basic);
+    expect((await r.getSubscriptionStatus()).getOrElse(() => null)?.tier, SubscriptionTier.premium);
     await r.dispose();
   });
 
   test('the persisted entitlement is known at cold start', () async {
     final first = await repo();
-    payment.controller.add(PurchaseUpdate.success(_purchase('com.bargain.wiz.basic')));
+    payment.controller.add(PurchaseUpdate.success(_purchase('com.bargain.wiz.premium.weekly')));
     await Future<void>.delayed(Duration.zero);
     await first.dispose();
 
     final second = await repo();
     final status = (await second.getSubscriptionStatus()).getOrElse(() => null);
-    expect(status?.tier, SubscriptionTier.basic);
+    expect(status?.tier, SubscriptionTier.premium);
+    expect(status?.productId, 'com.bargain.wiz.premium.weekly');
     await second.dispose();
   });
 
   test('restore clears a lapsed entitlement when the store reports nothing', () async {
     final r = await repo();
-    payment.controller.add(PurchaseUpdate.success(_purchase('com.bargain.wiz.basic')));
+    payment.controller.add(PurchaseUpdate.success(_purchase('com.bargain.wiz.premium.weekly')));
     await Future<void>.delayed(Duration.zero);
 
     payment.restoreResult = const [];
@@ -136,9 +137,9 @@ void main() {
     await r.dispose();
   });
 
-  test('restore keeps the highest tier the store reports', () async {
+  test('restore keeps a paid purchase over an unknown one', () async {
     final r = await repo();
-    payment.restoreResult = [_purchase('com.bargain.wiz.basic'), _purchase('com.bargain.wiz.premium')];
+    payment.restoreResult = [_purchase('something.else'), _purchase('com.bargain.wiz.premium.monthly')];
     await r.restorePurchases();
     expect((await r.getSubscriptionStatus()).getOrElse(() => null)?.tier, SubscriptionTier.premium);
     await r.dispose();
@@ -146,9 +147,17 @@ void main() {
 
   test('tierForProduct falls back to the product id naming without config', () async {
     final r = await repo();
-    expect(r.tierForProduct('com.bargain.wiz.premium'), SubscriptionTier.premium);
-    expect(r.tierForProduct('com.bargain.wiz.basic'), SubscriptionTier.basic);
+    expect(r.tierForProduct('com.bargain.wiz.premium.monthly'), SubscriptionTier.premium);
+    expect(r.tierForProduct('com.bargain.wiz.premium.weekly'), SubscriptionTier.premium);
     expect(r.tierForProduct('something.else'), SubscriptionTier.free);
+    await r.dispose();
+  });
+
+  test('the bundled fallback products carry the paywall option keys', () async {
+    final r = await repo();
+    final products = (await r.getAvailableProducts()).getOrElse(() => const []);
+    expect(products.map((p) => p.key), ['monthly', 'weekly']);
+    expect(products.map((p) => p.productId), SubscriptionRepositoryImpl.fallbackProductIds.values);
     await r.dispose();
   });
 }

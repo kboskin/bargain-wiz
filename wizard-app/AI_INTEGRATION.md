@@ -47,7 +47,7 @@ above) arrives as several entries sharing a key, and the order is the order the 
 them — onboarding screen order, which is the order the buyer block reads in. `prompt` is
 optional on an entry; `value` is carried so the answer can be stored and echoed back, and
 nothing in the function reads it.
-→ `{"seeing": "IKEA Kallax · $180 · slight scuff", "lines": [{"intent": "opener|counter|close", "text": "…", "why": "…"}], "model": "gemini-2.5-flash"}`
+→ `{"seeing": "IKEA Kallax · $180 · slight scuff", "lines": [{"intent": "opener|counter|close", "text": "…", "why": "…"}], "model": "gemini-3.8-flash"}`
 
 Limits: ≤ 10 images, ≤ 4 MB each, ≤ 16 MB together (also across chat turns), JPEG/PNG/WebP;
 the byte caps are a backstop — the app compresses to a few hundred KB per shot before upload;
@@ -77,7 +77,10 @@ is a valid request that simply produces a prompt with no buyer block. The buyer'
 hard to push are still the app's to decide and never a server default — the difference is that
 the function no longer knows those answers exist, so it has nothing to demand. The newest
 `MAX_MESSAGES` turns are used (200, the same as the cap on a conversation, so the model
-normally sees the whole chat); screenshots are kept newest-first within the 6-image budget.
+normally sees the whole chat); screenshots are kept newest-first within the `MAX_IMAGES`
+budget (10). Both are cost levers if they ever need to be: a Pro turn re-sends its whole
+window, text and screenshots, to the model on every call, and each screenshot is billed
+again every time.
 
 ### Screenshots: bytes once, then a URI
 
@@ -160,8 +163,17 @@ assigned by position, empty lines dropped).
 | Variable | Default | Meaning |
 |---|---|---|
 | `VERTEX_LOCATION` | `us-central1` | Vertex AI region |
-| `VERTEX_MODEL` | `gemini-2.5-flash` | Model id; swap to a newer Flash when available |
-| `VERTEX_THINKING_BUDGET` | `0` | Gemini 2.5 thinking tokens; 0 = off (fastest, cheapest), -1 = do not send (models without thinking) |
+| `VERTEX_MODEL` | `gemini-3.8-flash` | Model id (Gemini 2.5 Flash retires in Oct 2026) |
+| `VERTEX_THINKING_LEVEL` | `low` | Gemini 3 thinking level `low` / `medium` / `high`; 3.x Flash rejects `minimal` and cannot switch thinking off, and thinking tokens bill as output. Empty = not sent (model defaults to `high`) |
+| `VERTEX_TEMPERATURE` | `1.0` | Google strongly recommends the Gemini 3 default; empty = not sent |
+| `VERTEX_MEDIA_RESOLUTION` | `high` | Tokens per screenshot: `low` 280, `medium` 560, `high` 1,120. Chat screenshots need `high` |
+
+Every call logs one line, `gemini usage model=… prompt_tokens=… cached_tokens=… output_tokens=…
+thought_tokens=… total_tokens=…`, at INFO. `cached_tokens` is Vertex's implicit prompt caching
+(on by default for Gemini 2.5+; 3.x Flash needs a prompt of at least 4,096 tokens and an
+identical prefix, which is why the screenshots go before the transcript in `pro_parts`).
+`thought_tokens` is the number to watch: it is billed as output and Google publishes no
+figure for `low`. Build the cost dashboard from these lines before trusting any estimate.
 
 Requirements on the project: Vertex AI API enabled; the function's runtime service account
 needs **Vertex AI User** (`roles/aiplatform.user`). A stored screenshot is handed to Gemini
@@ -213,7 +225,18 @@ id → tier via `subscription_config`, kept in memory and in `SharedPreferences`
 initialises the store provider itself so the purchase stream is always wired. **Restore
 Purchases** re-reads the store and drops the entitlement only when the store reports no active
 purchase, so a lapsed subscription falls back to free. Feature
-gating (`FeatureGatePolicy`, fixed in code) and the paywall copy tell the user what each tier includes.
+gating (`FeatureGatePolicy`, fixed in code) and the paywall copy tell the user what the plan includes.
+
+**The offer (2026-09-21):** one paid tier, `premium`, which unlocks Express Dealmaker and
+Pro Deal Closer; `free` keeps Lines that land, History and Profile. The plan is sold as two
+store products, monthly (`com.bargain.wiz.premium.monthly`, $19.99, preselected, "Best
+value") and weekly (`com.bargain.wiz.premium.weekly`, $6.99), with **no free trial**
+(`trial_days: 0`, no explainer steps, no timeline). Each `subscription_config` product carries
+an `id` ("monthly" / "weekly") and the `paywall_config` option with the same `id` buys it, so
+the paywall resolves prices and product ids per option, not per tier. The store price is shown
+with the option's `price_suffix` ("$19.99" + "/mo") so the billing period is always next to
+the amount. Prices in `price_label` are only the offline fallback; the stores' regional
+price tiers are the source of truth.
 
 On iOS the plugin uses StoreKit 2 by default (`in_app_purchase_storekit` ≥ 0.4), so Restore
 reports only *current* entitlements and an expired subscription is not re-granted; purchase
@@ -230,7 +253,7 @@ Goal: cut multimodal cost by sending text instead of screenshots when possible.
 
 | Option | Cost | Quality | Effort |
 |---|---|---|---|
-| **Multimodal only (current)** — send downscaled screenshots to Gemini Flash | ~260 tokens per image on Flash; cents per 1000 requests at list price | Best: sees bubble sides (who said what), prices, badges, photos, strikethroughs | none |
+| **Multimodal only (current)** — send downscaled screenshots to Gemini Flash | 1,120 tokens per screenshot at `high` resolution on Gemini 3 (about $0.001 each at 2026 rates); a few cents per 10 reads | Best: sees bubble sides (who said what), prices, badges, photos, strikethroughs | none |
 | **On-device OCR (Google ML Kit Text Recognition v2)**, send text only | Free on device; text-only prompt is a few hundred tokens | Loses layout and who-said-what in chats; fine for listings; needs Latin script pack for es/en | medium: plugin, permission-free, ~1 day |
 | **Hybrid** — OCR on device, send text plus screenshots only when OCR confidence is low or the user asks | Lowest average cost | Near multimodal on listings, weaker on chats | medium+ |
 

@@ -85,9 +85,7 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
         return product.tierEnum;
       }
     }
-    if (productId.contains('premium')) return SubscriptionTier.premium;
-    if (productId.contains('basic')) return SubscriptionTier.basic;
-    return SubscriptionTier.free;
+    return productId.contains('premium') ? SubscriptionTier.premium : SubscriptionTier.free;
   }
 
   /// Entitlement implied by a store purchase (active while the store keeps reporting it).
@@ -152,6 +150,7 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
         );
         combined.add(SubscriptionProduct(
           productId: storeProduct.productId,
+          key: configProduct.id,
           tier: configProduct.tierEnum,
           title: _getMultilocaleText(configProduct.title, 'en'),
           description: _getMultilocaleText(configProduct.description, 'en'),
@@ -255,23 +254,33 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     }
   }
 
-  /// Fallback: hardcoded products if Remote Config is unavailable.
+  /// Fallback: the bundled products if Remote Config is unavailable (keys match the
+  /// bundled `paywall_config` options).
+  static const Map<String, String> fallbackProductIds = {
+    'monthly': 'com.bargain.wiz.premium.monthly',
+    'weekly': 'com.bargain.wiz.premium.weekly',
+  };
+
   Future<Either<Failure, List<SubscriptionProduct>>> _loadHardcodedProducts() async {
-    const productIds = ['com.bargain.wiz.basic', 'com.bargain.wiz.premium'];
-    final storeProducts = await _paymentProvider.loadProducts(productIds);
-    final products = storeProducts.map((sp) {
+    final storeProducts = await _paymentProvider.loadProducts(fallbackProductIds.values.toList());
+    final products = <SubscriptionProduct>[];
+    var order = 0;
+    for (final entry in fallbackProductIds.entries) {
+      final sp = storeProducts.where((p) => p.productId == entry.value).firstOrNull;
+      if (sp == null) continue;
       final tier = tierForProduct(sp.productId);
-      return SubscriptionProduct(
+      products.add(SubscriptionProduct(
         productId: sp.productId,
+        key: entry.key,
         tier: tier,
-        title: sp.title ?? tier.name.toUpperCase(),
-        description: sp.description ?? 'Subscription tier',
+        title: sp.title ?? entry.key,
+        description: sp.description ?? 'Subscription',
         price: sp.price,
         currency: sp.currency,
         features: const [],
-        displayOrder: tier == SubscriptionTier.basic ? 1 : 2,
-      );
-    }).toList();
+        displayOrder: ++order,
+      ));
+    }
     return Right(products);
   }
 

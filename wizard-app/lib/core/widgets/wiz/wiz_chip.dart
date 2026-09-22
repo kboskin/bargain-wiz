@@ -92,7 +92,7 @@ class WizChip extends StatelessWidget {
   }
 }
 
-/// Small solid tag (e.g. yellow "Vision" / "Recommended", intent tags).
+/// Small solid tag (e.g. the yellow 🔒 / "Best value" badges, intent tags).
 class WizTag extends StatelessWidget {
   const WizTag({
     super.key,

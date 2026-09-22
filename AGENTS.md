@@ -16,7 +16,7 @@ Two projects in one folder, one git repo. **The git root is this folder (`bwiz/`
 |---|---|
 | Client | Flutter 3.44.6 / Dart 3.12.2 (always through `fvm`), BLoC + Cubit, GetIt, `dartz` `Either`, go_router, Dio, `json_serializable` |
 | Functions | Python 3.12 on Cloud Functions **2nd gen** (`firebase-functions`), pydantic **v2** request models, `firebase-admin` for Firestore / Storage / Auth, Pillow for image re-encoding |
-| Model | Gemini (`gemini-2.5-flash` by default) on **Vertex AI** via the `google-genai` SDK — JSON-schema-constrained output only, never free text |
+| Model | Gemini (`gemini-3.8-flash` by default, thinking level `low`, media resolution `high`) on **Vertex AI** via the `google-genai` SDK — JSON-schema-constrained output only, never free text |
 | Async work | Cloud Tasks queue `generate` (also the project-wide rate limiter) + Cloud Scheduler job `refresh_lines` |
 | Data | Firestore (profiles, conversations, generated Lines content), Cloud Storage (screenshots), Firebase Remote Config (screen templates and `api_url`) |
 | Identity | Firebase Auth — anonymous from first launch, upgraded in place to Google / Apple; App Check behind a flag |

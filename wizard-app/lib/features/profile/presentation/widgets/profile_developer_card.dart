@@ -6,7 +6,7 @@ import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
 import 'package:appwizard/features/profile/presentation/widgets/profile_chip_card.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 
-/// Developer row (debug / dev builds only): tier override chips free · basic · premium · off.
+/// Developer row (debug / dev builds only): tier override chips free · premium · off.
 class ProfileDeveloperCard extends StatelessWidget {
   const ProfileDeveloperCard({super.key, required this.tierOverride, required this.onChange});
 

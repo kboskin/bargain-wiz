@@ -36,8 +36,6 @@ class SubscriptionStatus extends Equatable {
     switch (requiredTier) {
       case SubscriptionTier.free:
         return true;
-      case SubscriptionTier.basic:
-        return tier == SubscriptionTier.basic || tier == SubscriptionTier.premium;
       case SubscriptionTier.premium:
         return tier == SubscriptionTier.premium;
     }

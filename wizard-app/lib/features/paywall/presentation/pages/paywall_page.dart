@@ -32,8 +32,9 @@ import 'package:appwizard/features/subscription/presentation/bloc/subscription_e
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_state.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 
-/// Full-screen paywall modal (design handoff §7): explainer steps (intro → reminder) then the
-/// plans step (cards / list / compact) with the trial timeline.
+/// Full-screen paywall modal (design handoff §7): optional explainer steps, then the plans
+/// step (cards / list / compact) with the monthly / weekly options of the one paid plan. The
+/// trial timeline only renders when a trial is configured.
 ///
 /// Pops with `true` when access is granted (purchase, restore or debug override) and
 /// `false` when closed. Open it through [PaywallLauncher]; requires a [SubscriptionBloc]
@@ -235,7 +236,11 @@ class _PaywallPageState extends State<PaywallPage> {
       WizToast.show(context, _l10n?.productNotAvailable ?? 'Product not available');
       return;
     }
-    _analytics.logPaywallCtaTap(paywallType: c.type, tier: option.tier);
+    _analytics.logPaywallCtaTap(
+      paywallType: c.type,
+      tier: option.tier,
+      additionalParams: {'option_id': option.id},
+    );
     setState(() => _purchasing = true);
     _armPurchaseWatchdog();
     context.read<SubscriptionBloc>().add(PurchaseSubscriptionRequested(productId));
@@ -280,7 +285,7 @@ class _PaywallPageState extends State<PaywallPage> {
       if (c != null && option != null) {
         _analytics.logEvent(
           name: 'purchase_success',
-          parameters: {'paywall_type': c.type, 'tier': option.tier},
+          parameters: {'paywall_type': c.type, 'tier': option.tier, 'option_id': option.id},
         );
       }
       _grantAccess(_l10n?.subscriptionActivated ?? 'Subscription activated!');
@@ -295,7 +300,12 @@ class _PaywallPageState extends State<PaywallPage> {
       if (c != null && option != null && !wasRestoring) {
         _analytics.logEvent(
           name: 'purchase_fail',
-          parameters: {'paywall_type': c.type, 'tier': option.tier, 'error': state.message},
+          parameters: {
+            'paywall_type': c.type,
+            'tier': option.tier,
+            'option_id': option.id,
+            'error': state.message,
+          },
         );
       }
       WizToast.show(context, state.message);
@@ -437,7 +447,7 @@ class _PaywallPageState extends State<PaywallPage> {
       resolve: (v) => TemplateText.textOf(context, v),
       locale: locale,
     );
-    final ctaLabel = TemplateText.textOf(context, config.nextButtonText, fallback: 'Try for free');
+    final ctaLabel = TemplateText.textOf(context, config.nextButtonText, fallback: 'Unlock Bargain Wiz');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -484,7 +494,7 @@ class _PaywallPageState extends State<PaywallPage> {
           template: TemplateText.textOf(
             context,
             config.noteText,
-            fallback: 'Free trial, then {price}. Cancel anytime.',
+            fallback: '{price}, renews automatically. Cancel anytime.',
           ),
           price: price,
         ),
@@ -561,7 +571,7 @@ class _ContextHint extends StatelessWidget {
       );
 }
 
-/// "Free trial, then **$7.99/wk**. Cancel anytime." — `{price}` rendered bold.
+/// "**$19.99/mo**, renews automatically. Cancel anytime." — `{price}` rendered bold.
 class _NoteText extends StatelessWidget {
   const _NoteText({required this.template, required this.price});
 

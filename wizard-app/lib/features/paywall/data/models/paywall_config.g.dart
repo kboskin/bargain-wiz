@@ -175,6 +175,7 @@ PaywallOption _$PaywallOptionFromJson(Map<String, dynamic> json) =>
           ? const []
           : PaywallOption._featuresFromJson(json['features']),
       priceLabel: PaywallOption._multilocaleFromJson(json['price_label']),
+      priceSuffix: PaywallOption._multilocaleFromJson(json['price_suffix']),
     );
 
 Map<String, dynamic> _$PaywallOptionToJson(PaywallOption instance) =>
@@ -186,6 +187,7 @@ Map<String, dynamic> _$PaywallOptionToJson(PaywallOption instance) =>
       'badge': instance.badge,
       'features': instance.features,
       'price_label': instance.priceLabel,
+      'price_suffix': instance.priceSuffix,
     };
 
 PaywallMetadata _$PaywallMetadataFromJson(Map<String, dynamic> json) =>

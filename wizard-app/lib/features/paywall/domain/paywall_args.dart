@@ -1,9 +1,7 @@
-/// Why the paywall was opened. Drives the context hint and the preselected plan.
+/// Why the paywall was opened. Drives the context hint.
 enum PaywallEntry {
-  /// Free user tapped Express Dealmaker → hint "free", Vision preselected.
+  /// Free user tapped Express Dealmaker → hint "free".
   expressFree,
-  /// Basic (Text Wizard) user tapped Express → hint "basic_express", Vision preselected.
-  expressBasic,
   /// Free user tapped Pro Deal Closer → hint "free".
   proFree,
   /// Profile → Manage / Upgrade. No hint.
@@ -19,8 +17,6 @@ enum PaywallEntry {
       case PaywallEntry.expressFree:
       case PaywallEntry.proFree:
         return 'free';
-      case PaywallEntry.expressBasic:
-        return 'basic_express';
       case PaywallEntry.profile:
       case PaywallEntry.onboarding:
       case PaywallEntry.other:
@@ -35,6 +31,6 @@ class PaywallArgs {
   const PaywallArgs({this.entry = PaywallEntry.other, this.preselectOptionId});
 
   final PaywallEntry entry;
-  /// Option id to preselect ("vision" / "text"); falls back to config default.
+  /// Option id to preselect ("monthly" / "weekly"); falls back to the config default.
   final String? preselectOptionId;
 }

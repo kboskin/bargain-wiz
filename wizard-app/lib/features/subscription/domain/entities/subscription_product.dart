@@ -4,6 +4,8 @@ import 'package:appwizard/features/subscription/domain/entities/subscription_tie
 /// Subscription product entity - represents a purchasable subscription
 class SubscriptionProduct extends Equatable {
   final String productId;
+  /// `subscription_config` key ("monthly", "weekly"); null for configs without ids.
+  final String? key;
   final SubscriptionTier tier;
   final String title; // Multilocale string or simple string
   final String description; // Multilocale string or simple string
@@ -14,6 +16,7 @@ class SubscriptionProduct extends Equatable {
 
   const SubscriptionProduct({
     required this.productId,
+    this.key,
     required this.tier,
     required this.title,
     required this.description,
@@ -26,6 +29,7 @@ class SubscriptionProduct extends Equatable {
   @override
   List<Object?> get props => [
         productId,
+        key,
         tier,
         title,
         description,

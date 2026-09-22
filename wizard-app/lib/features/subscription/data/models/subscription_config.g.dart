@@ -22,6 +22,7 @@ Map<String, dynamic> _$SubscriptionConfigToJson(SubscriptionConfig instance) =>
 SubscriptionProductConfig _$SubscriptionProductConfigFromJson(
   Map<String, dynamic> json,
 ) => SubscriptionProductConfig(
+  id: json['id'] as String?,
   tier: json['tier'] as String,
   productId: ProductIdConfig.fromJson(
     json['product_id'] as Map<String, dynamic>,
@@ -39,6 +40,7 @@ SubscriptionProductConfig _$SubscriptionProductConfigFromJson(
 Map<String, dynamic> _$SubscriptionProductConfigToJson(
   SubscriptionProductConfig instance,
 ) => <String, dynamic>{
+  'id': instance.id,
   'tier': instance.tier,
   'product_id': instance.productId,
   'title': instance.title,

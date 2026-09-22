@@ -31,32 +31,34 @@ class PaywallText {
   }
 }
 
-/// Price lookup: store product (matching tier) → `price_label` from config → null (hidden).
+/// Price lookup: store product for the option → `price_label` from config → null (hidden).
 class PaywallPricing {
   PaywallPricing._();
 
+  /// The `subscription_config` product an option buys: the one whose key is the option id
+  /// (billing periods of one tier), else the tier's product when the tier has exactly one.
   static SubscriptionProduct? productFor(
     PaywallOption option,
     List<SubscriptionProduct> products,
   ) {
-    final tier = option.tierEnum;
-    for (final p in products) {
-      if (p.tier == tier) return p;
-    }
-    return null;
+    final byKey = products.where((p) => p.key == option.id).firstOrNull;
+    if (byKey != null) return byKey;
+    final byTier = products.where((p) => p.tier == option.tierEnum).toList();
+    return byTier.length == 1 ? byTier.first : null;
   }
 
-  /// Store product id for [option], else the tier's fallback constant.
+  /// Store product id for [option]; null until the products are loaded.
   static String? productIdFor(PaywallOption option, List<SubscriptionProduct> products) =>
-      productFor(option, products)?.productId ?? option.tierEnum.getProductId();
+      productFor(option, products)?.productId;
 
+  /// Store price with the option's `price_suffix` ("$19.99" + "/mo"), else the static label.
   static String? priceFor(
     PaywallOption option,
     List<SubscriptionProduct> products, {
     PaywallTextResolver resolve = PaywallText.plain,
   }) {
-    final store = productFor(option, products)?.price;
-    if (store != null && store.trim().isNotEmpty) return store.trim();
+    final store = productFor(option, products)?.price?.trim();
+    if (store != null && store.isNotEmpty) return '$store${resolve(option.priceSuffix).trim()}';
     final label = resolve(option.priceLabel).trim();
     return label.isEmpty ? null : label;
   }
@@ -106,6 +108,7 @@ class PaywallTimelineRow {
 
 /// Builds timeline rows from `trial_timeline` (preferred), the legacy `timeline_*`
 /// fields, or three hardcoded rows. Placeholders: `{date}`, `{plan}`, `{price}`, `{day}`.
+/// No rows at all when there is no trial (`trial_days` 0) and nothing is configured.
 class PaywallTimelineBuilder {
   PaywallTimelineBuilder._();
 
@@ -128,6 +131,7 @@ class PaywallTimelineBuilder {
     String Function(DateTime date)? formatDate,
     String? locale,
   }) {
+    if (config.trialTimeline.isEmpty && config.trialDays <= 0) return const [];
     final fmt = formatDate ?? ((d) => PaywallDates.monthDay(d, locale: locale));
     final today = DateTime(now.year, now.month, now.day);
 

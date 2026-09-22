@@ -35,7 +35,7 @@ It collapses that skill into a copy-paste action:
 Secondary value: a library of proven "lines that land" for opening, following up, and closing, available even without a screenshot.
 
 ### Business model
-Freemium with a 3-day free trial and two subscription tiers (text-only vs. text + image recognition). Referral program and share prompts for growth. Rate-us prompt feeding App Store / Play Store reviews.
+Free tier (Lines that land, History, Profile) plus one paid plan, Premium, sold monthly ($19.99, preselected as "Best value") or weekly ($6.99), with no free trial at launch (2026-09-21 decision; the earlier text-only vs. vision tiers and the 3-day trial were dropped). Referral program and share prompts for growth. Rate-us prompt feeding App Store / Play Store reviews.
 
 ---
 
@@ -137,9 +137,8 @@ Home
 ├─ Dialog – Rate Us ("Are you satisfied?" star Lottie, No / Yes)
 └─ Drawer (frosted glass): Profile*, Bargains History*, Rate Us, Refer, Terms, Privacy, Log out
 Paywall (modal, also shown on app resume)
-├─ Step 1 "intro": "We want you to try Bargain Wiz for free." [Try for $0.00]
-├─ Step 2 "reminder": "We'll send you a reminder before your free trial ends." [Continue for FREE]
-└─ Plans: Text Wizard (basic) vs Vision Wizard (premium, "Recommended") · trial timeline · [Try for free] · note · Restore · Terms/Privacy · delayed ✕
+└─ Plans: Monthly ("Best value", preselected) vs Weekly · [Unlock Bargain Wiz] · note "{price}, renews automatically. Cancel anytime." · Restore · Terms/Privacy · delayed ✕
+   (explainer steps and the trial timeline stay remote-configurable but are off: no trial at launch)
 Feedback form (email optional, message required, [Send])
 Sign-in modal (Google / Apple)
 ```
@@ -219,9 +218,9 @@ Confident, short, a little cheeky. "Choose your magic." "Your deal, upgraded." "
 
 ### 8.5 Paywall (J6)
 - Multi-step: two persuasion steps (intro with vision-wizard Lottie, reminder with bell Lottie), each with its own headline, note ("No payment due now."), and button text.
-- Plan step: title "Unlock Bargain Wizard", subtitle "Choose your negotiation power."; two option cards with 170×170 Lottie, glow border on selected, "Recommended" badge on Vision Wizard; vertical **trial timeline** (Today unlock → reminder → billing after 3 days); note "Free trial, then subscription. Cancel anytime."; **[Try for free]**; Restore Purchases; Terms / Privacy links; close ✕ appears after 5 s (configurable, currently hidden).
+- Plan step: title "Unlock Bargain Wiz", subtitle "One plan. Every wizard power."; two option cards (Monthly · "Best value" · preselected, Weekly), glow border on selected, colour mascot on the preselected card and greyscale on the other; price line "$19.99/mo" / "$6.99/wk" (store price + period suffix); note "{price}, renews automatically. Cancel anytime."; **[Unlock Bargain Wiz]**; Restore Purchases; Terms / Privacy links; close ✕ appears after 5 s (configurable). The trial timeline and the intro / reminder explainer steps render only when a trial is configured (`trial_days` > 0 or `steps` non-empty).
 - Layout variants required: `cards`, `list`, `compact`.
-- Tiers: **Basic / "Text Wizard"** = text model only. **Premium / "Vision Wizard"** = text + image recognition.
+- Tiers: **Free** = Lines that land, History, Profile. **Premium** = Express Dealmaker, Pro Deal Closer (screenshots included in both), unlimited deals. Billing period (monthly / weekly) is a product choice, not a tier.
 
 ### 8.6 Lines that land (J3)
 Glass bottom sheet, drag handle, ✕. Loading shows waving wizard. Then category cards (Opening lines, Follow-ups, Closing), each showing one pill-shaped line with a copy icon. Tap = copy + snackbar "Copied to clipboard". Content is remote-configured, so design should allow N categories × N lines and consider a "shuffle / see more" affordance.
@@ -259,7 +258,7 @@ Replaces the empty state once ≥1 conversation exists. 3-column grid of 140×18
 | Home | Empty state, history grid, and Express mode all share one screen. Consider a clearer home vs. mode separation or a bottom tab bar (Home · Lines · History · Profile). |
 | Express results | No way to give feedback on a line (👍/👎), no tone chips, no "explain why this works". Consider adding. |
 | Naming | "Pro Deal Closer" page title in code is "Deal lines"; onboarding calls the product "Bargain Wizard" while everywhere else it's "Bargain Wiz". Pick one. |
-| Paywall trigger | Currently opens on every app resume (debug behavior). Design intended entry points: after onboarding, on tapping a premium-only feature (screenshot upload for Basic), from profile. |
+| Paywall trigger | Opens on the first Express or Pro tap for free users, and from Profile → Upgrade / Manage. No paywall inside onboarding. |
 | Free tier | What does a `free` user see? Define locked states / blurred results / "1 free deal per day" style teaser. |
 | Dark mode | Text styles exist; palette and glass treatment do not. Optional deliverable. |
 | Empty & error states | Network offline, AI failure, no photo permission, gallery unavailable all have copy but no illustrated states. |
@@ -305,5 +304,5 @@ Use these as starting prompts for an AI mockup tool; each assumes a 390×844 iPh
 - **Lines that land** – curated library of negotiation phrases by category.
 - **Deal reply / reply options** – the list of AI-generated lines returned for a screenshot batch.
 - **Vibe** – the tone preset (Friendly / No-Nonsense / Tactical / Quiet Closer) chosen at onboarding.
-- **Text Wizard / Vision Wizard** – marketing names for the Basic and Premium tiers.
+- **Premium** – the one paid plan (monthly or weekly). "Text Wizard" / "Vision Wizard" were the retired names of the earlier two-tier offer.
 - **Bargains history** – saved conversations of either mode, shown as a thumbnail grid.
