@@ -43,7 +43,7 @@ def test_build_patch_validates_and_normalises_known_sections():
                             "experience_level": "pro", "gone": None},
             "onboarding_status": {"completed": True},
             "referral": {"code": " FRIEND-42 "},
-            "app": {"platform": "android", "flavor": "dev"},
+            "app": {"platform": "android", "flavor": "dev"},  # flavor: no longer stored
             "unknown_section": {"x": 1},
         },
         up.Identity(uid="u1"),
@@ -55,9 +55,17 @@ def test_build_patch_validates_and_normalises_known_sections():
                                     "experience_level": "pro", "gone": DELETE}
     assert patch["onboarding_status"] == {"completed_at": SERVER_TIME}
     assert patch["referral"] == {"code": "FRIEND-42", "entered_at": SERVER_TIME}
-    assert patch["app"] == {"platform": "android", "flavor": "dev"}
+    assert patch["app"] == {"platform": "android"}
     assert patch["identity"] == {"uid": "u1"}
     assert "unknown_section" not in patch and patch["schema_version"] == up.SCHEMA_VERSION
+
+
+def test_build_patch_keeps_the_fcm_token_whole():
+    token = "d" * 40 + ":APA91b" + "x" * 200  # longer than any other `app` field may be
+    patch = up.build_patch({"app": {"fcm_token": f" {token} "}}, up.Identity(uid="u1"))
+    assert patch["app"] == {"fcm_token": token}
+    with pytest.raises(BadRequest):
+        up.build_patch({"app": {"fcm_token": 42}}, up.Identity(uid="u1"))
 
 
 def test_build_patch_rejects_wrong_types():

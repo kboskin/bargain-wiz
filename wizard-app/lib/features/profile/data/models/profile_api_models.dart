@@ -21,6 +21,7 @@ class ProfileOnboardingStatus {
       _$ProfileOnboardingStatusFromJson(json);
 
   /// Request only: `true` stamps `completed_at` on the server.
+  @JsonKey(name: 'completed')
   final bool? completed;
 
   /// Response only.
@@ -36,6 +37,7 @@ class ProfileReferral {
 
   factory ProfileReferral.fromJson(Map<String, dynamic> json) => _$ProfileReferralFromJson(json);
 
+  @JsonKey(name: 'code')
   final String? code;
   @JsonKey(name: 'entered_at')
   final String? enteredAt;
@@ -45,14 +47,20 @@ class ProfileReferral {
 
 @JsonSerializable(includeIfNull: false)
 class ProfileApp {
-  const ProfileApp({this.platform, this.version, this.flavor, this.locale});
+  const ProfileApp({this.platform, this.version, this.locale, this.fcmToken});
 
   factory ProfileApp.fromJson(Map<String, dynamic> json) => _$ProfileAppFromJson(json);
 
+  @JsonKey(name: 'platform')
   final String? platform;
+  @JsonKey(name: 'version')
   final String? version;
-  final String? flavor;
+  @JsonKey(name: 'locale')
   final String? locale;
+
+  /// This install's FCM registration token, the address a push to this person goes to.
+  @JsonKey(name: 'fcm_token')
+  final String? fcmToken;
 
   Map<String, dynamic> toJson() => _$ProfileAppToJson(this);
 }
@@ -64,7 +72,9 @@ class ProfileIdentity {
 
   factory ProfileIdentity.fromJson(Map<String, dynamic> json) => _$ProfileIdentityFromJson(json);
 
+  @JsonKey(name: 'uid')
   final String? uid;
+  @JsonKey(name: 'provider')
   final String? provider;
 
   Map<String, dynamic> toJson() => _$ProfileIdentityToJson(this);
@@ -77,10 +87,13 @@ class ProfilePatchRequest {
 
   factory ProfilePatchRequest.fromJson(Map<String, dynamic> json) => _$ProfilePatchRequestFromJson(json);
 
+  @JsonKey(name: 'preferences')
   final Map<String, dynamic>? preferences;
   @JsonKey(name: 'onboarding_status')
   final ProfileOnboardingStatus? onboardingStatus;
+  @JsonKey(name: 'referral')
   final ProfileReferral? referral;
+  @JsonKey(name: 'app')
   final ProfileApp? app;
 
   Map<String, dynamic> toJson() => _$ProfilePatchRequestToJson(this);
@@ -104,11 +117,15 @@ class ProfileDocument {
 
   @JsonKey(name: 'schema_version')
   final int? schemaVersion;
+  @JsonKey(name: 'identity')
   final ProfileIdentity? identity;
+  @JsonKey(name: 'preferences')
   final Map<String, dynamic>? preferences;
   @JsonKey(name: 'onboarding_status')
   final ProfileOnboardingStatus? onboardingStatus;
+  @JsonKey(name: 'referral')
   final ProfileReferral? referral;
+  @JsonKey(name: 'app')
   final ProfileApp? app;
   @JsonKey(name: 'created_at')
   final String? createdAt;

@@ -92,7 +92,8 @@ goes through the `profile` function, and the security rules deny client access t
     "completed_at": "2026-09-17T12:00:00Z"       // server time, set when completed=true
   },
   "referral": {"code": "FRIEND-42", "entered_at": "…"},
-  "app": {"platform": "ios | android", "flavor": "dev | prod", "locale": "en", "version": "…"},
+  "app": {"platform": "ios | android", "locale": "en", "version": "…",
+          "fcm_token": "…"},                     // this install's FCM registration token
   "created_at": "…",
   "updated_at": "…"
 }
@@ -172,7 +173,19 @@ Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUN
 | Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `onboarding_status.completed: true`. Best effort: onboarding finishes even if the backend is down. |
 | Profile screen edit | `UserProfileService` stores the answer, then calls `schedulePush`: a debounced (1.5 s) push of the full current state, which the server merges. |
 | Sign-in (`authStateChanges`) | Push once (server merges the anonymous profile), then if the device has no local answers, `GET` the account profile and save its answers locally (`saveOnboardingData` + `refresh`), so the profile follows the user. |
+| FCM token | `FirebaseService.fcmTokens()` — the token at launch, then every rotation. Every push above carries the latest as `app.fcm_token`; a token that arrives while the app runs is also sent on its own (`{"app": {"fcm_token": …}}`) when the device has answers, so an existing profile learns it without waiting for an edit. That is one small write per launch, which doubles as the "still in use" signal for pruning stale tokens. Not retried: the next launch or edit sends it again. |
 | Failure | Retried once after 30 s with the same patch (a change made meanwhile pushes the full state instead). A failed retry is reported to Crashlytics as a non-fatal — the count of profiles the server is missing — and is not retried again: the next change pushes the full state. |
+
+### The FCM token
+
+`app.fcm_token` is where a push to this person goes. It is reported whether or not the
+notification permission was granted — the token exists either way; the permission only
+decides whether an alert is shown — so a sender has to expect some tokens it can reach but
+not alert. One token per profile, like the rest of `app`: the last device to push wins, so a
+person signed in on two devices is reachable on the last one used. Nothing is sent while no
+token can be had (iOS before APNs registers; and on iOS APNs cannot register until the push
+capability exists, see `../AGENTS.md`), and a missing token never deletes a stored one. The
+function stores it trimmed and never clipped: a truncated token addresses nothing.
 
 ## Funnel analytics
 
@@ -232,8 +245,8 @@ switches it, and that session keeps reporting under the uid it started with unti
 launch — which the profile document and Firebase Auth both record properly anyway.
 
 The uid is the **only** identity reported, and **no user properties are set at all**. Who that
-uid turned out to be lives on `identity.provider` above and in Firebase Auth; which build it was
-lives on `app` above; the answers live in `preferences` and on the funnel events. All of it joins to Analytics on the uid whenever it is actually wanted, and a user
+uid turned out to be lives on `identity.provider` above and in Firebase Auth; which device it was
+lives on `app` above (each Firebase project is one flavor, so the flavor is not recorded); the answers live in `preferences` and on the funnel events. All of it joins to Analytics on the uid whenever it is actually wanted, and a user
 property would only be a second copy to keep true. (The `local` flavor turns collection off
 in the SDK, in `FirebaseService`, so emulator runs stay out of the data entirely.)
 

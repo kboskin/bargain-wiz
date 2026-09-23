@@ -118,6 +118,23 @@ class FirebaseService {
     }
   }
 
+  /// This install's FCM registration token, then every new one FCM issues. Best effort: a
+  /// token that cannot be had yet is simply not emitted — on iOS `getToken` throws until APNs
+  /// has registered the device, and the refresh stream delivers the token once it has.
+  /// Independent of the notification permission: the token exists either way.
+  static Stream<String> fcmTokens() async* {
+    final messaging = _messaging;
+    if (messaging == null) return;
+    String? token;
+    try {
+      token = await messaging.getToken();
+    } on Object catch (e) {
+      debugPrint('[WARN] No FCM token yet: $e');
+    }
+    if (token != null) yield token;
+    yield* messaging.onTokenRefresh;
+  }
+
   /// Local flavor: Auth, Firestore and Storage talk to `firebase emulators:start`
   /// (wizard-backend/firebase.json ports). Must run before any of them is used. Remote Config
   /// has no emulator and keeps reading the dev project; the Functions emulator URL replaces

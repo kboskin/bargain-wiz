@@ -162,7 +162,7 @@ void main() {
     expect((patch['preferences'] as Map).containsKey('referral_code'), isFalse);
     expect(patch['onboarding_status'], {'completed': true});
     expect(patch['referral'], {'code': 'FRIEND-42'});
-    expect((patch['app'] as Map)['flavor'], isNotNull);
+    expect((patch['app'] as Map)['platform'], isNotNull);
     expect((patch['app'] as Map)['locale'], 'es');
   });
 
@@ -266,4 +266,61 @@ void main() {
     expect(onboarding.saved, isNull);
   });
 
+  group('the FCM token', () {
+    late StreamController<String> tokens;
+
+    setUp(() {
+      tokens = StreamController<String>();
+      service.dispose();
+      service = ProfileSyncService(
+        profile: profile,
+        remote: remote,
+        auth: auth,
+        onboarding: onboarding,
+        logger: _SilentLogger(),
+        debounce: Duration.zero,
+        retryDelay: const Duration(days: 1),
+        localeCode: () => 'es',
+        fcmTokens: () => tokens.stream,
+      );
+    });
+
+    tearDown(() => tokens.close());
+
+    test('rides on every push once FCM has handed one over', () async {
+      service.start();
+      expect((service.buildPatch(entity, completed: true).toJson()['app'] as Map).containsKey('fcm_token'), isFalse);
+
+      tokens.add('token-1');
+      await Future<void>.delayed(Duration.zero);
+
+      expect((service.buildPatch(entity, completed: true).toJson()['app'] as Map)['fcm_token'], 'token-1');
+    });
+
+    test('is reported on its own to an existing profile, and again only when it changes', () async {
+      profile.entity = entity;
+      service.start();
+
+      tokens
+        ..add('token-1')
+        ..add('token-1') // FCM may repeat itself; nothing new to say
+        ..add('token-2');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(remote.patches.map((final p) => p.toJson()), [
+        {'app': {'fcm_token': 'token-1'}},
+        {'app': {'fcm_token': 'token-2'}},
+      ]);
+    });
+
+    test('is not reported before there is a profile: the onboarding push carries it', () async {
+      service.start();
+      tokens.add('token-1');
+      await Future<void>.delayed(Duration.zero);
+      expect(remote.patches, isEmpty);
+
+      await service.pushOnboarding(entity);
+      expect(remote.patches.single.app!.fcmToken, 'token-1');
+    });
+  });
 }

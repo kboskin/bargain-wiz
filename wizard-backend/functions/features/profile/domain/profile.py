@@ -20,7 +20,8 @@ Sections (all optional in a PATCH; nested maps merge, `null` deletes a leaf):
                   funnel finished. Experiment assignment is Firebase A/B Testing's job
                   (Analytics user properties), not stored here.
     referral      code entered during onboarding, write-once ([WRITE_ONCE])
-    app           last seen platform / version / flavor / locale
+    app           last seen platform / version / locale, and that install's
+                  `fcm_token` (the address a push goes to; one per profile, last device wins)
     identity      server-managed: uid, provider
 
 Pure Python; `ProfileStore` abstracts Firestore so the logic is unit-testable.
@@ -32,7 +33,7 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from core.errors import BadRequest, NotFound, Unauthorized
 from core.firestore import DELETE, SERVER_TIME
-from core.validation import clip_text, validate_model
+from core.validation import clip_text, trimmed, validate_model
 
 logger = logging.getLogger("profile")
 
@@ -208,13 +209,18 @@ class ReferralPatch(_Section):
 class AppPatch(_Section):
     platform: str | None = None
     version: str | None = None
-    flavor: str | None = None
     locale: str | None = None
+    fcm_token: str | None = None
 
-    @field_validator("platform", "version", "flavor", "locale", mode="before")
+    @field_validator("platform", "version", "locale", mode="before")
     @classmethod
     def _text(cls, value: object) -> str | None:
         return clip_text(value, 64, ellipsis=False)
+
+    @field_validator("fcm_token", mode="before")
+    @classmethod
+    def _token(cls, value: object) -> str | None:
+        return trimmed(value)  # never clipped: a truncated token addresses nothing
 
 
 class ProfilePatchBody(BaseModel):

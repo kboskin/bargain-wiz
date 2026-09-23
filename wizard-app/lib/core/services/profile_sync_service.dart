@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:ui' show PlatformDispatcher;
 
-import 'package:appwizard/core/config/app_config.dart';
 import 'package:appwizard/core/services/auth_service.dart';
+import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
@@ -21,6 +21,8 @@ import 'package:appwizard/features/profile/domain/profile_fields.dart';
 /// - Signing in pushes once more (the server folds the install's anonymous profile into
 ///   the account) and, on a device with no local answers, pulls the account's answers down
 ///   so the profile follows the user.
+/// - Every push carries this install's FCM token (`app.fcm_token`); a token that arrives or
+///   changes while the app runs is reported on its own ([_onFcmToken]).
 ///
 /// Every push is a partial update: the server merges. A failure is retried once after
 /// [retryDelay], and a failed retry is reported to Crashlytics; the UI never waits on this
@@ -35,12 +37,14 @@ class ProfileSyncService {
     this.debounce = const Duration(milliseconds: 1500),
     this.retryDelay = const Duration(seconds: 30),
     String Function()? localeCode,
+    final Stream<String> Function()? fcmTokens,
   })  : _profile = profile,
         _remote = remote,
         _auth = auth,
         _onboarding = onboarding,
         _logger = logger,
-        _localeCode = localeCode ?? (() => PlatformDispatcher.instance.locale.languageCode);
+        _localeCode = localeCode ?? (() => PlatformDispatcher.instance.locale.languageCode),
+        _fcmTokens = fcmTokens ?? FirebaseService.fcmTokens;
 
   final UserProfileService _profile;
   final ProfileRemoteDataSource _remote;
@@ -50,14 +54,19 @@ class ProfileSyncService {
   final Duration debounce;
   final Duration retryDelay;
   final String Function() _localeCode;
+  final Stream<String> Function() _fcmTokens;
 
   /// The one `preferences` entry that is not an onboarding answer.
   static const String _localeKey = 'locale';
 
   Timer? _timer;
   StreamSubscription<Object?>? _authSub;
+  StreamSubscription<String>? _fcmSub;
   bool _started = false;
   bool _hadAccount = false;
+
+  /// The latest FCM token this install has been given; null until FCM hands one over.
+  String? _fcmToken;
 
   void start() {
     if (_started) return;
@@ -67,11 +76,36 @@ class ProfileSyncService {
       if (account && !_hadAccount) unawaited(onSignedIn());
       _hadAccount = account;
     });
+    _fcmSub = _fcmTokens().listen(
+      (final token) => unawaited(_onFcmToken(token)),
+      onError: (final Object e) => _logger.w('FCM token unavailable: $e'),
+    );
   }
 
   void dispose() {
     _timer?.cancel();
     _authSub?.cancel();
+    _fcmSub?.cancel();
+  }
+
+  /// A token FCM just handed over — at launch, or a rotated one. Every push carries the
+  /// latest ([buildPatch]); this sends it on its own as well, so a profile that already exists
+  /// learns it without waiting for the next edit. That is one small write per launch, which
+  /// also tells the server the token is still in use. Before there is a profile there is
+  /// nothing to report to: the onboarding push carries it.
+  ///
+  /// Not retried — the next launch or edit sends it again, and a retry here would replace a
+  /// pending full push ([_push] owns the one timer).
+  Future<void> _onFcmToken(final String token) async {
+    if (token == _fcmToken) return;
+    _fcmToken = token;
+    await _profile.ensureLoaded();
+    if (_profile.answers.isEmpty) return;
+    try {
+      await _remote.patch(ProfilePatchRequest(app: ProfileApp(fcmToken: token)));
+    } on Object catch (e) {
+      _logger.w('FCM token report failed: $e');
+    }
   }
 
   /// Pushes the stored answers after [debounce] (a later call restarts the wait), so a run of
@@ -162,8 +196,8 @@ class ProfileSyncService {
       referral: code == null || code.isEmpty ? null : ProfileReferral(code: code),
       app: ProfileApp(
         platform: Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : Platform.operatingSystem),
-        flavor: AppConfig.flavor,
         locale: _localeCode(),
+        fcmToken: _fcmToken,
       ),
     );
   }

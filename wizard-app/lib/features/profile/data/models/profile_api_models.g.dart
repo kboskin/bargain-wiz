@@ -35,16 +35,16 @@ Map<String, dynamic> _$ProfileReferralToJson(ProfileReferral instance) =>
 ProfileApp _$ProfileAppFromJson(Map<String, dynamic> json) => ProfileApp(
   platform: json['platform'] as String?,
   version: json['version'] as String?,
-  flavor: json['flavor'] as String?,
   locale: json['locale'] as String?,
+  fcmToken: json['fcm_token'] as String?,
 );
 
 Map<String, dynamic> _$ProfileAppToJson(ProfileApp instance) =>
     <String, dynamic>{
       'platform': ?instance.platform,
       'version': ?instance.version,
-      'flavor': ?instance.flavor,
       'locale': ?instance.locale,
+      'fcm_token': ?instance.fcmToken,
     };
 
 ProfileIdentity _$ProfileIdentityFromJson(Map<String, dynamic> json) =>
