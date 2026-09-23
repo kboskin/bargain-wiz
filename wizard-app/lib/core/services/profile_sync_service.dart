@@ -105,19 +105,17 @@ class ProfileSyncService {
     _fcmSub?.cancel();
   }
 
-  /// A token FCM just handed over — at launch, or a rotated one. Every push carries the
-  /// latest ([buildPatch]); this sends it on its own as well, so a profile that already exists
-  /// learns it without waiting for the next edit. That is one small write per launch, which
-  /// also tells the server the token is still in use. Before there is a profile there is
-  /// nothing to report to: the onboarding pushes carry it.
+  /// A token FCM just handed over — at launch, or a rotated one — is sent on its own right
+  /// away, answers or not: the token never waits on another push to carry it. Every push
+  /// also carries the latest ([buildPatch]). That is one small write per launch, which also
+  /// tells the server the token is still in use; a patch that lands before the launch report
+  /// simply creates the profile.
   ///
-  /// Not retried — the next launch or edit sends it again, and a retry here would replace a
+  /// Not retried — the next launch or push sends it again, and a retry here would replace a
   /// pending full push ([_push] owns the one timer).
   Future<void> _onFcmToken(final String token) async {
     if (token == _fcmToken) return;
     _fcmToken = token;
-    await _profile.ensureLoaded();
-    if (_profile.answers.isEmpty) return;
     try {
       await _remote.patch(ProfilePatchRequest(app: ProfileApp(fcmToken: token)));
     } on Object catch (e) {

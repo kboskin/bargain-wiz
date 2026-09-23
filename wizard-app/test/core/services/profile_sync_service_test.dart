@@ -321,8 +321,7 @@ void main() {
       expect((service.buildPatch(entity, completed: true).toJson()['app'] as Map)['fcm_token'], 'token-1');
     });
 
-    test('is reported on its own to an existing profile, and again only when it changes', () async {
-      profile.entity = entity;
+    test('is reported on its own, and again only when it changes', () async {
       service.start();
 
       tokens
@@ -337,14 +336,13 @@ void main() {
       ]);
     });
 
-    test('is not reported before there is a profile: the onboarding push carries it', () async {
+    test('does not wait for an answer: a fresh install reports it before the first step', () async {
       service.start();
       tokens.add('token-1');
       await Future<void>.delayed(Duration.zero);
-      expect(remote.sent, isEmpty);
 
-      await service.pushOnboarding(entity);
-      expect(remote.sent.single.app!.fcmToken, 'token-1');
+      expect(profile.answers, isEmpty);
+      expect(remote.sent.single.toJson(), {'app': {'fcm_token': 'token-1'}});
     });
   });
 }
