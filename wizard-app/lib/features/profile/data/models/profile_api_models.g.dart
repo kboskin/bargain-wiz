@@ -37,6 +37,7 @@ ProfileApp _$ProfileAppFromJson(Map<String, dynamic> json) => ProfileApp(
   version: json['version'] as String?,
   locale: json['locale'] as String?,
   fcmToken: json['fcm_token'] as String?,
+  lastOpenedAt: json['last_opened_at'] as String?,
 );
 
 Map<String, dynamic> _$ProfileAppToJson(ProfileApp instance) =>
@@ -45,6 +46,7 @@ Map<String, dynamic> _$ProfileAppToJson(ProfileApp instance) =>
       'version': ?instance.version,
       'locale': ?instance.locale,
       'fcm_token': ?instance.fcmToken,
+      'last_opened_at': ?instance.lastOpenedAt,
     };
 
 ProfileIdentity _$ProfileIdentityFromJson(Map<String, dynamic> json) =>

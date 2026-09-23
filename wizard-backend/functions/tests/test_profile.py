@@ -68,6 +68,13 @@ def test_build_patch_keeps_the_fcm_token_whole():
         up.build_patch({"app": {"fcm_token": 42}}, up.Identity(uid="u1"))
 
 
+def test_build_patch_stores_the_launch_time_as_a_timestamp():
+    patch = up.build_patch({"app": {"last_opened_at": "2026-09-17T12:00:00.000Z"}}, up.Identity(uid="u1"))
+    assert patch["app"] == {"last_opened_at": NOW}  # a datetime, which Firestore stores as a timestamp
+    with pytest.raises(BadRequest):
+        up.build_patch({"app": {"last_opened_at": "yesterday"}}, up.Identity(uid="u1"))
+
+
 def test_build_patch_rejects_wrong_types():
     ident = up.Identity(uid="u1")
     with pytest.raises(BadRequest):

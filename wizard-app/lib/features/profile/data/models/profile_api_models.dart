@@ -47,7 +47,7 @@ class ProfileReferral {
 
 @JsonSerializable(includeIfNull: false)
 class ProfileApp {
-  const ProfileApp({this.platform, this.version, this.locale, this.fcmToken});
+  const ProfileApp({this.platform, this.version, this.locale, this.fcmToken, this.lastOpenedAt});
 
   factory ProfileApp.fromJson(Map<String, dynamic> json) => _$ProfileAppFromJson(json);
 
@@ -61,6 +61,10 @@ class ProfileApp {
   /// This install's FCM registration token, the address a push to this person goes to.
   @JsonKey(name: 'fcm_token')
   final String? fcmToken;
+
+  /// When this install was last launched: ISO-8601 UTC, sent by the launch report.
+  @JsonKey(name: 'last_opened_at')
+  final String? lastOpenedAt;
 
   Map<String, dynamic> toJson() => _$ProfileAppToJson(this);
 }

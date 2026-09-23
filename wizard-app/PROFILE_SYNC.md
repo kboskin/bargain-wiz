@@ -29,10 +29,11 @@ question added in Remote Config is recorded without a backend deploy. Beside it 
 the funnel finished.
 
 The answers are pushed **step by step** (2026-09-23): each time the person moves on from a
-screen that asks something, the flow sends everything answered so far. So a document exists
-from the first answered screen, and one with `preferences` but no
-`onboarding_status.completed_at` is a funnel still in progress or abandoned, recorded as far
-as it got — `created_at` is when that first answer landed, `updated_at` the last step reached.
+screen that asks something, the flow sends everything answered so far. A document exists from
+the first launch (every launch sets `app.last_opened_at`, see below), so `created_at` is
+when the app was first opened; one with no `onboarding_status.completed_at` is a funnel still
+in progress or abandoned, and its `preferences` are recorded as far as it got. `updated_at`
+moves on every write — a step, an edit or a launch — so it is not where someone stopped.
 Signing in on the `create_account` screen keeps the uid (the anonymous user is linked), so the
 same document carries on; signing into an account that already exists switches uid, and the
 steps before it stay behind on the anonymous uid's document, unfinished.
@@ -103,7 +104,8 @@ goes through the `profile` function, and the security rules deny client access t
   },
   "referral": {"code": "FRIEND-42", "entered_at": "…"},
   "app": {"platform": "ios | android", "locale": "en", "version": "…",
-          "fcm_token": "…"},                     // this install's FCM registration token
+          "fcm_token": "…",                      // this install's FCM registration token
+          "last_opened_at": "…"},                // device time, sent on every launch
   "created_at": "…",
   "updated_at": "…"
 }
@@ -160,7 +162,8 @@ screen sets.
 
 `PATCH /profile` — body `{preferences?, onboarding_status?, referral?, app?}`.
 Partial update: nested maps merge, a `null` leaf deletes the field, `onboarding_status.completed:
-true` stamps `completed_at`. Returns the merged document. `identity` is server-managed.
+true` stamps `completed_at`. `app.last_opened_at` is an ISO-8601 time, stored as a Firestore
+timestamp. Returns the merged document. `identity` is server-managed.
 
 `referral.code` is **write-once** (`WRITE_ONCE` in `domain/profile.py`): the first code a
 profile is given stands, and a later PATCH carrying one is dropped and logged instead of
@@ -186,6 +189,7 @@ Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUN
 | Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `onboarding_status.completed: true` and the referral code. Best effort: onboarding finishes even if the backend is down. |
 | Profile screen edit | `UserProfileService` stores the answer, then calls `schedulePush`: a debounced (1.5 s) push of the full current state, which the server merges. |
 | Sign-in (`authStateChanges`) | Push once (server merges the anonymous profile), then if the device has no local answers, `GET` the account profile and save its answers locally (`saveOnboardingData` + `refresh`), so the profile follows the user. |
+| Launch | `start()` (from `AppBootstrap.warmUp`, once per launch, after the launch has signed in) sends `{"app": {"platform", "locale", "last_opened_at"}}`, the time now in UTC by the device clock — whether or not onboarding has begun, so the first launch creates the document. A cold start only: coming back from the background is not a launch. Not retried: the next launch sends it again. |
 | FCM token | `FirebaseService.fcmTokens()` — the token at launch, then every rotation. Every push above carries the latest as `app.fcm_token`; a token that arrives while the app runs is also sent on its own (`{"app": {"fcm_token": …}}`) when the device has answers, so an existing profile learns it without waiting for an edit. That is one small write per launch, which doubles as the "still in use" signal for pruning stale tokens. Not retried: the next launch or edit sends it again. |
 | Failure | Retried once after 30 s with the same patch (a change made meanwhile pushes the full state instead). A failed retry is reported to Crashlytics as a non-fatal — the count of profiles the server is missing — and is not retried again: the next change pushes the full state. |
 

@@ -90,6 +90,9 @@ class _FakeRemote implements ProfileRemoteDataSource {
 
   @override
   Future<ProfileDocument?> fetch() async => stored;
+
+  /// Everything sent besides the launch report [ProfileSyncService.start] makes.
+  List<ProfilePatchRequest> get sent => [for (final p in patches) if (p.app?.lastOpenedAt == null) p];
 }
 
 class _FakeOnboardingRepo implements OnboardingRepository {
@@ -243,8 +246,18 @@ void main() {
     profile.entity = entity;
     service.schedulePush();
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(remote.patches.length, 1);
-    expect(remote.patches.single.preferences!['vibe'], 'tactical');
+    expect(remote.sent.single.preferences!['vibe'], 'tactical');
+  });
+
+  test('start reports the launch once, before onboarding has begun too', () async {
+    service
+      ..start()
+      ..start();
+    await Future<void>.delayed(Duration.zero);
+
+    final json = remote.patches.single.toJson();
+    expect(json.keys, ['app']); // no answers, no status: only this install and the time
+    expect(DateTime.parse((json['app'] as Map)['last_opened_at'] as String).isUtc, isTrue);
   });
 
   test('pushNow does nothing without local answers', () async {
@@ -318,7 +331,7 @@ void main() {
         ..add('token-2');
       await Future<void>.delayed(Duration.zero);
 
-      expect(remote.patches.map((final p) => p.toJson()), [
+      expect(remote.sent.map((final p) => p.toJson()), [
         {'app': {'fcm_token': 'token-1'}},
         {'app': {'fcm_token': 'token-2'}},
       ]);
@@ -328,10 +341,10 @@ void main() {
       service.start();
       tokens.add('token-1');
       await Future<void>.delayed(Duration.zero);
-      expect(remote.patches, isEmpty);
+      expect(remote.sent, isEmpty);
 
       await service.pushOnboarding(entity);
-      expect(remote.patches.single.app!.fcmToken, 'token-1');
+      expect(remote.sent.single.app!.fcmToken, 'token-1');
     });
   });
 }

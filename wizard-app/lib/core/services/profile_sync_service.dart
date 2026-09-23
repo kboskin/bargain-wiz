@@ -24,6 +24,7 @@ import 'package:appwizard/features/profile/domain/profile_fields.dart';
 ///   so the profile follows the user.
 /// - Every push carries this install's FCM token (`app.fcm_token`); a token that arrives or
 ///   changes while the app runs is reported on its own ([_onFcmToken]).
+/// - Every launch is reported once ([_reportOpened]) as `app.last_opened_at`.
 ///
 /// Every push is a partial update: the server merges. A failure is retried once after
 /// [retryDelay], and a failed retry is reported to Crashlytics; the UI never waits on this
@@ -81,6 +82,21 @@ class ProfileSyncService {
       (final token) => unawaited(_onFcmToken(token)),
       onError: (final Object e) => _logger.w('FCM token unavailable: $e'),
     );
+    unawaited(_reportOpened());
+  }
+
+  /// The app just started (this service starts once per launch, after the launch has signed
+  /// in): sets `app.last_opened_at` to now, by the device clock. Sent whether or not
+  /// onboarding has begun, so the first launch creates the profile. Not retried — the next
+  /// launch reports again.
+  Future<void> _reportOpened() async {
+    try {
+      await _remote.patch(
+        ProfilePatchRequest(app: _app(lastOpenedAt: DateTime.now().toUtc().toIso8601String())),
+      );
+    } on Object catch (e) {
+      _logger.w('Launch report failed: $e');
+    }
   }
 
   void dispose() {
@@ -197,13 +213,17 @@ class ProfileSyncService {
       // and until then the person can still go back and correct one. Sent on every push
       // after that — nothing edits it, so a retried first push still credits it.
       referral: !completed || code == null || code.isEmpty ? null : ProfileReferral(code: code),
-      app: ProfileApp(
+      app: _app(),
+    );
+  }
+
+  /// This install, as every push describes it.
+  ProfileApp _app({String? lastOpenedAt}) => ProfileApp(
         platform: Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : Platform.operatingSystem),
         locale: _localeCode(),
         fcmToken: _fcmToken,
-      ),
-    );
-  }
+        lastOpenedAt: lastOpenedAt,
+      );
 
   /// Local entity rebuilt from server answers (screen metadata is not needed to use them).
   static OnboardingDataEntity entityFromAnswers(Map<String, dynamic> answers, {required bool completed}) =>

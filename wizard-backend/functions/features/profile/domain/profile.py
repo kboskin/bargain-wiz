@@ -21,12 +21,14 @@ Sections (all optional in a PATCH; nested maps merge, `null` deletes a leaf):
                   (Analytics user properties), not stored here.
     referral      code entered during onboarding, write-once ([WRITE_ONCE])
     app           last seen platform / version / locale, and that install's
-                  `fcm_token` (the address a push goes to; one per profile, last device wins)
+                  `fcm_token` (the address a push goes to; one per profile, last device wins);
+                  `last_opened_at`, sent by the app on each launch
     identity      server-managed: uid, provider
 
 Pure Python; `ProfileStore` abstracts Firestore so the logic is unit-testable.
 """
 import logging
+from datetime import datetime
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -211,6 +213,7 @@ class AppPatch(_Section):
     version: str | None = None
     locale: str | None = None
     fcm_token: str | None = None
+    last_opened_at: datetime | None = None  # sent by the app on every launch, device clock
 
     @field_validator("platform", "version", "locale", mode="before")
     @classmethod
