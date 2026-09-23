@@ -7,6 +7,7 @@ import 'package:appwizard/core/widgets/glass_container.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_event.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_state.dart';
+import 'package:appwizard/features/auth/presentation/widgets/auth_button.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:appwizard/core/routing/app_routes.dart';
 
@@ -84,53 +85,9 @@ class _SignInPageState extends State<SignInPage> {
                         // Sign in with Google button
                         SizedBox(
                           width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: isLoading
-                                ? null
-                                : () {
-                                    context.read<AuthBloc>().add(
-                                          const SignInWithGoogleRequested(),
-                                        );
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2A2A2A),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                // Google logo - using colored G icon
-                                Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      'G',
-                                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                        color: Colors.blue,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  AppLocalizations.of(context)!.signInWithGoogle,
-                                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          child: GoogleSignInButton(
+                            loading: isLoading,
+                            onTap: () => context.read<AuthBloc>().add(const SignInWithGoogleRequested()),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -139,40 +96,9 @@ class _SignInPageState extends State<SignInPage> {
                         if (Platform.isIOS)
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: isLoading
-                                  ? null
-                                  : () {
-                                      context.read<AuthBloc>().add(
-                                            const SignInWithAppleRequested(),
-                                          );
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2A2A2A),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.apple,
-                                    size: 24,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 12),
-                                    Text(
-                                      AppLocalizations.of(context)!.signInWithApple,
-                                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                ],
-                              ),
+                            child: AppleSignInButton(
+                              loading: isLoading,
+                              onTap: () => context.read<AuthBloc>().add(const SignInWithAppleRequested()),
                             ),
                           ),
                         if (Platform.isIOS) const SizedBox(height: 24),

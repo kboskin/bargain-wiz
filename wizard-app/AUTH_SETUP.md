@@ -74,35 +74,21 @@ Add the SHA-1 fingerprint to Firebase Console → Project Settings → Your Andr
 
 ## Usage
 
-The sign-in page automatically:
-- Shows **Email/Password** form
-- Shows **Google Sign-In** button
-- Shows **Apple Sign-In** button (iOS only)
-- Displays **Privacy Policy** and **Terms of Service** links at the bottom
+Everyone starts signed in anonymously; signing in links Google or Apple to that account
+(`AuthService`, driven by `AuthBloc`). There are two entry points:
 
-### Navigation Flow
+- **Sign-in sheet** (`SignInModal`) — opened from the onboarding welcome screen, the home
+  drawer and the profile page. Google always; Apple on iOS. The Terms / Privacy links open the
+  Remote Config URLs.
+- **`create_account` onboarding screen** — labels and per-platform visibility come from the
+  Remote Config template.
+- **`SignInPage`** — full-page variant (glass card, Google + Apple on iOS). Its Terms / Privacy
+  links are still placeholders (`// TODO` in `sign_in_page.dart`); wire them to
+  `RemoteConfigService.getTermsOfUseUrl()` / `getPrivacyPolicyUrl()` as `SignInModal` does.
 
-1. App starts → Checks authentication status
-2. If not authenticated → Shows `SignInPage`
-3. After successful sign-in → Shows `HomePage`
-4. Auth state is managed by `AuthBloc` and persists across app restarts
-
-## Privacy Policy and Terms of Service
-
-The links are currently placeholder buttons. To implement:
-
-1. Create pages for Privacy Policy and Terms of Service
-2. Or use web URLs:
-   ```dart
-   // In sign_in_page.dart, replace TODO comments with:
-   launchUrl(Uri.parse('https://yourdomain.com/privacy-policy'));
-   launchUrl(Uri.parse('https://yourdomain.com/terms-of-service'));
-   ```
-
-3. Add `url_launcher` package if using URLs:
-   ```yaml
-   url_launcher: ^6.3.1
-   ```
+All three use the shared buttons in `lib/features/auth/presentation/widgets/auth_button.dart`:
+`GoogleSignInButton` and `AppleSignInButton`, built on `AuthButton`. Use those for any new
+entry point rather than styling a button by hand.
 
 ## Testing
 
