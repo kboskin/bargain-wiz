@@ -8,8 +8,8 @@ import 'package:appwizard/features/onboarding/data/mappers/onboarding_data_mappe
 
 /// Implementation of OnboardingRepository
 class OnboardingRepositoryImpl implements OnboardingRepository {
-  /// [uploader] pushes completed onboarding data to the profile endpoint (resolved lazily
-  /// to avoid a dependency cycle with the profile services).
+  /// [uploader] pushes onboarding data — so far, or completed — to the profile endpoint
+  /// (resolved lazily to avoid a dependency cycle with the profile services).
   OnboardingRepositoryImpl(this.localDataSource, this._mapper, this._logger, {this.uploader});
 
   final OnboardingLocalDataSource localDataSource;

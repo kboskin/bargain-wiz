@@ -16,7 +16,8 @@ import 'package:appwizard/features/profile/domain/profile_fields.dart';
 /// Keeps the server-side profile (`profile` Cloud Function → Firestore) in step with the
 /// onboarding answers stored on the device. See PROFILE_SYNC.md.
 ///
-/// - Onboarding completion pushes the full answer set right away ([pushOnboarding]).
+/// - Onboarding pushes the answers given so far each time a step is left, and the full set
+///   when the funnel finishes ([pushOnboarding]).
 /// - Later edits ask for a push as they are stored; [schedulePush] debounces them.
 /// - Signing in pushes once more (the server folds the install's anonymous profile into
 ///   the account) and, on a device with no local answers, pulls the account's answers down
@@ -92,7 +93,7 @@ class ProfileSyncService {
   /// latest ([buildPatch]); this sends it on its own as well, so a profile that already exists
   /// learns it without waiting for the next edit. That is one small write per launch, which
   /// also tells the server the token is still in use. Before there is a profile there is
-  /// nothing to report to: the onboarding push carries it.
+  /// nothing to report to: the onboarding pushes carry it.
   ///
   /// Not retried — the next launch or edit sends it again, and a retry here would replace a
   /// pending full push ([_push] owns the one timer).
@@ -115,9 +116,10 @@ class ProfileSyncService {
     _timer = Timer(delay ?? debounce, () => unawaited(pushNow()));
   }
 
-  /// Onboarding just finished: push the completed answers (called by the repository's
-  /// `uploadUserData`, before the answers are persisted locally).
-  Future<void> pushOnboarding(OnboardingDataEntity data) => _push(buildPatch(data, completed: true));
+  /// Pushes the in-flow answers (called by the repository's `uploadUserData`, before the
+  /// answers are persisted locally): after every step, so a funnel that is never finished is
+  /// recorded as far as it got, and once more when it finishes (`data.isCompleted`).
+  Future<void> pushOnboarding(OnboardingDataEntity data) => _push(buildPatch(data, completed: data.isCompleted));
 
   /// Pushes the current local answers, if any.
   Future<void> pushNow() async {
@@ -191,9 +193,10 @@ class ProfileSyncService {
         _localeKey: _localeCode(),
       },
       onboardingStatus: completed ? const ProfileOnboardingStatus(completed: true) : null,
-      // Sent whenever the device has one: the code cannot change here (no screen edits it)
-      // and the function ignores a second code, so a retried first push still credits it.
-      referral: code == null || code.isEmpty ? null : ProfileReferral(code: code),
+      // Held back until the funnel is finished: the function keeps the first code it gets,
+      // and until then the person can still go back and correct one. Sent on every push
+      // after that — nothing edits it, so a retried first push still credits it.
+      referral: !completed || code == null || code.isEmpty ? null : ProfileReferral(code: code),
       app: ProfileApp(
         platform: Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : Platform.operatingSystem),
         locale: _localeCode(),

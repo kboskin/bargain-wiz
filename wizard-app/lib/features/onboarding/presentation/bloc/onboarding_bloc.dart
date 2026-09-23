@@ -121,9 +121,11 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
   }
 
   /// Flattens the in-flow answers into the entity persisted at the end (also
-  /// used by the data_upload screen to build the upload payload).
-  static OnboardingDataEntity buildEntity(OnboardingConfigLoaded state) => OnboardingDataEntity(
+  /// used by the flow to build the profile pushes; [completed] is false for the ones sent
+  /// as each step is left).
+  static OnboardingDataEntity buildEntity(OnboardingConfigLoaded state, {bool completed = true}) =>
+      OnboardingDataEntity(
         answers: OnboardingAnswerFlattener.flatten(state.screens, state.answers),
-        isCompleted: true,
+        isCompleted: completed,
       );
 }

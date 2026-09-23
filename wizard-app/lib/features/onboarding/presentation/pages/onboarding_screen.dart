@@ -97,6 +97,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     final screens = state.screens;
     if (target >= screens.length) {
       _logAnswer(state, _index);
+      _pushProgress(state, _index);
       _bloc.add(const SubmitOnboardingRequested());
       return;
     }
@@ -113,7 +114,10 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       return;
     }
     if (!mounted) return;
-    if (forward) _logAnswer(state, _index);
+    if (forward) {
+      _logAnswer(state, _index);
+      _pushProgress(state, _index);
+    }
     setState(() => _index = target);
     _logStepView(state, target, forward: forward);
     final current = _pageController.hasClients ? (_pageController.page?.round() ?? _index) : _index;
@@ -153,12 +157,25 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   void _answer(int index, dynamic value) =>
       _bloc.add(OnboardingAnswerChanged(screenIndex: index, answer: value));
 
+  // ─── profile progress ──────────────────────────────────────────────────────
+
+  /// Sends everything answered so far to the profile as the person moves on from a screen
+  /// that asks something, so a funnel that is never finished is still recorded as far as it
+  /// got (PROFILE_SYNC.md). Not marked completed — the data_upload screen's push does that —
+  /// and best effort like that one: the flow never waits on it.
+  void _pushProgress(OnboardingConfigLoaded state, int index) {
+    if (index < 0 || index >= state.screens.length || state.screens[index].answerKeys.isEmpty) return;
+    unawaited(
+      di.sl<OnboardingRepository>().uploadUserData(OnboardingBloc.buildEntity(state, completed: false)),
+    );
+  }
+
   // ─── funnel analytics ──────────────────────────────────────────────────────
   //
-  // The funnel is the one flow the backend hears about only once, at the end (the profile
-  // is pushed from the data_upload screen, PROFILE_SYNC.md), so drop-off exists in
-  // Analytics or nowhere. Reported from the two points where a screen actually changes —
-  // never per keystroke or slider tick.
+  // The profile records the answers as each step is left, but only Analytics sees the
+  // screens that ask nothing, the order they were seen in and where someone turned back.
+  // Reported from the two points where a screen actually changes — never per keystroke or
+  // slider tick.
 
   /// `screen_class` for every step: the flow is one route, and the class groups them.
   static const String _screenClass = 'OnboardingFlowPage';
@@ -189,8 +206,8 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     ));
   }
 
-  /// The screen being left, with what was picked on it — so the answers of a funnel that
-  /// never completes (and never reaches the profile) can still be analysed. Only picks from
+  /// The screen being left, with what was picked on it — so the funnel can be broken down by
+  /// answer and joined to its A/B arm in the Analytics export. Only picks from
   /// the screen's own options are sent, never typed text, which could carry personal data
   /// Analytics must not receive.
   void _logAnswer(OnboardingConfigLoaded state, int index) {

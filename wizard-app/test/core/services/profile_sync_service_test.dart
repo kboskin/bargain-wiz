@@ -180,9 +180,20 @@ void main() {
     expect(patch.containsKey('referral'), isFalse);
   });
 
+  test('an in-flow push records the answers so far, but not the status or the referral code', () async {
+    await service.pushOnboarding(entity.copyWith(isCompleted: false));
+
+    final patch = remote.patches.single.toJson();
+    expect((patch['preferences'] as Map)['vibe'], 'tactical');
+    expect(patch.containsKey('onboarding_status'), isFalse);
+    // Write-once on the server: held back while the person can still go back and fix it.
+    expect(patch.containsKey('referral'), isFalse);
+  });
+
   test('pushOnboarding sends the completed answers; a failure schedules a retry silently', () async {
     await service.pushOnboarding(entity);
     expect(remote.patches.single.onboardingStatus!.completed, isTrue);
+    expect(remote.patches.single.referral!.code, 'FRIEND-42');
 
     remote.fail = true;
     await service.pushOnboarding(entity); // must not throw

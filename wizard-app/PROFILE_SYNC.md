@@ -28,6 +28,15 @@ question added in Remote Config is recorded without a backend deploy. Beside it 
 **`onboarding_status`** — `completed_at`, stamped by the server when a client first reports
 the funnel finished.
 
+The answers are pushed **step by step** (2026-09-23): each time the person moves on from a
+screen that asks something, the flow sends everything answered so far. So a document exists
+from the first answered screen, and one with `preferences` but no
+`onboarding_status.completed_at` is a funnel still in progress or abandoned, recorded as far
+as it got — `created_at` is when that first answer landed, `updated_at` the last step reached.
+Signing in on the `create_account` screen keeps the uid (the anonymous user is linked), so the
+same document carries on; signing into an account that already exists switches uid, and the
+steps before it stay behind on the anonymous uid's document, unfinished.
+
 There used to be a second `onboarding` section holding the same answers again plus a `flow`
 trace of the screens shown. It was removed: the answers were a duplicate of `preferences`,
 nothing read the trace, and one record that can hold any key does the same job. Experiment
@@ -89,7 +98,8 @@ goes through the `profile` function, and the security rules deny client access t
                                                  // as sent, no backend change needed
   },
   "onboarding_status": {
-    "completed_at": "2026-09-17T12:00:00Z"       // server time, set when completed=true
+    "completed_at": "2026-09-17T12:00:00Z"       // server time, set when completed=true;
+                                                 // absent while the funnel is unfinished
   },
   "referral": {"code": "FRIEND-42", "entered_at": "…"},
   "app": {"platform": "ios | android", "locale": "en", "version": "…",
@@ -123,8 +133,10 @@ Nothing is required: the backend names no key, so an empty `answers` list is a v
 that simply produces a prompt with no buyer block — keep the screens asking, because an
 answer that is not sent is not coached on. The referral code is the one answer that stays out
 of `preferences`, and out of `answers` too: it has a section of its own (`referral.code`,
-stamped with `entered_at`), which the client keeps sending — the device cannot change it and
-the function keeps the first one, so a retried first push still credits it. The next step,
+stamped with `entered_at`). The client holds it back from the step-by-step pushes — the
+function keeps the first code it gets, and until the funnel is finished the person can still
+go back and correct one — and sends it from the completion push on: the device cannot change
+it after that, so a retried first push still credits it. The next step,
 once profiles are populated, is to let the functions read `users/{id}` themselves and drop
 the profile from the request body.
 
@@ -170,7 +182,8 @@ Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUN
 
 | Trigger | What happens |
 |---|---|
-| Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `onboarding_status.completed: true`. Best effort: onboarding finishes even if the backend is down. |
+| Onboarding step left | Moving forward off a screen that asks something (`_pushProgress` in `onboarding_screen.dart`): `uploadUserData` → `pushOnboarding` with every answer so far, no `onboarding_status`, no `referral`. Screens that ask nothing send nothing; going back sends nothing, and the next step forward sends a changed answer. Best effort and not awaited. |
+| Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `onboarding_status.completed: true` and the referral code. Best effort: onboarding finishes even if the backend is down. |
 | Profile screen edit | `UserProfileService` stores the answer, then calls `schedulePush`: a debounced (1.5 s) push of the full current state, which the server merges. |
 | Sign-in (`authStateChanges`) | Push once (server merges the anonymous profile), then if the device has no local answers, `GET` the account profile and save its answers locally (`saveOnboardingData` + `refresh`), so the profile follows the user. |
 | FCM token | `FirebaseService.fcmTokens()` — the token at launch, then every rotation. Every push above carries the latest as `app.fcm_token`; a token that arrives while the app runs is also sent on its own (`{"app": {"fcm_token": …}}`) when the device has answers, so an existing profile learns it without waiting for an edit. That is one small write per launch, which doubles as the "still in use" signal for pruning stale tokens. Not retried: the next launch or edit sends it again. |
@@ -189,9 +202,10 @@ function stores it trimmed and never clipped: a truncated token addresses nothin
 
 ## Funnel analytics
 
-The backend hears about onboarding once, at the end, and the device only writes the answers to
-`SharedPreferences` on submit — so someone who drops out at screen four leaves no trace in
-either place. Where they stopped exists in Firebase Analytics or nowhere, and the flow reports
+The device only writes the answers to `SharedPreferences` on submit. The profile gets them step
+by step, so someone who drops out at screen four leaves the answers of screens one to three in
+`preferences` — but not the screens that ask nothing, the order they were seen in, or where
+someone turned back. That trace exists in Firebase Analytics or nowhere, and the flow reports
 itself (`core/services/analytics_service.dart`, called from
 `features/onboarding/presentation/pages/onboarding_screen.dart`):
 
@@ -211,10 +225,10 @@ instead. Both events fire only where a screen actually changes, never per keystr
 tick.
 
 **What was picked rides on `onboarding_step_answered`** (2026-09-23; until then only
-`answer_keys` were sent). `preferences` is still the record, but it only exists for funnels that
-reach the end: the event is the one place the answers of someone who dropped out at the paywall
-exist, so the funnel can be broken down by answer ("do small-deal sellers quit earlier?") and
-joined with the A/B arm in the BigQuery export on uid, finished or not. Rules:
+`answer_keys` were sent). `preferences` is the record, of unfinished funnels too; the event
+puts the same picks beside the screen trace, so the funnel can be broken down by answer ("do
+small-deal sellers quit earlier?") and joined with the A/B arm in the BigQuery export on uid,
+finished or not. Rules:
 
 - **Option ids only.** Only answers picked from a configured option list are sent — `select`,
   `multi_select`, `select_group`, `slider`, `slider_lottie`
