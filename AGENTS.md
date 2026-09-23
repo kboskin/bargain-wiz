@@ -84,7 +84,15 @@ Known blockers an agent cannot fix from here — surface them, don't work around
   `localspeechrecognition` has no model asset (`UAF_Siri_Understanding` is a stub), so
   `SFSpeechRecognizer` returns `error_assets_not_installed` (iOS 102) and the press-and-hold
   mic in `ProComposer` yields no words. Verify dictation on a real device.
-- **iOS has no Push Notifications capability.** There is no `Runner.entitlements`, so nothing
-  sets `aps-environment`: the paywall/onboarding permission prompt appears and is recorded, but
-  APNs registration fails and FCM cannot deliver the trial reminder. Needs the capability added
-  in Xcode plus an APNs key uploaded to Firebase.
+- **iOS push is wired but cannot be finished without an Apple Developer account.** The app
+  side is done (2026-09-22): `ios/Runner/Runner.entitlements` sets `aps-environment` to
+  `development` and `CODE_SIGN_ENTITLEMENTS` points at it in all twelve Runner configurations,
+  and the Firebase app delegate proxy gives `firebase_messaging` the APNs token with no native
+  code. What is still missing is outside this repo and needs a **paid** account: the Push
+  Notifications capability on the App ID, an APNs key (.p8) uploaded to the Firebase project,
+  and `aps-environment` set to `production` for a TestFlight or App Store archive. Until then
+  the paywall's reminder step still prompts and records the answer, and the reminder still
+  cannot be delivered. Simulator builds are unaffected (they skip code signing); a **device**
+  build will fail to sign, because a free personal team cannot issue a profile carrying this
+  entitlement — drop `CODE_SIGN_ENTITLEMENTS` from the Runner configs if you need one before
+  the account exists.

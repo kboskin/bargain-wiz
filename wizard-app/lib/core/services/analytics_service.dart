@@ -163,19 +163,23 @@ class AnalyticsService {
 
   // ─── onboarding funnel ─────────────────────────────────────────────────────
 
-  /// The person moved on from a screen: [answerKeys] are the answers it writes. Which
-  /// options they picked is not reported — the completed profile is the record of that
-  /// (PROFILE_SYNC.md); this says which questions a funnel got through, including the
-  /// funnels that never complete.
+  /// The person moved on from a screen: [answerKeys] are the answers it writes, [answers]
+  /// what they picked — one parameter per answer key (`vibe: tactical`, a multi-select
+  /// comma-joined), so the funnel can be broken down by answer, including the funnels that
+  /// never complete (PROFILE_SYNC.md). The caller sends option ids only, never typed text.
+  /// A key named like one of the step's own parameters loses to it.
   Future<void> logOnboardingStepAnswered({
     required int index,
     required String stepId,
     required String stepType,
     List<String> answerKeys = const [],
+    Map<String, dynamic> answers = const {},
   }) =>
       logEvent(
         name: 'onboarding_step_answered',
         parameters: {
+          for (final entry in answers.entries)
+            entry.key: entry.value is List ? (entry.value as List).join(',') : entry.value,
           'step_index': index,
           'step_id': stepId,
           'step_type': stepType,

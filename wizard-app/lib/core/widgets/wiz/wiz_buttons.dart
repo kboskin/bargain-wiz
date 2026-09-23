@@ -227,7 +227,16 @@ class _WizGlowButtonState extends State<WizGlowButton>
           mainAxisSize: MainAxisSize.min,
           children: [
             if (widget.leading != null) ...[widget.leading!, const SizedBox(width: 8)],
-            Text(widget.label, style: WizType.cta.copyWith(color: widget.textColor)),
+            // The label gives way rather than overflowing: with a leading visual and two
+            // of these side by side, a 320 pt phone leaves each button under 135 pt.
+            Flexible(
+              child: Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: WizType.cta.copyWith(color: widget.textColor),
+              ),
+            ),
           ],
         ),
       ),

@@ -4,12 +4,15 @@ import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/visual_asset_widget.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
-import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
-import 'package:appwizard/core/widgets/wiz/wiz_mascot.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_config.dart';
 import 'package:appwizard/features/paywall/data/models/paywall_layout.dart';
+import 'package:appwizard/features/home/presentation/widgets/highlighted_text.dart';
+import 'package:appwizard/features/paywall/domain/paywall_copy.dart';
 
 typedef PaywallPriceLookup = String? Function(PaywallOption option);
+
+/// The trial length that applies to one option (its own, else the paywall default).
+typedef PaywallTrialLookup = int Function(PaywallOption option);
 typedef PaywallOptionSelected = void Function(PaywallOption option);
 
 const Duration _kSwitch = Duration(milliseconds: 200);
@@ -29,6 +32,8 @@ class PaywallPlanPicker extends StatelessWidget {
   final PaywallPriceLookup priceFor;
   final PaywallOptionSelected onSelect;
 
+  int _trialDaysOf(PaywallOption option) => option.trialDaysOr(config.trialDays);
+
   @override
   Widget build(BuildContext context) {
     switch (config.metadata.layout) {
@@ -38,6 +43,7 @@ class PaywallPlanPicker extends StatelessWidget {
           metadata: config.metadata,
           selectedId: selectedId,
           priceFor: priceFor,
+          trialDaysOf: _trialDaysOf,
           onSelect: onSelect,
         );
       case PaywallLayout.list:
@@ -45,6 +51,9 @@ class PaywallPlanPicker extends StatelessWidget {
           options: config.options,
           selectedId: selectedId,
           priceFor: priceFor,
+          trialDaysOf: _trialDaysOf,
+          cardStyle: config.metadata.cardStyle,
+          metadata: config.metadata,
           onSelect: onSelect,
         );
       case PaywallLayout.compact:
@@ -59,37 +68,82 @@ class PaywallPlanPicker extends StatelessWidget {
   }
 }
 
-/// The plan the config preselects (the recommended one) gets the amber art block and the
-/// colour mascot; the others are mint with a greyscale mascot, as the handoff drew them.
-bool _isFeatured(PaywallOption o, PaywallMetadata? metadata) =>
-    metadata == null || o.id == metadata.defaultSelectedOptionId;
-
+/// `art_color` when the plan sets one, else the handoff's tints: amber for the plan the
+/// config preselects, mint for the rest.
 Color _artBackground(PaywallOption o, PaywallMetadata? metadata) =>
-    _isFeatured(o, metadata) ? WizColors.amberSoft : WizColors.mintSoft;
+    PaywallBackgroundConfig.parseHex(o.artColor ?? '') ??
+    (metadata == null || o.id == metadata.defaultSelectedOptionId
+        ? WizColors.amberSoft
+        : WizColors.mintSoft);
 
-/// Mascot (greyscale .7 for non-featured plans) or the remote visual when it is not a PNG.
-class _PlanArt extends StatelessWidget {
-  const _PlanArt({required this.option, required this.metadata, required this.size});
+/// The emphasis a selected card carries, from `metadata.card_style`.
+extension PaywallCardStyleShadow on PaywallCardStyle {
+  List<BoxShadow> get selectedShadow {
+    switch (this) {
+      case PaywallCardStyle.glow:
+        return WizShadows.selectedPlan;
+      case PaywallCardStyle.shadow:
+        return WizShadows.card;
+      case PaywallCardStyle.flat:
+        return const [];
+    }
+  }
+}
 
-  final PaywallOption option;
-  final PaywallMetadata? metadata;
-  final double size;
+/// How a price is drawn, wherever a layout draws one: light by default, and haloed only on
+/// the card being bought. Shared so the three layouts cannot disagree about it.
+TextStyle priceStyleOf(PaywallMetadata metadata, {required bool selected}) => TextStyle(
+      fontFamily: metadata.priceFamily,
+      fontSize: metadata.priceSize,
+      fontWeight: metadata.priceWeight,
+      color: WizColors.ink,
+      shadows: selected && metadata.isPriceGlowing ? WizShadows.textGlow : null,
+    );
+
+/// The badges a plan card shows, in reading order.
+///
+/// The trial comes first and only while the period has one — its text is reachable only
+/// through `trial_days`, so a card cannot go on promising a trial the offer has dropped.
+/// Everything after it is whatever `badges` lists ("Save 34%"), unchanged by the app. A
+/// config from before the row existed still works: its single `badge` is the whole row.
+List<String> badgesFor(PaywallOption option, int trialDays, PaywallTextResolver resolve) {
+  final out = <String>[];
+  if (trialDays > 0 && option.trialBadge != null) {
+    final trial = resolve(option.trialBadge!.sourceFor(trialDays)).trim();
+    if (trial.isNotEmpty) out.add(TemplateText.fill(trial, {'n': '$trialDays'}));
+  }
+  final configured = option.badges.isNotEmpty
+      ? option.badges.map(resolve)
+      : [resolve(option.badge)];
+  out.addAll(configured.map((b) => b.trim()).where((b) => b.isNotEmpty));
+  return out;
+}
+
+/// One ink pill with yellow text, the badge shape from the handoff.
+class PaywallBadgePill extends StatelessWidget {
+  const PaywallBadgePill({super.key, required this.label, this.compact = false});
+
+  final String label;
+  final bool compact;
 
   @override
-  Widget build(BuildContext context) {
-    final path = metadata?.optionVisuals[option.id] ?? '';
-    final lower = path.toLowerCase();
-    if (path.isNotEmpty && !lower.endsWith('.png') && !lower.endsWith('.jpg')) {
-      return VisualAssetWidget(
-        visualPath: path,
-        width: size,
-        height: size,
-        repeat: metadata?.isAnimationLooped ?? true,
+  Widget build(BuildContext context) => Container(
+        padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 2 : 3),
+        decoration: BoxDecoration(
+          color: WizColors.ink,
+          borderRadius: BorderRadius.circular(WizRadii.chip),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: WizType.badge.copyWith(
+            color: WizColors.yellow,
+            fontSize: compact ? 10 : null,
+            letterSpacing: compact ? 0 : null,
+          ),
+        ),
       );
-    }
-    final muted = !_isFeatured(option, metadata);
-    return WizMascot(width: size, greyscale: muted, opacity: muted ? 0.7 : 1);
-  }
 }
 
 // ── cards ──────────────────────────────────────────────────────────────────
@@ -102,6 +156,7 @@ class PaywallCardsLayout extends StatelessWidget {
     required this.metadata,
     required this.selectedId,
     required this.priceFor,
+    required this.trialDaysOf,
     required this.onSelect,
   });
 
@@ -109,6 +164,7 @@ class PaywallCardsLayout extends StatelessWidget {
   final PaywallMetadata metadata;
   final String? selectedId;
   final PaywallPriceLookup priceFor;
+  final PaywallTrialLookup trialDaysOf;
   final PaywallOptionSelected onSelect;
 
   @override
@@ -128,6 +184,7 @@ class PaywallCardsLayout extends StatelessWidget {
                   metadata: metadata,
                   selected: pair[j].id == selectedId,
                   price: priceFor(pair[j]),
+                  trialDays: trialDaysOf(pair[j]),
                   onTap: () => onSelect(pair[j]),
                 ),
               ),
@@ -154,6 +211,7 @@ class _PlanCard extends StatelessWidget {
     required this.metadata,
     required this.selected,
     required this.price,
+    required this.trialDays,
     required this.onTap,
   });
 
@@ -161,13 +219,23 @@ class _PlanCard extends StatelessWidget {
   final PaywallMetadata metadata;
   final bool selected;
   final String? price;
+
+  /// This option's trial length; drives whether the trial pill is shown at all.
+  final int trialDays;
+
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final title = TemplateText.textOf(context, option.title);
     final desc = TemplateText.textOf(context, option.description);
-    final badge = TemplateText.textOf(context, option.badge);
+    final badges = badgesFor(option, trialDays, (v) => TemplateText.textOf(context, v));
+    final descriptionStyle = TextStyle(
+      fontFamily: WizType.bodyFont,
+      fontSize: metadata.descriptionSize,
+      height: 1.35,
+      color: WizColors.textSecondary,
+    );
 
     return WizPressable(
       onTap: onTap,
@@ -186,14 +254,14 @@ class _PlanCard extends StatelessWidget {
                 color: selected ? WizColors.ink : WizColors.border,
                 width: 2,
               ),
-              boxShadow: selected ? WizShadows.selectedPlan : const [],
+              boxShadow: selected ? metadata.cardStyle.selectedShadow : const [],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  height: 110,
+                  height: metadata.artBlockHeight,
                   width: double.infinity,
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
@@ -201,14 +269,19 @@ class _PlanCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(WizRadii.thumbLg),
                   ),
                   alignment: Alignment.center,
-                  child: _PlanArt(option: option, metadata: metadata, size: 88),
+                  child: VisualAssetWidget(
+                    visualPath: metadata.artPathFor(option.id),
+                    width: metadata.artWidth,
+                    height: metadata.artHeight,
+                    repeat: metadata.isAnimationLooped,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: WizType.display,
-                    fontSize: 17,
+                    fontSize: metadata.titleSize,
                     fontWeight: FontWeight.w700,
                     color: WizColors.ink,
                   ),
@@ -216,45 +289,36 @@ class _PlanCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 34),
-                  child: Text(
-                    desc,
-                    style: const TextStyle(
-                      fontFamily: WizType.bodyFont,
-                      fontSize: 12.5,
-                      height: 1.35,
-                      color: WizColors.textSecondary,
+                  child: Text.rich(
+                    TextSpan(
+                      children: HighlightedText.buildSpans(
+                        desc,
+                        descriptionStyle,
+                        option.descriptionHighlightWords,
+                      ),
                     ),
+                    style: descriptionStyle,
                   ),
                 ),
                 if (price != null) ...[
                   const SizedBox(height: 6),
-                  Text(
-                    price!,
-                    style: const TextStyle(
-                      fontFamily: WizType.display,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: WizColors.ink,
-                    ),
-                  ),
+                  Text(price!, style: priceStyleOf(metadata, selected: selected)),
                 ],
               ],
             ),
           ),
-          if (badge.isNotEmpty)
+          if (badges.isNotEmpty)
             Positioned(
+              // Straddles the card's top edge as the handoff drew it. A row that outgrows the
+              // card wraps downward over the art rather than clipping, so the number of
+              // badges stays the template's business.
               top: -10,
               left: 14,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: WizColors.ink,
-                  borderRadius: BorderRadius.circular(WizRadii.chip),
-                ),
-                child: Text(
-                  badge,
-                  style: WizType.badge.copyWith(color: WizColors.yellow),
-                ),
+              right: 14,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [for (final b in badges) PaywallBadgePill(label: b)],
               ),
             ),
         ],
@@ -272,13 +336,19 @@ class PaywallListLayout extends StatelessWidget {
     required this.options,
     required this.selectedId,
     required this.priceFor,
+    required this.trialDaysOf,
     required this.onSelect,
+    required this.metadata,
+    this.cardStyle = PaywallCardStyle.glow,
   });
 
   final List<PaywallOption> options;
   final String? selectedId;
   final PaywallPriceLookup priceFor;
+  final PaywallTrialLookup trialDaysOf;
   final PaywallOptionSelected onSelect;
+  final PaywallCardStyle cardStyle;
+  final PaywallMetadata metadata;
 
   @override
   Widget build(BuildContext context) {
@@ -293,6 +363,9 @@ class PaywallListLayout extends StatelessWidget {
             option: options[i],
             selected: options[i].id == selectedId,
             price: priceFor(options[i]),
+            trialDays: trialDaysOf(options[i]),
+            cardStyle: cardStyle,
+            metadata: metadata,
             onTap: () => onSelect(options[i]),
           ),
         ],
@@ -321,19 +394,25 @@ class _PlanRow extends StatelessWidget {
     required this.option,
     required this.selected,
     required this.price,
+    required this.trialDays,
+    required this.cardStyle,
+    required this.metadata,
     required this.onTap,
   });
 
   final PaywallOption option;
   final bool selected;
   final String? price;
+  final int trialDays;
+  final PaywallCardStyle cardStyle;
+  final PaywallMetadata metadata;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final title = TemplateText.textOf(context, option.title);
     final desc = TemplateText.textOf(context, option.description);
-    final badge = TemplateText.textOf(context, option.badge);
+    final badges = badgesFor(option, trialDays, (v) => TemplateText.textOf(context, v));
     return WizPressable(
       onTap: onTap,
       scale: 0.985,
@@ -345,7 +424,7 @@ class _PlanRow extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(WizRadii.card),
           border: Border.all(color: selected ? WizColors.ink : WizColors.border, width: 2),
-          boxShadow: selected ? WizShadows.selectedPlan : const [],
+          boxShadow: selected ? cardStyle.selectedShadow : const [],
         ),
         child: Row(
           children: [
@@ -385,13 +464,9 @@ class _PlanRow extends StatelessWidget {
                           style: WizType.optionLabel.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
-                      if (badge.isNotEmpty) ...[
+                      for (final b in badges) ...[
                         const SizedBox(width: 8),
-                        WizTag(
-                          label: badge,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          style: WizType.badge.copyWith(fontSize: 10, letterSpacing: 0),
-                        ),
+                        PaywallBadgePill(label: b, compact: true),
                       ],
                     ],
                   ),
@@ -404,15 +479,7 @@ class _PlanRow extends StatelessWidget {
             ),
             if (price != null) ...[
               const SizedBox(width: 12),
-              Text(
-                price!,
-                style: const TextStyle(
-                  fontFamily: WizType.display,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: WizColors.ink,
-                ),
-              ),
+              Text(price!, style: priceStyleOf(metadata, selected: selected)),
             ],
           ],
         ),
@@ -506,14 +573,28 @@ class PaywallCompactLayout extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _PlanArt(option: selected, metadata: metadata, size: 64),
+              VisualAssetWidget(
+                visualPath: metadata.artPathFor(selected.id),
+                width: 64,
+                height: 64,
+                repeat: metadata.isAnimationLooped,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      price == null ? title : '$title · $price',
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: title),
+                          if (price != null)
+                            TextSpan(
+                              text: '  $price',
+                              style: priceStyleOf(metadata, selected: true),
+                            ),
+                        ],
+                      ),
                       style: const TextStyle(
                         fontFamily: WizType.display,
                         fontSize: 18,

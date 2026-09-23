@@ -39,7 +39,7 @@ class PaywallStepView extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    PaywallStepVisual(path: step.visual),
+                    PaywallStepVisual(path: step.visual, size: step.artSize),
                     const SizedBox(height: 20),
                     if (title.isNotEmpty)
                       Text(title, textAlign: TextAlign.center, style: WizType.titleXl),

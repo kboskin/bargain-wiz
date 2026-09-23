@@ -22,6 +22,14 @@ class _SilentLogger implements AppLogger {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
+class _RecordingLogger implements AppLogger {
+  final errors = <String>[];
+  @override
+  void e(String message, [Object? error, StackTrace? stackTrace]) => errors.add(message);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
 class _FakeAuth implements AuthService {
   final controller = StreamController<User?>.broadcast();
   @override
@@ -70,9 +78,11 @@ class _FakeRemote implements ProfileRemoteDataSource {
   final patches = <ProfilePatchRequest>[];
   ProfileDocument? stored;
   bool fail = false;
+  int attempts = 0;
 
   @override
   Future<ProfileDocument> patch(ProfilePatchRequest request) async {
+    attempts++;
     if (fail) throw StateError('offline');
     patches.add(request);
     return stored ?? const ProfileDocument();
@@ -177,6 +187,44 @@ void main() {
     remote.fail = true;
     await service.pushOnboarding(entity); // must not throw
     expect(remote.patches.length, 1);
+  });
+
+  group('a failed push', () {
+    late _RecordingLogger logger;
+
+    setUp(() {
+      logger = _RecordingLogger();
+      service.dispose();
+      service = ProfileSyncService(
+        profile: profile,
+        remote: remote,
+        auth: auth,
+        onboarding: onboarding,
+        logger: logger,
+        debounce: Duration.zero,
+        retryDelay: const Duration(milliseconds: 10),
+        localeCode: () => 'es',
+      );
+    });
+
+    test('is retried once with the same patch, and nothing is reported when the retry lands', () async {
+      remote.fail = true;
+      await service.pushOnboarding(entity);
+      remote.fail = false;
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(remote.patches.single.onboardingStatus!.completed, isTrue);
+      expect(logger.errors, isEmpty);
+    });
+
+    test('is reported once when the retry fails too, and not retried again', () async {
+      remote.fail = true;
+      await service.pushOnboarding(entity);
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      expect(remote.attempts, 2);
+      expect(logger.errors, hasLength(1));
+    });
   });
 
   test('a scheduled push sends the stored answers (debounced)', () async {

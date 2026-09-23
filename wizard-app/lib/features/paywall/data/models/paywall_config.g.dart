@@ -20,6 +20,8 @@ PaywallConfig _$PaywallConfigFromJson(
   noteText: PaywallConfig._multilocaleFromJson(json['note_text']),
   showRestore: json['show_restore'] as bool? ?? true,
   showClose: json['show_close'] as bool? ?? false,
+  showContextHint: json['show_context_hint'] as bool? ?? true,
+  showNote: json['show_note'] as bool? ?? true,
   closeButtonDelaySeconds:
       (json['close_button_delay_seconds'] as num?)?.toDouble() ?? 5.0,
   paymentProvider: json['payment_provider'] as String?,
@@ -37,15 +39,9 @@ PaywallConfig _$PaywallConfigFromJson(
   noPaymentDueText: PaywallConfig._multilocaleFromJson(
     json['no_payment_due_text'],
   ),
-  timelineTodayText: PaywallConfig._multilocaleFromJson(
-    json['timeline_today_text'],
-  ),
-  timelineReminderText: PaywallConfig._multilocaleFromJson(
-    json['timeline_reminder_text'],
-  ),
-  timelineBillingText: PaywallConfig._multilocaleFromJson(
-    json['timeline_billing_text'],
-  ),
+  timelineTodayText: PluralText.fromJson(json['timeline_today_text']),
+  timelineReminderText: PluralText.fromJson(json['timeline_reminder_text']),
+  timelineBillingText: PluralText.fromJson(json['timeline_billing_text']),
   timelineTodaySubtitle: PaywallConfig._multilocaleFromJson(
     json['timeline_today_subtitle'],
   ),
@@ -85,6 +81,11 @@ PaywallConfig _$PaywallConfigFromJson(
           ?.map((e) => e as String)
           .toList() ??
       const [],
+  planCard: json['plan_card'] == null
+      ? null
+      : PaywallPlanCardConfig.fromJson(
+          json['plan_card'] as Map<String, dynamic>,
+        ),
 );
 
 Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
@@ -98,6 +99,8 @@ Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
       'note_text': instance.noteText,
       'show_restore': instance.showRestore,
       'show_close': instance.showClose,
+      'show_context_hint': instance.showContextHint,
+      'show_note': instance.showNote,
       'close_button_delay_seconds': instance.closeButtonDelaySeconds,
       'payment_provider': instance.paymentProvider,
       'trial_days': instance.trialDays,
@@ -107,15 +110,22 @@ Map<String, dynamic> _$PaywallConfigToJson(PaywallConfig instance) =>
       'description_highlight_words': instance.descriptionHighlightWords,
       'no_payment_highlight_words': instance.noPaymentHighlightWords,
       'no_payment_due_text': instance.noPaymentDueText,
-      'timeline_today_text': instance.timelineTodayText,
-      'timeline_reminder_text': instance.timelineReminderText,
-      'timeline_billing_text': instance.timelineBillingText,
+      'timeline_today_text': PaywallConfig._pluralToJson(
+        instance.timelineTodayText,
+      ),
+      'timeline_reminder_text': PaywallConfig._pluralToJson(
+        instance.timelineReminderText,
+      ),
+      'timeline_billing_text': PaywallConfig._pluralToJson(
+        instance.timelineBillingText,
+      ),
       'timeline_today_subtitle': instance.timelineTodaySubtitle,
       'timeline_reminder_subtitle': instance.timelineReminderSubtitle,
       'timeline_billing_subtitle': instance.timelineBillingSubtitle,
       'context_hints': instance.contextHints,
       'trial_timeline': instance.trialTimeline,
       'entry_points': instance.entryPoints,
+      'plan_card': instance.planCard,
     };
 
 PaywallTimelineRowConfig _$PaywallTimelineRowConfigFromJson(
@@ -140,6 +150,7 @@ PaywallStepConfig _$PaywallStepConfigFromJson(Map<String, dynamic> json) =>
       title: PaywallStepConfig._multilocaleFromJson(json['title']),
       description: PaywallStepConfig._multilocaleFromJson(json['description']),
       visual: json['visual'] as String?,
+      visualSize: (json['visual_size'] as num?)?.toDouble(),
       noteText: PaywallStepConfig._multilocaleFromJson(json['note_text']),
       buttonText: PaywallStepConfig._multilocaleFromJson(json['button_text']),
       titleHighlightWords: json['title_highlight_words'] == null
@@ -157,6 +168,7 @@ Map<String, dynamic> _$PaywallStepConfigToJson(PaywallStepConfig instance) =>
       'title': instance.title,
       'description': instance.description,
       'visual': instance.visual,
+      'visual_size': instance.visualSize,
       'note_text': instance.noteText,
       'button_text': instance.buttonText,
       'title_highlight_words': instance.titleHighlightWords,
@@ -171,11 +183,21 @@ PaywallOption _$PaywallOptionFromJson(Map<String, dynamic> json) =>
       title: PaywallOption._multilocaleFromJson(json['title']),
       description: PaywallOption._multilocaleFromJson(json['description']),
       badge: PaywallOption._multilocaleFromJson(json['badge']),
+      badges: json['badges'] == null
+          ? const []
+          : PaywallOption._featuresFromJson(json['badges']),
+      descriptionHighlightWords:
+          json['description_highlight_words'] as Map<String, dynamic>?,
+      artColor: json['art_color'] as String?,
       features: json['features'] == null
           ? const []
           : PaywallOption._featuresFromJson(json['features']),
       priceLabel: PaywallOption._multilocaleFromJson(json['price_label']),
       priceSuffix: PaywallOption._multilocaleFromJson(json['price_suffix']),
+      trialDays: (json['trial_days'] as num?)?.toInt(),
+      trialBadge: PluralText.fromJson(json['trial_badge']),
+      noteText: PaywallOption._multilocaleFromJson(json['note_text']),
+      buttonText: PaywallOption._multilocaleFromJson(json['button_text']),
     );
 
 Map<String, dynamic> _$PaywallOptionToJson(PaywallOption instance) =>
@@ -185,33 +207,56 @@ Map<String, dynamic> _$PaywallOptionToJson(PaywallOption instance) =>
       'title': instance.title,
       'description': instance.description,
       'badge': instance.badge,
+      'badges': instance.badges,
       'features': instance.features,
+      'art_color': instance.artColor,
+      'description_highlight_words': instance.descriptionHighlightWords,
       'price_label': instance.priceLabel,
       'price_suffix': instance.priceSuffix,
+      'trial_days': instance.trialDays,
+      'trial_badge': PaywallOption._pluralToJson(instance.trialBadge),
+      'note_text': instance.noteText,
+      'button_text': instance.buttonText,
     };
 
 PaywallMetadata _$PaywallMetadataFromJson(Map<String, dynamic> json) =>
     PaywallMetadata(
       defaultSelectedOptionId: json['default_selected_option_id'] as String,
       layout: PaywallMetadata._layoutFromJson(json['layout'] as String?),
-      cardStyle: json['card_style'] as String?,
+      cardStyle: json['card_style'] == null
+          ? PaywallCardStyle.glow
+          : PaywallMetadata._cardStyleFromJson(json['card_style'] as String?),
       visualWidth: (json['visual_width'] as num?)?.toDouble(),
       visualHeight: (json['visual_height'] as num?)?.toDouble(),
       visualOpacity: (json['visual_opacity'] as num?)?.toDouble(),
       animationLooped: json['animation_looped'] as bool?,
       optionVisuals: Map<String, String>.from(json['option_visuals'] as Map),
       highlightColor: json['highlight_color'] as String?,
+      titleFontSize: (json['title_font_size'] as num?)?.toDouble(),
+      descriptionFontSize: (json['description_font_size'] as num?)?.toDouble(),
+      priceFontSize: (json['price_font_size'] as num?)?.toDouble(),
+      priceFontWeight: (json['price_font_weight'] as num?)?.toInt(),
+      priceFontFamily: json['price_font_family'] as String?,
+      priceGlow: json['price_glow'] as bool?,
+      artBlockHeightConfig: (json['art_block_height'] as num?)?.toDouble(),
     );
 
 Map<String, dynamic> _$PaywallMetadataToJson(PaywallMetadata instance) =>
     <String, dynamic>{
       'default_selected_option_id': instance.defaultSelectedOptionId,
       'layout': PaywallMetadata._layoutToJson(instance.layout),
-      'card_style': instance.cardStyle,
+      'card_style': PaywallMetadata._cardStyleToJson(instance.cardStyle),
       'visual_width': instance.visualWidth,
       'visual_height': instance.visualHeight,
       'visual_opacity': instance.visualOpacity,
       'animation_looped': instance.animationLooped,
       'option_visuals': instance.optionVisuals,
       'highlight_color': instance.highlightColor,
+      'title_font_size': instance.titleFontSize,
+      'description_font_size': instance.descriptionFontSize,
+      'price_font_size': instance.priceFontSize,
+      'price_font_weight': instance.priceFontWeight,
+      'price_font_family': instance.priceFontFamily,
+      'price_glow': instance.priceGlow,
+      'art_block_height': instance.artBlockHeightConfig,
     };

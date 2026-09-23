@@ -158,6 +158,8 @@ flutter:
           weight: 700
     - family: Figtree
       fonts:
+        - asset: assets/fonts/Figtree-300.ttf
+          weight: 300
         - asset: assets/fonts/Figtree-400.ttf
           weight: 400
         - asset: assets/fonts/Figtree-500.ttf

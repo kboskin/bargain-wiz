@@ -35,6 +35,23 @@ void main() {
     expect(byKey['referral_code']!.options, isNull);
   });
 
+  test('pickedOptions keeps the answers picked from options and leaves typed ones out', () {
+    final picked = OnboardingAnswerFlattener.pickedOptions(screens, {
+      0: ['starting', 'fair_price'], // multi_select
+      2: 60, // slider_lottie (push)
+      3: {'marketplace': 'ebay', 'deals_per_month': '3_5'}, // select_group
+      7: 'FRIEND-42', // referral_code: typed, never reported
+    });
+
+    expect(picked, {
+      'hurdles': ['starting', 'fair_price'],
+      'push': 60,
+      'marketplace': 'ebay',
+      'deals_per_month': '3_5',
+    });
+    expect(OnboardingAnswerFlattener.pickedOptions(screens, {1: null}), isEmpty); // unanswered
+  });
+
   test('options survive the entity JSON round trip', () {
     final a = OnboardingAnswerFlattener.flatten(screens, {1: 'friendly'}).single;
     final copy = OnboardingAnswer.fromJson(a.toJson());

@@ -32,3 +32,40 @@ enum PaywallLayout {
     }
   }
 }
+
+/// How a plan card shows that it is the selected one, on top of the ink border it always
+/// gets. `glow` is the handoff's design and the default for any config that omits it.
+enum PaywallCardStyle {
+  /// Amber halo plus a soft drop shadow ([WizShadows.selectedPlan]).
+  glow,
+
+  /// A plain drop shadow, no colour.
+  shadow,
+
+  /// Border only.
+  flat;
+
+  static PaywallCardStyle fromString(String? value) {
+    switch ((value ?? '').toLowerCase()) {
+      case 'shadow':
+        return PaywallCardStyle.shadow;
+      case 'flat':
+      case 'none':
+        return PaywallCardStyle.flat;
+      case 'glow':
+      default:
+        return PaywallCardStyle.glow;
+    }
+  }
+
+  String get name {
+    switch (this) {
+      case PaywallCardStyle.glow:
+        return 'glow';
+      case PaywallCardStyle.shadow:
+        return 'shadow';
+      case PaywallCardStyle.flat:
+        return 'flat';
+    }
+  }
+}

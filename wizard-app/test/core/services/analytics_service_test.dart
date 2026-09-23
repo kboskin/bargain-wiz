@@ -100,20 +100,37 @@ void main() {
 
   group('onboarding funnel', () {
 
-    test('a step reports the answers it writes, never what was picked', () async {
+    test('a step reports the answers it writes and what was picked, one parameter per key', () async {
       await service.logOnboardingStepAnswered(
         index: 4,
         stepId: 'marketplace',
         stepType: 'select_group',
         answerKeys: ['marketplace', 'deal_size'],
+        answers: {'marketplace': 'ebay', 'deal_size': 550},
       );
 
       expect(analytics.events.single.parameters, {
+        'marketplace': 'ebay',
+        'deal_size': 550,
         'step_index': 4,
         'step_id': 'marketplace',
         'step_type': 'select_group',
         'answer_keys': 'marketplace,deal_size',
       });
+    });
+
+    test("a multi-select is comma-joined, and the step's own parameters win a name clash", () async {
+      await service.logOnboardingStepAnswered(
+        index: 0,
+        stepId: 'hurdles',
+        stepType: 'multiSelect',
+        answerKeys: ['hurdles'],
+        answers: {'hurdles': ['starting', 'fair_price'], 'step_index': 'x'},
+      );
+
+      final params = analytics.events.single.parameters!;
+      expect(params['hurdles'], 'starting,fair_price');
+      expect(params['step_index'], 0);
     });
 
     test('a screen that asks nothing leaves the parameter out entirely', () async {

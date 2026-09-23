@@ -91,6 +91,18 @@ class OnboardingAnswerFlattener {
     return out;
   }
 
+  /// `answerKey → value` for the answers picked from a configured option list (select,
+  /// multi-select, select-group, both sliders). Answers the person typed — a referral code —
+  /// are left out: the option ids are the config's words, a typed answer is the person's.
+  static Map<String, dynamic> pickedOptions(
+    List<OnboardingModel> screens,
+    Map<int, dynamic> answers,
+  ) =>
+      {
+        for (final a in flatten(screens, answers))
+          if (a.answerKey != null && a.options != null) a.answerKey!: a.answer,
+      };
+
   static bool _isBlank(dynamic v) =>
       v == null || (v is String && v.trim().isEmpty) || (v is List && v.isEmpty) || (v is Map && v.isEmpty);
 }

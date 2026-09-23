@@ -127,10 +127,10 @@ void main() {
     expect(m.visual, 'assets/lottie/falling_money.json');
   });
 
-  test('permission (rate_us): star visual, wand button visual and two buttons', () {
+  test('permission (rate_us): wizard visual, wand button visual and two buttons', () {
     final m = screens[6] as PermissionScreenModel;
     expect(m.subtype, 'rate_us');
-    expect(m.visual, 'assets/lottie/star_anim.json');
+    expect(m.visual, 'assets/images/wizard_yes_cutout.png');
     expect(m.metadata!.buttonVisual, 'assets/lottie/magic_stick_pointer.json');
     final buttons = m.metadata!.buttons!;
     expect(buttons.length, 2);

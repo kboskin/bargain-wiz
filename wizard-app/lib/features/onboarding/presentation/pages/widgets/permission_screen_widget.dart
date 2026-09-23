@@ -111,7 +111,20 @@ class _PermissionScreenWidgetState extends State<PermissionScreenWidget> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                VisualAssetWidget(visualPath: visual, width: size, height: widget.model.metadata?.height ?? size),
+                // The template picks the size; on a short screen there may not be room for it,
+                // and the surrounding IntrinsicHeight rules out measuring with a LayoutBuilder.
+                // Flexible + scaleDown lets the art give way to the text and buttons instead
+                // of overflowing, and changes nothing when the space is there.
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: VisualAssetWidget(
+                      visualPath: visual,
+                      width: size,
+                      height: widget.model.metadata?.height ?? size,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 HighlightedText(
                   TemplateText.textOf(context, widget.model.title),

@@ -8,9 +8,19 @@ import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_product.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 
-/// The bundled offer: one premium plan, monthly (preselected) and weekly, no trial.
+/// The timeline wording every derived-row test shares. Lives in the config, like the app's.
+const _timelineWording = {
+  'timeline_today_text': {'en': 'Today · {date}'},
+  'timeline_today_subtitle': {'en': 'Unlock every feature of {plan}'},
+  'timeline_reminder_text': {'en': 'Day {day} · {date}'},
+  'timeline_reminder_subtitle': {'en': 'We remind you before the trial ends'},
+  'timeline_billing_text': {'en': 'Day {day} · {date}'},
+  'timeline_billing_subtitle': {'en': 'Billing starts at {price} unless cancelled'},
+};
+
+/// The bundled offer: one premium plan, monthly (preselected) and weekly, 2 days free.
 PaywallConfig _config({
-  int trialDays = 0,
+  int trialDays = 2,
   List<Map<String, dynamic>>? trialTimeline,
   Map<String, dynamic> extra = const {},
 }) =>
@@ -45,6 +55,7 @@ PaywallConfig _config({
       'next_button_text': {'en': 'Unlock Bargain Wiz'},
       'note_text': {'en': '{price}, renews automatically. Cancel anytime.'},
       'trial_days': trialDays,
+      ..._timelineWording,
       if (trialTimeline != null) 'trial_timeline': trialTimeline,
       'context_hints': {
         'free': {'en': 'Express and Pro need the full wizard.'},
@@ -88,13 +99,34 @@ void main() {
 
     test('shows nothing when there is no trial and no rows are configured', () {
       final rows = PaywallTimelineBuilder.build(
-        config: _config(),
+        config: _config(trialDays: 0),
         now: now,
         plan: 'Premium',
         price: r'$19.99/mo',
         locale: 'en',
       );
       expect(rows, isEmpty);
+    });
+
+    test('shows nothing when the wording is not configured, rather than English defaults', () {
+      final bare = PaywallConfig.fromJson({
+        'type': 'test',
+        'title': {'en': 'Unlock Bargain Wiz'},
+        'description': {'en': ''},
+        'options': const <Map<String, dynamic>>[],
+        'metadata': {
+          'default_selected_option_id': 'monthly',
+          'layout': 'cards',
+          'option_visuals': <String, String>{},
+        },
+        'next_button_text': {'en': ''},
+        'note_text': {'en': ''},
+        'trial_days': 2,
+      });
+      expect(
+        PaywallTimelineBuilder.build(config: bare, now: now, plan: 'Premium', price: r'$6.99/wk'),
+        isEmpty,
+      );
     });
 
     test('fills {date}, {plan} and {price} from trial_timeline', () {
@@ -107,11 +139,11 @@ void main() {
       );
 
       expect(rows, hasLength(3));
-      expect(rows[0].title, 'Today · Sep 11');
+      expect(rows[0].title, 'Today · Sep 11, 2025');
       expect(rows[0].subtitle, 'Unlock every feature of Premium');
-      expect(rows[1].title, 'Day 2 · Sep 13');
+      expect(rows[1].title, 'Day 2 · Sep 13, 2025');
       expect(rows[1].subtitle, 'We remind you before the trial ends');
-      expect(rows[2].title, 'Day 3 · Sep 14');
+      expect(rows[2].title, 'Day 3 · Sep 14, 2025');
       expect(rows[2].subtitle, r'Billing starts at $6.99/wk unless cancelled');
     });
 
@@ -134,27 +166,60 @@ void main() {
         price: r'$6.99/wk',
         locale: 'en',
       );
-      expect(rows[1].title, 'Day 2 · Oct 2');
-      expect(rows[2].title, 'Day 3 · Oct 3');
+      expect(rows[1].title, 'Day 2 · Oct 2, 2025');
+      expect(rows[2].title, 'Day 3 · Oct 3, 2025');
     });
 
-    test('falls back to three default rows from trial_days when a trial is configured', () {
+    test('derives the rows from trial_days: today, the reminder, the billing day', () {
       final rows = PaywallTimelineBuilder.build(
-        config: _config(trialDays: 3),
+        config: _config(),
         now: now,
         plan: 'Premium',
         price: r'$6.99/wk',
         locale: 'en',
       );
-      expect(rows.map((r) => r.day), [0, 2, 3]);
-      expect(rows[0].title, 'Today · Sep 11');
+      expect(rows.map((r) => r.day), [0, 1, 2]);
+      expect(rows[0].title, 'Today · Sep 11, 2025');
       expect(rows[0].subtitle, 'Unlock every feature of Premium');
-      expect(rows[1].title, 'Day 2 · Sep 13');
-      expect(rows[2].title, 'Day 3 · Sep 14');
+      expect(rows[1].title, 'Day 1 · Sep 12, 2025');
+      expect(rows[2].title, 'Day 2 · Sep 13, 2025');
       expect(rows[2].subtitle, r'Billing starts at $6.99/wk unless cancelled');
     });
 
-    test('prefers legacy timeline_* fields over the hardcoded defaults', () {
+    test('a row title that counts days takes its singular form', () {
+      final rows = PaywallTimelineBuilder.build(
+        config: _config(trialDays: 2, extra: {
+          'timeline_reminder_text': {
+            'one': {'en': 'In {day} Day – Reminder'},
+            'other': {'en': 'In {day} Days – Reminder'},
+          },
+          'timeline_billing_text': {
+            'one': {'en': 'In {day} Day – Billing Starts'},
+            'other': {'en': 'In {day} Days – Billing Starts'},
+          },
+        }),
+        now: now,
+        plan: 'Premium',
+        price: r'$19.99/mo',
+        locale: 'en',
+      );
+      expect(rows[1].title, 'In 1 Day – Reminder');
+      expect(rows[2].title, 'In 2 Days – Billing Starts');
+    });
+
+    test('a longer trial moves the reminder and the billing day with it', () {
+      final rows = PaywallTimelineBuilder.build(
+        config: _config(trialDays: 7),
+        now: now,
+        plan: 'Premium',
+        price: r'$6.99/wk',
+        locale: 'en',
+      );
+      expect(rows.map((r) => r.day), [0, 6, 7]);
+      expect(rows[2].title, 'Day 7 · Sep 18, 2025');
+    });
+
+    test('each row can be worded independently', () {
       final rows = PaywallTimelineBuilder.build(
         config: _config(trialDays: 7, extra: {
           'timeline_today_text': {'en': 'Start · {date}'},
@@ -166,9 +231,9 @@ void main() {
         locale: 'en',
       );
       expect(rows.map((r) => r.day), [0, 6, 7]);
-      expect(rows[0].title, 'Start · Sep 11');
-      expect(rows[1].title, 'Day 6 · Sep 17');
-      expect(rows[2].subtitle, r'You pay $6.99/wk on Sep 18');
+      expect(rows[0].title, 'Start · Sep 11, 2025');
+      expect(rows[1].title, 'Day 6 · Sep 17, 2025');
+      expect(rows[2].subtitle, r'You pay $6.99/wk on Sep 18, 2025');
     });
 
     test('tidies the copy when no price is available', () {
@@ -201,6 +266,11 @@ void main() {
 
     test('falls back to English for locales without loaded data', () {
       expect(PaywallDates.monthDay(DateTime(2025, 9, 11), locale: 'xx-YY'), 'Sep 11');
+    });
+
+    test('the timeline spells the year out, since it names the day money moves', () {
+      expect(PaywallDates.monthDayYear(DateTime(2025, 9, 11), locale: 'en'), 'Sep 11, 2025');
+      expect(PaywallDates.monthDayYear(DateTime(2025, 9, 11), locale: 'xx-YY'), 'Sep 11, 2025');
     });
   });
 
@@ -330,8 +400,8 @@ void main() {
       expect(steps.map((s) => s.asksNotificationPermission), [false, true]);
     });
 
-    test('the bundled offer has no explainer steps', () {
-      expect(_config().steps, isEmpty);
+    test('an offer without a trial has no explainer steps', () {
+      expect(_config(trialDays: 0).steps, isEmpty);
     });
   });
 }

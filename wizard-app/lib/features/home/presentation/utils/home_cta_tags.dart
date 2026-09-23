@@ -25,15 +25,6 @@ class HomeCtaTags {
   int get hashCode => Object.hash(showExpressLockTag, showProLockTag);
 }
 
-/// Plan name shown in the drawer footer ("v2.0 · {tier}").
-String tierLabel(SubscriptionTier? tier) {
-  switch (tier ?? SubscriptionTier.free) {
-    case SubscriptionTier.free:
-      return 'Free plan';
-    case SubscriptionTier.premium:
-      return 'Premium';
-  }
-}
 
 /// Whether the bobbing first-run nudge is visible.
 ///

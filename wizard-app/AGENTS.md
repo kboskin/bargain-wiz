@@ -135,7 +135,8 @@ Notable features: `conversation/` (the shared Firestore listener + API used by b
 ## Docs in this folder
 
 `CONVERSATIONS.md` (backend-owned conversations, rules, indexes) · `AI_INTEGRATION.md`
-(function contracts, prompts, image limits) · `PROFILE_SYNC.md` · `LINES_THAT_LAND.md` ·
+(function contracts, prompts, image limits) · `PAYWALL_ART.md` (what the plan-card
+illustrations must be, and how to swap them) · `PROFILE_SYNC.md` · `LINES_THAT_LAND.md` ·
 `STARTUP.md` · `README_FLAVORS.md` + `QUICK_START_FLAVORS.md` · `FIREBASE_SETUP.md` ·
 `AUTH_SETUP.md` · `LINTING.md` · `VERSIONING.md` · `BUILD_TROUBLESHOOTING.md` ·
 `ANDROID_STUDIO_SETUP.md`.

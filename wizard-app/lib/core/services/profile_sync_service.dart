@@ -22,8 +22,9 @@ import 'package:appwizard/features/profile/domain/profile_fields.dart';
 ///   the account) and, on a device with no local answers, pulls the account's answers down
 ///   so the profile follows the user.
 ///
-/// Every push is a partial update: the server merges. Failures are logged and retried once
-/// after [retryDelay]; the UI never waits on this service.
+/// Every push is a partial update: the server merges. A failure is retried once after
+/// [retryDelay], and a failed retry is reported to Crashlytics; the UI never waits on this
+/// service.
 class ProfileSyncService {
   ProfileSyncService({
     required UserProfileService profile,
@@ -92,12 +93,21 @@ class ProfileSyncService {
     await _push(buildPatch(data, completed: data.isCompleted));
   }
 
-  Future<void> _push(ProfilePatchRequest patch) async {
+  /// A failure is retried once with the same patch — unless a later change schedules a push
+  /// of its own first, which carries the full state anyway. A failed retry is reported to
+  /// Crashlytics: it is the one point where the server is known to be missing what the
+  /// device has, and until the next change it stays that way.
+  Future<void> _push(ProfilePatchRequest patch, {bool retry = false}) async {
     try {
       await _remote.patch(patch);
-    } on Object catch (e) {
+    } on Object catch (e, st) {
+      if (retry) {
+        _logger.e('Profile sync failed after a retry', e, st);
+        return;
+      }
       _logger.w('Profile sync failed, retrying in ${retryDelay.inSeconds}s: $e');
-      schedulePush(retryDelay);
+      _timer?.cancel();
+      _timer = Timer(retryDelay, () => unawaited(_push(patch, retry: true)));
     }
   }
 

@@ -11,7 +11,7 @@ class ProfilePlanCard extends StatelessWidget {
     required this.subtitle,
     required this.ctaLabel,
     required this.onCta,
-    this.label = 'CURRENT PLAN',
+    this.label = '',
   });
 
   final String name;
@@ -53,23 +53,32 @@ class ProfilePlanCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          label,
-                          style: WizType.label.copyWith(
-                            fontSize: 11,
-                            letterSpacing: 1.1,
-                            color: WizColors.borderStrong,
+                        if (label.isNotEmpty) ...[
+                          Text(
+                            label,
+                            style: WizType.label.copyWith(
+                              fontSize: 11,
+                              letterSpacing: 1.1,
+                              color: WizColors.borderStrong,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
+                          const SizedBox(height: 4),
+                        ],
                         Text(name, style: WizType.titleXs.copyWith(color: Colors.white)),
-                        const SizedBox(height: 2),
-                        Text(subtitle, style: WizType.caption.copyWith(color: WizColors.borderStrong)),
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: WizType.caption.copyWith(color: WizColors.borderStrong),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  ProfileSmallPill(label: ctaLabel, onTap: onCta),
+                  if (ctaLabel.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    ProfileSmallPill(label: ctaLabel, onTap: onCta),
+                  ],
                 ],
               ),
             ),

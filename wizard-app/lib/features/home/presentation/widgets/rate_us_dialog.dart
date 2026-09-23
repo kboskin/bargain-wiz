@@ -25,6 +25,9 @@ class RateUsDialog extends StatelessWidget {
 
   final RateUsModalConfig? config;
 
+  /// Used when `rate_us_modal_config` names no size of its own.
+  static const double _defaultVisualSize = 90;
+
   static const String _defaultVisual = 'assets/lottie/star_anim.json';
 
   static Future<void> show(BuildContext context) {
@@ -51,7 +54,13 @@ class RateUsDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(child: VisualAssetWidget(visualPath: visual, width: 90, height: 90)),
+          Center(
+            child: VisualAssetWidget(
+              visualPath: visual,
+              width: config?.visualWidth ?? _defaultVisualSize,
+              height: config?.visualHeight ?? _defaultVisualSize,
+            ),
+          ),
           const SizedBox(height: 6),
           HighlightedText(
             title,

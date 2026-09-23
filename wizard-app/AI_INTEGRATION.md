@@ -227,16 +227,115 @@ Purchases** re-reads the store and drops the entitlement only when the store rep
 purchase, so a lapsed subscription falls back to free. Feature
 gating (`FeatureGatePolicy`, fixed in code) and the paywall copy tell the user what the plan includes.
 
-**The offer (2026-09-21):** one paid tier, `premium`, which unlocks Express Dealmaker and
+**The offer (2026-09-22):** one paid tier, `premium`, which unlocks Express Dealmaker and
 Pro Deal Closer; `free` keeps Lines that land, History and Profile. The plan is sold as two
 store products, monthly (`com.bargain.wiz.premium.monthly`, $19.99, preselected, "Best
-value") and weekly (`com.bargain.wiz.premium.weekly`, $6.99), with **no free trial**
-(`trial_days: 0`, no explainer steps, no timeline). Each `subscription_config` product carries
-an `id` ("monthly" / "weekly") and the `paywall_config` option with the same `id` buys it, so
-the paywall resolves prices and product ids per option, not per tier. The store price is shown
-with the option's `price_suffix` ("$19.99" + "/mo") so the billing period is always next to
-the amount. Prices in `price_label` are only the offline fallback; the stores' regional
-price tiers are the source of truth.
+value") and weekly (`com.bargain.wiz.premium.weekly`, $6.99). **The 3-day free trial is on the monthly
+product only**, which is how the stores model it: a trial is an introductory offer on one
+product, not on a plan. Each `subscription_config` product carries an `id` ("monthly" / "weekly") and the
+`paywall_config` option with the same `id` buys it, so the paywall resolves prices and product
+ids per option, not per tier. The store price is shown with the option's `price_suffix`
+("$19.99" + "/mo") so the billing period is always next to the amount. Prices in `price_label`
+are only the offline fallback; the stores' regional price tiers are the source of truth.
+
+`trial_days` is the single source for the trial, and it lives **per option** (the paywall-level
+value is only the fallback for an option that omits it): monthly sets 3, weekly sets 0
+explicitly rather than inheriting. Three is deliberate: it is the shortest free trial either
+store will create, so the app promises exactly what the store product can grant. It drives the trial pill on that plan's card, its note, its
+CTA, the three timeline rows (today / the day before the end / the billing day, titled
+relatively — "Today", "In 2 Days – Reminder", "In 3 Days – Billing Starts" — with the amount
+and the billing row's subtitle naming the date in a friendly register and **not** the amount —
+with `show_note` off, the plan card's price line is the only place the amount appears, so keep
+it visible; the titles are plural texts so "In 1 Day"
+reads, and `PaywallDates.monthDayYear` spells the year out because that row names the day
+money moves) and the Profile
+card's "Trial ends in n days" — which follows the period that was actually bought, so a weekly
+subscriber never sees trial copy. Selecting the weekly card shows no timeline and says nothing
+about a trial. Per-option keys: `trial_days`, `trial_badge` (a plural text filled with `{n}`,
+shown **first in the badge row** while that option's trial is greater than zero, so the monthly
+card leads with "3 days free" and loses only that pill if the trial goes away), `note_text` and `button_text` (overrides of the paywall-level ones, so
+a period with a trial and one without never share a sentence). `steps` holds the two explainer screens shown
+before the plans (intro, then the reminder step whose `button_action: request_permission`
+asks for push); an offer with `steps: []` and `trial_days: 0` renders as a single screen with
+no timeline, which is how the app shipped between 2026-09-21 and 2026-09-22.
+
+**No offer wording lives in Dart.** The app decides *which* line applies and the template
+decides *what it says*, so a plan change is a Remote Config edit and never a release. An
+unconfigured string renders as nothing rather than as English describing an offer this build
+cannot know. That covers the plans step (title, description, the cards, the note, the CTA and
+the context hint), the explainer steps, the timeline (`timeline_*_text` /
+`timeline_*_subtitle`; only the day numbers are computed) and — via the `plan_card` section —
+the Profile "current plan" card and the drawer footer's plan name:
+
+Monthly leads the offer: it is first in `options`, it is `default_selected_option_id`, and it
+is the only one that badges anything. Badges are a **row** straddling the card's top edge:
+`badges` is a list the template owns in its own order (empty today — the saving is made in
+monthly's description instead, so the card carries one pill, not two), and the
+trial pill is prepended to it rather than stored in it, so a claim about the trial cannot
+outlive `trial_days`. The row wraps over the art instead of clipping when it outgrows the card,
+so the count is the template's business. A card's `description_highlight_words`
+(`{"You save 34% with this plan": "bold #117E76"}`) emphasises phrases inside that card's own
+description.
+A value is `bold`, a hex colour, or **both together**, so a phrase can be weighted and tinted
+at once — that combined form works anywhere the shared highlighter is used, including the
+onboarding templates; matching is case-insensitive so both languages fit in one map,
+and a test fails if a highlighted phrase is not actually written in the copy. The older single `badge` field still renders as a
+one-pill row for any config written before this.
+
+Two switches sit beside `show_restore` / `show_close`, both currently **false**, with their
+wording left configured so either comes back without a release: `show_context_hint` (the amber
+hint above the plans) and `show_note` (the line between the plans and the CTA). The note is
+where the trial-to-billing terms were spelled out, so while it is hidden the trial timeline is
+what states them — keep `trial_days` above zero. Plan-card type is also configurable: `metadata.title_font_size` (17),
+`description_font_size` (12.5), `price_font_size` (11), `price_font_weight` (300),
+`price_font_family` (`body`) and `price_glow` (false). The price is deliberately the quietest
+text on the card: smaller than the description and genuinely light. **A weight only renders if
+it is bundled** — asking for one that is not silently falls back to the nearest that is, which
+is how a "light" price can still look heavy. Outfit ships 500/600/700; Figtree ships 300/400/
+500/600 (300 was instanced from the Google variable font with fontTools, like the others, and
+registered in `pubspec.yaml`). A test fails if `price_font_weight` names a file the pubspec
+does not carry. `price_glow` adds an amber halo
+(`WizShadows.textGlow`) on the **selected** card only; it is off, having read as highlighting.
+One `priceStyleOf` builds the style for the cards, list and compact layouts alike, so they
+cannot disagree about it.
+`metadata.card_style` picks how the **selected** card is emphasised on top of its ink border:
+`glow` (the handoff's amber halo, what ships), `shadow` (a plain drop shadow) or `flat` (border
+only). It governs the cards and the list rows alike, and an unknown value falls back to
+`glow`.
+
+**Per-plan art.** `metadata.option_visuals` maps an option id to its art, and the value is
+now honoured for images as well as Lottie/SVG — until 2026-09-22 any `.png`/`.jpg` path was
+ignored and every card drew the shared mascot, so two plans could not look different. Art a
+plan names is drawn as given; the greyscale-and-fade that marks the non-preselected card
+applies only to the fallback mascot. `options[].art_color` (`#RRGGBB`) tints the 110 px art
+block per plan (monthly `#FFF1E2` warm, weekly `#EEF7F6` cool) instead of deriving the tint
+from which card happens to be preselected. Monthly plays a looping Lottie and weekly
+shows a still image (`PAYWALL_ART.md` records both files and the brief behind them);
+`metadata.visual_width` / `visual_height` size the art (120, default 88) inside a block
+`art_block_height` tall (132, default 110) which clips it, so the two grow together;
+`animation_looped` decides whether a Lottie repeats.
+
+| `plan_card` key | Shown when | Placeholders |
+|---|---|---|
+| `label` · `free_name` · `paid_name` | always | — |
+| `free_subtitle` | free tier | — |
+| `trial_subtitle` (`{"one": …, "other": …}`) | paid, inside the trial | `{n}`, `{price}` |
+| `trial_ends_today_subtitle` | paid, the last day of the trial | `{price}` |
+| `renews_subtitle` | paid, the store reported a renewal date | `{date}`, `{price}`  |
+| `active_subtitle` | paid, no date (a restore, or a QA tier override) | `{price}` |
+| `upgrade_cta` · `manage_cta` | free / paid | — |
+
+The exceptions are strings that cannot come from the template by definition: the "plans are
+unavailable" state (shown when the config itself is missing), the store-timeout and
+restore-result toasts, and the debug tier-override labels. `test/features/paywall/
+bundled_offer_test.dart` parses the real defaults file and fails if any of the wording above
+is missing, loses a placeholder, or ships without Spanish.
+
+**The trial itself is a store offer, not app state.** The app only renders the copy: the free
+period has to exist as an introductory offer on each product in App Store Connect and Play
+Console, and neither store accepts fewer than **3 days**. Until `trial_days` is raised to 3 the
+app promises less free time than the store actually grants, and a mismatch in the other
+direction would fail App Store review under guideline 3.1.2.
 
 On iOS the plugin uses StoreKit 2 by default (`in_app_purchase_storekit` ≥ 0.4), so Restore
 reports only *current* entitlements and an expired subscription is not re-granted; purchase

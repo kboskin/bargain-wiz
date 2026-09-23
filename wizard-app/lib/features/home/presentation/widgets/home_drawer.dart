@@ -8,16 +8,18 @@ import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/services/feature_gate_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
+import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_mascot.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_event.dart';
 import 'package:appwizard/features/auth/presentation/bloc/auth_state.dart';
 import 'package:appwizard/features/auth/presentation/pages/sign_in_modal.dart';
-import 'package:appwizard/features/home/presentation/utils/home_cta_tags.dart';
 import 'package:appwizard/features/home/presentation/widgets/rate_us_dialog.dart';
 import 'package:appwizard/features/home/presentation/widgets/refer_sheet.dart';
 import 'package:appwizard/features/main_shell/domain/main_tab.dart';
+import 'package:appwizard/features/profile/domain/profile_plan_copy.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 import 'package:appwizard/features/main_shell/presentation/main_shell_controller.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 
@@ -35,6 +37,14 @@ class HomeDrawer extends StatefulWidget {
 
 class _HomeDrawerState extends State<HomeDrawer> {
   late final FeatureGateService _gate = di.sl<FeatureGateService>();
+  late final RemoteConfigService _remoteConfig = di.sl<RemoteConfigService>();
+
+  /// Plan name for the footer, worded by `paywall_config.plan_card` like the Profile card.
+  String get _planLabel => ProfilePlanCopy.planName(
+        _gate.lastTier ?? SubscriptionTier.free,
+        _remoteConfig.getPaywallConfig()?.planCard,
+        resolve: (v) => TemplateText.textOf(context, v),
+      );
 
   @override
   void initState() {
@@ -173,7 +183,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
-                    '${HomeDrawer.appVersion} · ${tierLabel(_gate.lastTier)}',
+                    [HomeDrawer.appVersion, _planLabel].where((s) => s.isNotEmpty).join(' · '),
                     style: WizType.footnote,
                   ),
                 ),

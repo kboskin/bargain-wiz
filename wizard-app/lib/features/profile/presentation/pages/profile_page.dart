@@ -133,8 +133,8 @@ class _ProfilePageState extends State<ProfilePage> {
         options.first;
   }
 
-  String? _planPrice() {
-    final option = _purchasedOption();
+  /// Store price of the period that was bought, with its `/mo` or `/wk` suffix.
+  String? _planPrice(PaywallOption? option) {
     if (option == null) return null;
     return PaywallPricing.priceFor(
       option,
@@ -222,13 +222,20 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) => ListenableBuilder(
         listenable: Listenable.merge([_profile, _gate]),
         builder: (context, _) {
-          final planName = ProfilePlanCopy.planName(_tier);
+          final planCard = _paywall?.planCard;
+          final purchased = _purchasedOption();
+          String resolvePlan(dynamic v) => TemplateText.textOf(context, v);
+          final planName = ProfilePlanCopy.planName(_tier, planCard, resolve: resolvePlan);
           final planSub = ProfilePlanCopy.planSub(
             tier: _tier,
+            card: planCard,
             status: _status,
-            price: _tier == SubscriptionTier.free ? null : _planPrice(),
+            price: _tier == SubscriptionTier.free ? null : _planPrice(purchased),
             now: DateTime.now(),
-            trialDays: _paywall?.trialDays ?? 0,
+            // The trial belongs to the period that was bought: a weekly subscriber never
+            // sees trial copy just because the monthly plan offers one.
+            trialDays: purchased?.trialDaysOr(_paywall?.trialDays ?? 0) ?? 0,
+            resolve: resolvePlan,
             formatDate: (d) => PaywallDates.monthDay(
               d,
               locale: Localizations.maybeLocaleOf(context)?.toLanguageTag(),
@@ -256,7 +263,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 ProfilePlanCard(
                   name: planName,
                   subtitle: planSub,
-                  ctaLabel: ProfilePlanCopy.cta(_tier),
+                  label: ProfilePlanCopy.label(planCard, resolve: resolvePlan),
+                  ctaLabel: ProfilePlanCopy.cta(_tier, planCard, resolve: resolvePlan),
                   onCta: _openPaywall,
                 ),
                 for (final field in cards)

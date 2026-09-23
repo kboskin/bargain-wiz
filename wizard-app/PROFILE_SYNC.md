@@ -172,7 +172,7 @@ Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUN
 | Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `onboarding_status.completed: true`. Best effort: onboarding finishes even if the backend is down. |
 | Profile screen edit | `UserProfileService` stores the answer, then calls `schedulePush`: a debounced (1.5 s) push of the full current state, which the server merges. |
 | Sign-in (`authStateChanges`) | Push once (server merges the anonymous profile), then if the device has no local answers, `GET` the account profile and save its answers locally (`saveOnboardingData` + `refresh`), so the profile follows the user. |
-| Failure | Logged, retried once after 30 s; every later change pushes the full state again. |
+| Failure | Retried once after 30 s with the same patch (a change made meanwhile pushes the full state instead). A failed retry is reported to Crashlytics as a non-fatal — the count of profiles the server is missing — and is not retried again: the next change pushes the full state. |
 
 ## Funnel analytics
 
@@ -185,7 +185,7 @@ itself (`core/services/analytics_service.dart`, called from
 | Event | When | Parameters |
 |---|---|---|
 | `screen_view` | a screen comes into view | `screen_name` `onboarding/<step_id>`, `screen_class` `OnboardingFlowPage`, plus `step_index`, `step_count`, `step_id`, `step_type`, `direction` |
-| `onboarding_step_answered` | the person moves on from that screen | `step_index`, `step_id`, `step_type`, `answer_keys` (left out when the screen asks nothing) |
+| `onboarding_step_answered` | the person moves on from that screen | `step_index`, `step_id`, `step_type`, `answer_keys` (left out when the screen asks nothing), and one parameter per answer picked from the screen's options, named by its key: `vibe` `tactical`, `deal_size` `550`, `hurdles` `starting,fair_price` |
 | `onboarding_completed` | the funnel finishes, beside the profile push | `step_count`, `answered_count` |
 
 A step is a screen, so it is reported as one: the flow calls `AnalyticsService.logScreenView`
@@ -194,10 +194,27 @@ repeating it beside the screen view.
 
 `step_id` is the screen's `answer_key_name`: screens have no id of their own, and the key is
 what survives the funnel being reordered — a screen that asks nothing is named by its template
-instead. **No answer values are reported**, only `answer_keys`, the questions the screen
-writes: what someone picked is `preferences`' job, and a funnel that never completes has
-nothing worth keeping beyond how far it got. Both events fire only where a screen actually
-changes, never per keystroke or slider tick.
+instead. Both events fire only where a screen actually changes, never per keystroke or slider
+tick.
+
+**What was picked rides on `onboarding_step_answered`** (2026-09-23; until then only
+`answer_keys` were sent). `preferences` is still the record, but it only exists for funnels that
+reach the end: the event is the one place the answers of someone who dropped out at the paywall
+exist, so the funnel can be broken down by answer ("do small-deal sellers quit earlier?") and
+joined with the A/B arm in the BigQuery export on uid, finished or not. Rules:
+
+- **Option ids only.** Only answers picked from a configured option list are sent — `select`,
+  `multi_select`, `select_group`, `slider`, `slider_lottie`
+  (`OnboardingAnswerFlattener.pickedOptions`). Typed answers (the referral code, any future
+  text screen) are never sent: Google Analytics forbids personal data, and free text can
+  carry it.
+- **The answer key is the parameter name**, so it must be a valid Analytics name (snake_case,
+  ≤ 40 characters, not `firebase_`/`google_`/`ga_`-prefixed — every key today is). A key that
+  clashes with one of the step's own parameters is dropped in their favour. Values are cut at
+  100 characters by Analytics; a multi-select is its ids comma-joined.
+- **To see them in the console**, register each key as an event-scoped custom dimension
+  (Analytics → Custom definitions; 50 per property). BigQuery has every parameter without
+  that, once the Analytics → BigQuery link is on for the project.
 
 Screen views for the rest of the app come from a `FirebaseAnalyticsObserver` on the router.
 It reads `route.settings.name`, so every page built by a custom `pageBuilder` carries a
@@ -214,10 +231,9 @@ that uid, so nothing has to be re-sent; signing into a credential that already h
 switches it, and that session keeps reporting under the uid it started with until the next
 launch — which the profile document and Firebase Auth both record properly anyway.
 
-The uid is the **only** thing reported about the person, and **no user properties are set at
-all**. Who that uid turned out to be lives on `identity.provider` above and in Firebase Auth;
-which build it was lives on `app` above; the answers live in `preferences` and on the funnel
-events. All of it joins to Analytics on the uid whenever it is actually wanted, and a user
+The uid is the **only** identity reported, and **no user properties are set at all**. Who that
+uid turned out to be lives on `identity.provider` above and in Firebase Auth; which build it was
+lives on `app` above; the answers live in `preferences` and on the funnel events. All of it joins to Analytics on the uid whenever it is actually wanted, and a user
 property would only be a second copy to keep true. (The `local` flavor turns collection off
 in the SDK, in `FirebaseService`, so emulator runs stay out of the data entirely.)
 

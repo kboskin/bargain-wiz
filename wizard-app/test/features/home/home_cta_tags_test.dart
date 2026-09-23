@@ -25,14 +25,6 @@ void main() {
     });
   });
 
-  group('tierLabel', () {
-    test('drawer footer labels', () {
-      expect(tierLabel(SubscriptionTier.free), 'Free plan');
-      expect(tierLabel(SubscriptionTier.premium), 'Premium');
-      expect(tierLabel(null), 'Free plan');
-    });
-  });
-
   group('showFirstRunNudge', () {
     test('hidden once Express was used', () {
       expect(showFirstRunNudge(expressUsed: true, nudgePending: true, historyEmpty: true), isFalse);
@@ -91,6 +83,30 @@ void main() {
       final bold = body.firstWhere((s) => s.text == 'rewards');
       expect(bold.style?.fontWeight, FontWeight.w700);
       expect(bold.style?.color, Colors.black);
+    });
+
+    test('a value can weight and tint at once', () {
+      final spans =
+          HighlightedText.buildSpans('You save 34%', base, {'save 34%': 'bold #117E76'})
+              .cast<TextSpan>();
+      final marked = spans.firstWhere((s) => s.text == 'save 34%');
+      expect(marked.style?.fontWeight, FontWeight.w700);
+      expect(marked.style?.color, const Color(0xFF117E76));
+      // The rest of the line is untouched.
+      expect(spans.first.style?.fontWeight, base.fontWeight);
+      expect(spans.first.style?.color, Colors.black);
+    });
+
+    test('either half on its own still behaves as before', () {
+      final boldOnly =
+          HighlightedText.buildSpans('a b', base, {'b': 'bold'}).cast<TextSpan>().last;
+      expect(boldOnly.style?.fontWeight, FontWeight.w700);
+      expect(boldOnly.style?.color, Colors.black);
+
+      final colourOnly =
+          HighlightedText.buildSpans('a b', base, {'b': '#117E76'}).cast<TextSpan>().last;
+      expect(colourOnly.style?.fontWeight, base.fontWeight);
+      expect(colourOnly.style?.color, const Color(0xFF117E76));
     });
 
     test('matching is case-insensitive; no config → single span', () {

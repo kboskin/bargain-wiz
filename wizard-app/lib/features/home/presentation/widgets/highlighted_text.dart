@@ -90,12 +90,20 @@ class HighlightedText extends StatelessWidget {
     return spans;
   }
 
+  /// A highlight value is `bold`, a hex colour, or both together — `"bold #117E76"` — so a
+  /// phrase can be weighted and tinted at once. Tokens may be separated by spaces or commas.
   static TextStyle _styleFor(String value, TextStyle base, Color? fallback) {
-    final v = value.toLowerCase();
-    if (v == 'bold' || v == 'bold_large') {
-      return base.copyWith(fontWeight: FontWeight.w700, color: fallback ?? base.color);
+    var weight = base.fontWeight;
+    Color? color;
+    for (final token in value.split(RegExp(r'[\s,]+')).where((t) => t.isNotEmpty)) {
+      final t = token.toLowerCase();
+      if (t == 'bold' || t == 'bold_large') {
+        weight = FontWeight.w700;
+      } else {
+        color ??= parseHexColor(token);
+      }
     }
-    return base.copyWith(color: parseHexColor(value) ?? fallback ?? base.color);
+    return base.copyWith(fontWeight: weight, color: color ?? fallback ?? base.color);
   }
 
   /// `#RGB`, `#RRGGBB`, `#AARRGGBB` (with or without `#`, `0x` accepted).

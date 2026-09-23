@@ -147,6 +147,13 @@ class WizShadows {
     BoxShadow(color: Color(0x73FFD166), spreadRadius: 4),
     BoxShadow(color: Color(0x1F14121B), blurRadius: 26, offset: Offset(0, 10)),
   ];
+
+  /// Amber halo behind text — the same yellow as [selectedPlan], as a [Shadow] so a light
+  /// weight can carry it. Two layers: a tight core and a wide bloom.
+  static const List<Shadow> textGlow = [
+    Shadow(color: Color(0x99FFD166), blurRadius: 8),
+    Shadow(color: Color(0x59FFD166), blurRadius: 18),
+  ];
 }
 
 class WizRadii {

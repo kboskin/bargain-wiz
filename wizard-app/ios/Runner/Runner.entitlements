@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Push Notifications capability. Without this file nothing sets aps-environment, so
+	  APNs registration fails and FCM cannot deliver the paywall's trial reminder.
+
+	  "development" is the sandbox APNs environment, which is what a development-signed
+	  build (Debug / Profile, and Release run locally) needs. An App Store or TestFlight
+	  archive needs "production": with automatic signing Xcode substitutes it from the
+	  distribution profile, so check the archive's entitlements before the first upload
+	  rather than assuming.
+
+	  This capability also has to exist on the App ID in the Apple Developer portal, and an
+	  APNs key has to be uploaded to Firebase, before a device gets a token. Both need a
+	  paid Apple Developer account. Until then this entitlement is inert: Simulator builds
+	  are unaffected, and device builds will fail to sign until the account exists.
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

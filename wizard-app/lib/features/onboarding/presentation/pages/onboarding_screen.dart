@@ -10,6 +10,7 @@ import 'package:appwizard/core/widgets/configurable_gradient_background.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
+import 'package:appwizard/features/onboarding/domain/logic/onboarding_answer_flattener.dart';
 import 'package:appwizard/features/onboarding/domain/logic/onboarding_profile_snapshot.dart';
 import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
 import 'package:appwizard/features/onboarding/presentation/bloc/onboarding_bloc.dart';
@@ -188,8 +189,10 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     ));
   }
 
-  /// The screen being left, named by the answers it writes — the picks themselves are the
-  /// profile's to record.
+  /// The screen being left, with what was picked on it — so the answers of a funnel that
+  /// never completes (and never reaches the profile) can still be analysed. Only picks from
+  /// the screen's own options are sent, never typed text, which could carry personal data
+  /// Analytics must not receive.
   void _logAnswer(OnboardingConfigLoaded state, int index) {
     if (index < 0 || index >= state.screens.length) return;
     final screen = state.screens[index];
@@ -198,6 +201,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       stepId: _stepId(screen),
       stepType: screen.type.name,
       answerKeys: screen.answerKeys,
+      answers: OnboardingAnswerFlattener.pickedOptions(state.screens, {index: state.answers[index]}),
     ));
   }
 

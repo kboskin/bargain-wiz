@@ -32,9 +32,10 @@ import 'package:appwizard/features/subscription/presentation/bloc/subscription_e
 import 'package:appwizard/features/subscription/presentation/bloc/subscription_state.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 
-/// Full-screen paywall modal (design handoff §7): optional explainer steps, then the plans
-/// step (cards / list / compact) with the monthly / weekly options of the one paid plan. The
-/// trial timeline only renders when a trial is configured.
+/// Full-screen paywall modal (design handoff §7): the explainer steps (intro → reminder),
+/// then the plans step (cards / list / compact) with the monthly / weekly options of the one
+/// paid plan. Steps and the trial timeline come from `paywall_config`, so an offer without a
+/// trial (`steps: []`, `trial_days: 0`) renders as a single screen with no timeline.
 ///
 /// Pops with `true` when access is granted (purchase, restore or debug override) and
 /// `false` when closed. Open it through [PaywallLauncher]; requires a [SubscriptionBloc]
@@ -420,7 +421,11 @@ class _PaywallPageState extends State<PaywallPage> {
     final label = TemplateText.textOf(
       context,
       step.buttonText,
-      fallback: TemplateText.textOf(context, config.nextButtonText, fallback: 'Continue'),
+      fallback: TemplateText.textOf(
+        context,
+        config.nextButtonText,
+        fallback: _l10n?.continueButton ?? 'Continue',
+      ),
     );
     return PaywallStepView(
       step: step,
@@ -432,22 +437,41 @@ class _PaywallPageState extends State<PaywallPage> {
 
   Widget _buildPlans(PaywallConfig config) {
     final option = _selectedOption;
-    final title = TemplateText.textOf(context, config.title, fallback: 'Unlock Bargain Wiz');
+    final title = TemplateText.textOf(context, config.title);
     final description = TemplateText.textOf(context, config.description);
     final hint = PaywallHints.hintFor(config.contextHints, widget.args.entry);
     final hintText = hint == null ? '' : hint.get(context);
     final planTitle = option == null ? '' : TemplateText.textOf(context, option.title);
     final price = option == null ? null : priceFor(option);
     final locale = Localizations.maybeLocaleOf(context)?.toLanguageTag();
+    // Each billing period carries its own offer, so the timeline, the note and the CTA all
+    // follow the selection: a period with no trial shows no timeline and says nothing about one.
+    final trialDays = option?.trialDaysOr(config.trialDays) ?? config.trialDays;
     final rows = PaywallTimelineBuilder.build(
       config: config,
       now: DateTime.now(),
       plan: planTitle,
       price: price,
+      trialDays: trialDays,
       resolve: (v) => TemplateText.textOf(context, v),
       locale: locale,
     );
-    final ctaLabel = TemplateText.textOf(context, config.nextButtonText, fallback: 'Unlock Bargain Wiz');
+    final noteTemplate = TemplateText.textOf(
+      context,
+      option?.noteText,
+      fallback: TemplateText.textOf(context, config.noteText),
+    );
+    // No offer wording in Dart: an unconfigured CTA falls back to the localized "Continue",
+    // never to a promise ("Try for free") this build cannot know the offer still makes.
+    final ctaLabel = TemplateText.textOf(
+      context,
+      option?.buttonText,
+      fallback: TemplateText.textOf(
+        context,
+        config.nextButtonText,
+        fallback: _l10n?.continueButton ?? 'Continue',
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -459,13 +483,14 @@ class _PaywallPageState extends State<PaywallPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(title, textAlign: TextAlign.center, style: WizType.title),
+                  if (title.isNotEmpty)
+                    Text(title, textAlign: TextAlign.center, style: WizType.title),
                   if (description.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(description, textAlign: TextAlign.center, style: WizType.bodyMd),
                   ],
                   const SizedBox(height: 16),
-                  if (hintText.isNotEmpty) ...[
+                  if (config.showContextHint && hintText.isNotEmpty) ...[
                     _ContextHint(text: hintText),
                     const SizedBox(height: 12),
                   ],
@@ -490,15 +515,10 @@ class _PaywallPageState extends State<PaywallPage> {
           ),
         ),
         const SizedBox(height: 6),
-        _NoteText(
-          template: TemplateText.textOf(
-            context,
-            config.noteText,
-            fallback: '{price}, renews automatically. Cancel anytime.',
-          ),
-          price: price,
-        ),
-        const SizedBox(height: 10),
+        if (config.showNote && noteTemplate.isNotEmpty) ...[
+          _NoteText(template: noteTemplate, price: price),
+          const SizedBox(height: 10),
+        ],
         GestureDetector(
           onLongPress: _debugShortcutAvailable ? _debugActivate : null,
           child: WizPrimaryButton(
@@ -571,7 +591,9 @@ class _ContextHint extends StatelessWidget {
       );
 }
 
-/// "**$19.99/mo**, renews automatically. Cancel anytime." — `{price}` rendered bold.
+/// The note under the CTA, e.g. "3 days free, then **$19.99/mo**. Cancel anytime." — the
+/// wording is `paywall_config.note_text` and `{price}` is rendered bold. Empty when the
+/// template is not configured: the offer's terms are the template's to state, not the app's.
 class _NoteText extends StatelessWidget {
   const _NoteText({required this.template, required this.price});
 

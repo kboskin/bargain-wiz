@@ -29,9 +29,11 @@ class PluralText {
       ? other.toJson()
       : {'one': one!.toJson(), 'other': other.toJson()};
 
+  /// The form for [count], unresolved — for callers that resolve the locale themselves
+  /// (and fill `{n}` with the rest of their placeholders).
+  MultilocaleText sourceFor(int count) => (count == 1 && one != null) ? one! : other;
+
   /// Resolves the plural form for [count] and replaces `{n}`.
-  String get(BuildContext context, int count) {
-    final source = (count == 1 && one != null) ? one! : other;
-    return source.get(context).replaceAll('{n}', '$count');
-  }
+  String get(BuildContext context, int count) =>
+      sourceFor(count).get(context).replaceAll('{n}', '$count');
 }
