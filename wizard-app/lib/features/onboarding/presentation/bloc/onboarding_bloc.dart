@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:appwizard/core/config/prefs_keys.dart';
 import 'package:appwizard/core/services/onboarding_service.dart';
+import 'package:appwizard/core/services/push_topic_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
@@ -21,11 +24,13 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
     required AppLogger logger,
     SharedPreferences? preferences,
     UserProfileService? profileService,
+    PushTopicService? pushTopics,
   })  : _repository = repository,
         _onboardingService = onboardingService,
         _logger = logger,
         _preferences = preferences,
         _profileService = profileService,
+        _pushTopics = pushTopics,
         super(const OnboardingInitial()) {
     on<LoadOnboardingConfigRequested>(_onLoadOnboardingConfig);
     on<OnboardingAnswerChanged>(_onAnswerChanged);
@@ -37,6 +42,7 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
   final AppLogger _logger;
   final SharedPreferences? _preferences;
   final UserProfileService? _profileService;
+  final PushTopicService? _pushTopics;
 
   Future<void> _onLoadOnboardingConfig(
     LoadOnboardingConfigRequested event,
@@ -103,6 +109,7 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
         (_) async {
           await _markFirstRun();
           await _profileService?.refresh();
+          unawaited(_pushTopics?.sync()); // onboarding_phase → subscription_phase
           emit(const OnboardingCompleted());
         },
       );

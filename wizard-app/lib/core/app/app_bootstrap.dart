@@ -9,6 +9,7 @@ import 'package:appwizard/core/services/analytics_service.dart';
 import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/firebase_service.dart';
 import 'package:appwizard/core/services/profile_sync_service.dart';
+import 'package:appwizard/core/services/push_topic_service.dart';
 import 'package:appwizard/core/services/remote_config_service.dart';
 
 /// Startup, split into what the first real screen needs and what can follow it.
@@ -21,7 +22,7 @@ import 'package:appwizard/core/services/remote_config_service.dart';
 /// failure screen up with tap-to-retry instead of letting a crippled app through.
 ///
 /// [warmUp] then starts what can lag behind the first screen: the Remote Config fetch (up to
-/// 10 s), profile sync and the analytics user id. The splash is already painted before any of this begins, so the
+/// 10 s), profile sync, the push topic and the analytics user id. The splash is already painted before any of this begins, so the
 /// launch still shows something immediately (see STARTUP.md).
 class AppBootstrap {
   const AppBootstrap._();
@@ -71,6 +72,7 @@ class AppBootstrap {
   static void warmUp() {
     unawaited(di.sl<RemoteConfigService>().refresh());
     di.sl<ProfileSyncService>().start();
+    di.sl<PushTopicService>().start();
     // Attributes events to the uid [run] just signed in (never null here: the launch is
     // blocked until it exists). Signing into an account that already has a uid of its own
     // switches it, and that session keeps reporting under this one until the next launch.

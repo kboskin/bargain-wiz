@@ -137,6 +137,32 @@ void main() {
     await r.dispose();
   });
 
+  test('reports every entitlement change, with the new one already readable', () async {
+    SubscriptionTier? seen;
+    var changes = 0;
+    late SubscriptionRepositoryImpl r;
+    r = SubscriptionRepositoryImpl(
+      payment,
+      SubscriptionInMemoryDataSourceImpl(_SilentLogger()),
+      _NoConfig(),
+      prefs,
+      _SilentLogger(),
+      restoreWindow: Duration.zero,
+      onEntitlementChanged: () async {
+        changes++;
+        seen = (await r.getSubscriptionStatus()).getOrElse(() => null)?.tier;
+      },
+    );
+    payment.controller.add(PurchaseUpdate.success(_purchase('com.bargain.wiz.premium.weekly')));
+    await Future<void>.delayed(Duration.zero);
+    expect((changes, seen), (1, SubscriptionTier.premium));
+
+    await r.restorePurchases(); // the store reports nothing: the entitlement is dropped
+    await Future<void>.delayed(Duration.zero);
+    expect((changes, seen), (2, null));
+    await r.dispose();
+  });
+
   test('restore keeps a paid purchase over an unknown one', () async {
     final r = await repo();
     payment.restoreResult = [_purchase('something.else'), _purchase('com.bargain.wiz.premium.monthly')];

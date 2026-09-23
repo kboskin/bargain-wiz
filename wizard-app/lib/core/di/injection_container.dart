@@ -53,6 +53,7 @@ import 'package:appwizard/features/lines_that_land/presentation/bloc/lines_that_
 
 import 'package:appwizard/core/network/cloud_functions_client.dart';
 import 'package:appwizard/core/services/profile_sync_service.dart';
+import 'package:appwizard/core/services/push_topic_service.dart';
 import 'package:appwizard/core/utils/screenshot_encoder.dart';
 import 'package:appwizard/features/profile/data/datasources/profile_remote_datasource.dart';
 import 'package:appwizard/features/express_dealmaker/data/datasources/cloud_express_dealmaker_remote_datasource.dart';
@@ -257,6 +258,8 @@ Future<void> init() async {
       sl<RemoteConfigService>(),
       sl<SharedPreferences>(),
       sl<AppLogger>(),
+      // Resolved lazily: the topic service reads the entitlement back through this one.
+      onEntitlementChanged: () => sl<PushTopicService>().sync(),
     ),
   );
 
@@ -308,6 +311,15 @@ Future<void> init() async {
         logger: sl<AppLogger>(),
       ),
     );
+
+  // Push topics: one FCM topic per funnel phase (onboarding → subscription → premium)
+  sl.registerLazySingleton<PushTopicService>(
+    () => PushTopicService(
+      onboarding: sl<OnboardingRepository>(),
+      subscription: sl<SubscriptionCheckerService>(),
+      logger: sl<AppLogger>(),
+    ),
+  );
 
   // Auth BLoC
   sl.registerFactory<AuthBloc>(

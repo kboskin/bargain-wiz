@@ -129,6 +129,13 @@ Notable features: `conversation/` (the shared Firestore listener + API used by b
   — used by the onboarding `permission` screen and by the paywall's reminder step (any step with
   `button_action: request_permission`, or the legacy `reminder` id). It prompts *and* registers
   for FCM; do not add a second path through `permission_handler`.
+- **Push topics have one owner too.** `PushTopicService` keeps each install in exactly one
+  FCM topic — `onboarding_phase` → `subscription_phase` → `premium_phase` — derived from local
+  state (paid tier, else finished onboarding, else onboarding), never stored. It re-applies on
+  every FCM token (so at launch, once there is one), when onboarding finishes and when the
+  stored entitlement changes. Campaigns target these names: renaming one leaves installs in
+  the old topic, because only the current names are ever unsubscribed. Do not call
+  `subscribeToTopic` anywhere else.
 - Emulator startup timings swing wildly with host load — measure with `--trace-startup` on an
   idle machine before claiming a regression (`STARTUP.md`).
 

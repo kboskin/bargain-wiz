@@ -34,6 +34,7 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     this._prefs,
     this._logger, {
     Duration restoreWindow = const Duration(seconds: 5),
+    this.onEntitlementChanged,
   }) : _restoreWindow = restoreWindow {
     // The store stream only flows once the provider is initialised, and nothing else does it.
     unawaited(_initialiseProvider());
@@ -59,6 +60,9 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
 
   /// How long Restore Purchases waits for the store to replay purchases on the stream.
   final Duration _restoreWindow;
+
+  /// Told after the stored entitlement is replaced or cleared (the push topic follows it).
+  final Future<void> Function()? onEntitlementChanged;
 
   StreamSubscription<PurchaseUpdate>? _updates;
 
@@ -106,11 +110,13 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     _inMemoryDataSource.saveSubscriptionStatus(model);
     _prefs.setString(PrefsKeys.subscriptionStatus, jsonEncode(model.toJson()));
     _logger.i('Subscription: ${status.tier.name} via ${status.productId}');
+    unawaited(onEntitlementChanged?.call());
   }
 
   void _forget() {
     _inMemoryDataSource.clearSubscriptionStatus();
     _prefs.remove(PrefsKeys.subscriptionStatus);
+    unawaited(onEntitlementChanged?.call());
   }
 
   SubscriptionModel? _persisted() {

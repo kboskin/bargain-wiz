@@ -1,4 +1,5 @@
 import 'package:appwizard/core/services/onboarding_service.dart';
+import 'package:appwizard/core/services/push_topic_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/onboarding/domain/repositories/onboarding_repository.dart';
@@ -17,6 +18,7 @@ void registerOnboardingDependencies(GetIt sl) {
         logger: sl<AppLogger>(),
         preferences: sl.isRegistered<SharedPreferences>() ? sl<SharedPreferences>() : null,
         profileService: sl.isRegistered<UserProfileService>() ? sl<UserProfileService>() : null,
+        pushTopics: sl.isRegistered<PushTopicService>() ? sl<PushTopicService>() : null,
       ),
     );
   }
