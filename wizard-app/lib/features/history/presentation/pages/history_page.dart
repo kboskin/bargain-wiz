@@ -13,6 +13,7 @@ import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/template_text.dart';
 import 'package:appwizard/core/widgets/wiz/fade_up.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_chip.dart';
+import 'package:appwizard/core/widgets/wiz/wiz_empty_state.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_text_field.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
@@ -21,7 +22,6 @@ import 'package:appwizard/features/express_dealmaker/presentation/pages/express_
 import 'package:appwizard/features/history/presentation/cubit/history_cubit.dart';
 import 'package:appwizard/features/history/presentation/cubit/history_state.dart';
 import 'package:appwizard/features/history/presentation/history_copy.dart';
-import 'package:appwizard/features/history/presentation/widgets/history_empty_state.dart';
 import 'package:appwizard/features/history/presentation/widgets/history_row.dart';
 import 'package:appwizard/features/history/presentation/widgets/history_status_sheet.dart';
 import 'package:appwizard/features/profile/domain/profile_fields.dart';
@@ -172,9 +172,16 @@ class _HistoryViewState extends State<HistoryView> {
     if (state.isLoading && !state.hasAny) return const SizedBox.shrink();
     final rows = state.visible;
     if (rows.isEmpty) {
+      // Rows exist but the search / filter hides them all.
+      final filtered = state.hasAny && state.isFiltering;
       return ListView(
         padding: padding,
-        children: [HistoryEmptyState(filtered: state.hasAny && state.isFiltering)],
+        children: [
+          WizEmptyState(
+            title: HistoryCopy.of(context, filtered ? HistoryCopy.nothingMatchesTitle : HistoryCopy.emptyTitle),
+            body: HistoryCopy.of(context, filtered ? HistoryCopy.nothingMatchesBody : HistoryCopy.emptyBody),
+          ),
+        ],
       );
     }
     return ListView.separated(
