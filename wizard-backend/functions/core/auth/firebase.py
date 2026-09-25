@@ -1,17 +1,19 @@
-"""Firebase Auth and App Check verification behind a small interface, so endpoints do not
-touch `firebase_admin` directly and tests inject identities instead of monkeypatching."""
-import logging
-from typing import Protocol
+"""Firebase Auth and App Check verification behind one interface, so controllers never touch
+`firebase_admin` directly and tests inject identities instead of monkeypatching."""
 
+import asyncio
+from typing import ClassVar, Protocol
+
+from firebase_functions import https_fn
 from pydantic import BaseModel, ConfigDict
 
-from core import config
+from core.config import SecuritySettings
 from core.errors import Unauthorized
-
-logger = logging.getLogger("auth")
 
 
 class AuthInfo(BaseModel):
+    """Who is calling: the Firebase uid (anonymous users included) and how they signed in."""
+
     model_config = ConfigDict(frozen=True)
 
     uid: str
@@ -19,81 +21,65 @@ class AuthInfo(BaseModel):
 
 
 class Authenticator(Protocol):
-    def optional(self, req) -> AuthInfo | None:
+    async def optional(self, req: https_fn.Request) -> AuthInfo | None:
         """Identity from the Authorization header, or None when absent."""
 
-    def require(self, req) -> AuthInfo:
+    async def require(self, req: https_fn.Request) -> AuthInfo:
         """Identity from the Authorization header; Unauthorized when absent."""
 
-    def verify_app_check(self, req) -> None:
+    async def verify_app_check(self, req: https_fn.Request) -> None:
         """Unauthorized when App Check is enforced and the token is missing or invalid."""
-
-
-def bearer_token(req) -> str | None:
-    header = req.headers.get("Authorization", "")
-    if not header.lower().startswith("bearer "):
-        return None
-    return header[7:].strip() or None
 
 
 class FirebaseAuthenticator:
     """Verifies Firebase ID tokens; anonymous users are first-class (every install has one).
-    A token that is present but invalid is always rejected."""
+    A token that is present but invalid is always rejected. The Admin SDK verifies
+    synchronously (and may fetch Google's signing keys), so verification runs on a thread."""
 
-    def optional(self, req) -> AuthInfo | None:
-        token = bearer_token(req)
+    APP_CHECK_HEADER: ClassVar[str] = "X-Firebase-AppCheck"
+    SIGN_IN_REQUIRED: ClassVar[str] = "Sign in required (send a Firebase ID token)"
+
+    def __init__(self, security: SecuritySettings):
+        self._security = security
+
+    @staticmethod
+    def bearer_token(req: https_fn.Request) -> str | None:
+        header = req.headers.get("Authorization", "")
+        if not header.lower().startswith("bearer "):
+            return None
+        return header[7:].strip() or None
+
+    async def optional(self, req: https_fn.Request) -> AuthInfo | None:
+        token = self.bearer_token(req)
         if token is None:
             return None
+        # Imported on first use: firebase_admin.auth adds ~0.15 s to a cold start, and the
+        # public Lines endpoint never verifies a token.
         from firebase_admin import auth as firebase_auth
 
         try:
-            claims = firebase_auth.verify_id_token(token)
+            claims = await asyncio.to_thread(firebase_auth.verify_id_token, token)
         except Exception as exc:
             raise Unauthorized("Invalid Firebase ID token") from exc
         provider = (claims.get("firebase") or {}).get("sign_in_provider")
         return AuthInfo(uid=claims["uid"], provider=provider)
 
-    def require(self, req) -> AuthInfo:
-        info = self.optional(req)
+    async def require(self, req: https_fn.Request) -> AuthInfo:
+        info = await self.optional(req)
         if info is None:
-            raise Unauthorized("Sign in required (send a Firebase ID token)")
+            raise Unauthorized(self.SIGN_IN_REQUIRED)
         return info
 
-    def verify_app_check(self, req) -> None:
+    async def verify_app_check(self, req: https_fn.Request) -> None:
         # `https_fn.on_request` does not check App Check itself (only callables do).
-        if not config.REQUIRE_APP_CHECK.value:
+        if not self._security.require_app_check:
             return
-        token = req.headers.get("X-Firebase-AppCheck", "").strip()
+        token = req.headers.get(self.APP_CHECK_HEADER, "").strip()
         if not token:
             raise Unauthorized("App Check token missing")
         from firebase_admin import app_check
 
         try:
-            app_check.verify_token(token)
+            await asyncio.to_thread(app_check.verify_token, token)
         except Exception as exc:
             raise Unauthorized("App Check token invalid") from exc
-
-
-class StaticAuthenticator:
-    """Test double: a fixed identity (or none). With [invalid_token] any bearer token is
-    rejected; with [app_check_ok] False every request fails App Check."""
-
-    def __init__(self, info: AuthInfo | None = None, *, invalid_token: bool = False, app_check_ok: bool = True):
-        self.info = info
-        self.invalid_token = invalid_token
-        self.app_check_ok = app_check_ok
-
-    def optional(self, req) -> AuthInfo | None:
-        if self.invalid_token and bearer_token(req):
-            raise Unauthorized("Invalid Firebase ID token")
-        return self.info
-
-    def require(self, req) -> AuthInfo:
-        info = self.optional(req)
-        if info is None:
-            raise Unauthorized("Sign in required (send a Firebase ID token)")
-        return info
-
-    def verify_app_check(self, req) -> None:
-        if not self.app_check_ok:
-            raise Unauthorized("App Check token missing")

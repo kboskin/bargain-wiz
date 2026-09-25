@@ -1,232 +1,130 @@
-"""Persistence for backend-owned conversations.
+"""The conversation documents in Firestore (the screenshots are `screenshots.py`).
 
-Firestore layout (only the functions write; the app listens with owner-only rules):
-
-    users/{uid}                                   the person's profile document (features/profile)
+    users/{uid}                                    the person's profile document (features/profile)
     users/{uid}/conversations/{cid}                summary for the history list (`active` flag)
     users/{uid}/conversations/{cid}/messages/{mid} one bubble per document, ordered by `seq`
 
-Nothing is ever deleted here: the app archives (`active: false`) and the document stays.
-Retention, if it is ever wanted, has `created_at` and `last_message_at` to work from — there
-is no derived expiry field. Screenshots live in Cloud Storage under
-`users/{uid}/conversations/{cid}/`; messages hold only the object path.
-Both classes here implement `..domain.ports.ConversationStore`; the in-memory one mirrors
-the semantics so the tests need no emulator.
+Only the functions write; the app listens with owner-only rules. Nothing is ever deleted: the
+app archives (`active: false`) and the document stays. Retention, if it is ever wanted, has
+`created_at` and `last_message_at` to work from. Messages hold only a screenshot's object path.
+
+Every call goes through the invocation's async client (`core.firestore.FirestoreConnection`),
+so the reads of one invocation overlap on its event loop. What comes back is validated into
+the domain's models; what goes in is the domain's documents and patches, made plain here.
 """
-import logging
-from datetime import UTC, datetime
+
 from typing import Any
 
-from core import config
 from core.errors import NotFound, TurnInProgress
-from core.firestore import SERVER_TIME, apply_in_memory, to_firestore
+from core.firestore import FirestorePatch, Patch
 
-logger = logging.getLogger("conversation_store")
-
-
-def image_path(uid: str, cid: str, image_id: str) -> str:
-    return f"users/{uid}/conversations/{cid}/{image_id}.jpg"
-
-
-def _active_turn(reply_id: str) -> dict:
-    return {"message_id": reply_id, "since": SERVER_TIME}
-
-
-# ── in-memory double ──────────────────────────────────────────────────────────
-
-
-class InMemoryConversationStore:
-    def __init__(self, clock=lambda: datetime.now(UTC)):
-        self._clock = clock
-        self.users: dict[str, dict[str, dict]] = {}
-        self.images: dict[str, bytes] = {}
-        self._seq = 0
-
-    def new_id(self) -> str:
-        self._seq += 1
-        return f"id{self._seq:04d}"
-
-    def _conv(self, uid: str, cid: str) -> dict | None:
-        return self.users.get(uid, {}).get(cid)
-
-    @staticmethod
-    def _copy(doc_id: str, doc: dict) -> dict:
-        return {**_deepcopy(doc), "id": doc_id}
-
-    def get_conversation(self, uid, cid):
-        conv = self._conv(uid, cid)
-        return self._copy(cid, conv["doc"]) if conv else None
-
-    def list_conversations(self, uid, *, limit=100):
-        docs = [self._copy(cid, c["doc"]) for cid, c in self.users.get(uid, {}).items() if c["doc"].get("active", True)]
-        docs.sort(key=lambda d: d.get("updated_at") or datetime.min.replace(tzinfo=UTC), reverse=True)
-        return docs[:limit]
-
-    def set_conversation(self, uid, cid, data, *, merge=False):
-        conv = self.users.setdefault(uid, {}).setdefault(cid, {"doc": {}, "messages": {}})
-        if not merge:
-            conv["doc"] = {}
-        apply_in_memory(conv["doc"], data, self._clock)
-
-    def list_messages(self, uid, cid):
-        conv = self._conv(uid, cid)
-        if not conv:
-            return []
-        return sorted((self._copy(mid, m) for mid, m in conv["messages"].items()), key=lambda d: d.get("seq", 0))
-
-    def set_message(self, uid, cid, mid, data, *, merge=False):
-        conv = self._conv(uid, cid)
-        if conv is None:
-            raise NotFound("No such conversation")
-        message = conv["messages"].setdefault(mid, {})
-        if not merge:
-            message.clear()
-        apply_in_memory(message, data, self._clock)
-
-    def begin_turn(self, uid, cid, user_message, wizard_message, patch):
-        conv = self._conv(uid, cid)
-        if conv is None:
-            raise NotFound("No such conversation")
-        if conv["doc"].get("active_turn"):
-            raise TurnInProgress("The wizard is still typing")
-        count = int(conv["doc"].get("message_count") or 0)
-        mid, reply_id = self.new_id(), self.new_id()
-        self.set_message(uid, cid, mid, {**user_message, "seq": count + 1, "reply_id": reply_id})
-        self.set_message(uid, cid, reply_id, {**wizard_message, "seq": count + 2})
-        self.set_conversation(
-            uid, cid,
-            {**patch, "message_count": count + 2, "active_turn": _active_turn(reply_id)},
-            merge=True,
-        )
-        return mid, reply_id
-
-    def put_image(self, uid, cid, image_id, data, mime_type):
-        path = image_path(uid, cid, image_id)
-        self.images[path] = data
-        return path
-
-    def get_image(self, path):
-        return self.images.get(path)
-
-    def image_uri(self, path):
-        return f"gs://in-memory/{path}" if path in self.images else None
-
-
-def _deepcopy(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {k: _deepcopy(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_deepcopy(v) for v in value]
-    return value
-
-
-# ── Firestore + Cloud Storage ─────────────────────────────────────────────────
-
-
-def _with_id(snapshot) -> dict | None:
-    if not snapshot.exists:
-        return None
-    return {**(snapshot.to_dict() or {}), "id": snapshot.id}
+from ..domain.documents import (
+    ConversationDocuments,
+    NewConversation,
+    NewMessage,
+    StoredConversation,
+    StoredMessage,
+)
 
 
 class FirestoreConversationStore:
-    def __init__(self, client=None, bucket=None):
-        if client is None:
-            from firebase_admin import firestore
+    """`..domain.ports.ConversationStore` on Firestore."""
 
-            client = firestore.client()
+    def __init__(self, client: Any):
         self._client = client
-        self._bucket = bucket
 
-    def _bucket_ref(self):
-        if self._bucket is None:
-            from firebase_admin import storage
+    @staticmethod
+    def _sdk() -> Any:
+        # Imported on first use: the Firestore client adds ~0.3 s to a cold start, and the
+        # stateless AI functions never touch Firestore.
+        from google.cloud import firestore
 
-            name = config.STORAGE_BUCKET.value.strip()
-            self._bucket = storage.bucket(name) if name else storage.bucket()
-        return self._bucket
+        return firestore
 
-    def _user(self, uid: str):
-        return self._client.collection("users").document(uid)
+    @staticmethod
+    def _fields(snapshot: Any) -> dict:
+        return {**(snapshot.to_dict() or {}), "id": snapshot.id}
 
-    def _conversations(self, uid: str):
-        return self._user(uid).collection("conversations")
+    def _conversations(self, uid: str) -> Any:
+        return self._client.collection("users").document(uid).collection("conversations")
 
-    def _messages(self, uid: str, cid: str):
+    def _messages(self, uid: str, cid: str) -> Any:
         return self._conversations(uid).document(cid).collection("messages")
 
     def new_id(self) -> str:
+        """A fresh document id, made locally like the SDK's own."""
         return self._client.collection("users").document().id
 
-    def get_conversation(self, uid, cid):
-        return _with_id(self._conversations(uid).document(cid).get())
+    async def get_conversation(self, uid: str, cid: str) -> StoredConversation | None:
+        snapshot = await self._conversations(uid).document(cid).get()
+        if not snapshot.exists:
+            return None
+        return StoredConversation.model_validate(self._fields(snapshot))
 
-    def list_conversations(self, uid, *, limit=100):
-        from google.cloud.firestore_v1 import Query
-        from google.cloud.firestore_v1.base_query import FieldFilter
-
+    async def list_conversations(self, uid: str, *, limit: int) -> list[StoredConversation]:
+        firestore = self._sdk()
         query = (
             self._conversations(uid)
-            .where(filter=FieldFilter("active", "==", True))
-            .order_by("updated_at", direction=Query.DESCENDING)
+            .where(filter=firestore.FieldFilter("active", "==", True))
+            .order_by("updated_at", direction=firestore.Query.DESCENDING)
             .limit(limit)
         )
-        return [doc for doc in (_with_id(s) for s in query.stream()) if doc]
+        return [StoredConversation.model_validate(self._fields(s)) for s in await query.get()]
 
-    def set_conversation(self, uid, cid, data, *, merge=False):
-        self._conversations(uid).document(cid).set(to_firestore(data), merge=merge)
+    async def list_messages(self, uid: str, cid: str) -> list[StoredMessage]:
+        snapshots = await self._messages(uid, cid).order_by("seq").get()
+        return [StoredMessage.model_validate(self._fields(s)) for s in snapshots]
 
-    def list_messages(self, uid, cid):
-        return [doc for doc in (_with_id(s) for s in self._messages(uid, cid).order_by("seq").stream()) if doc]
+    async def create_conversation(self, uid: str, cid: str, document: NewConversation) -> None:
+        await self._conversations(uid).document(cid).set(FirestorePatch.to_sdk(document))
 
-    def set_message(self, uid, cid, mid, data, *, merge=False):
-        self._messages(uid, cid).document(mid).set(to_firestore(data), merge=merge)
+    async def add_message(self, uid: str, cid: str, mid: str, document: NewMessage) -> None:
+        await self._messages(uid, cid).document(mid).set(FirestorePatch.to_sdk(document))
 
-    def begin_turn(self, uid, cid, user_message, wizard_message, patch):
-        from google.cloud import firestore
+    async def merge_conversation(self, uid: str, cid: str, patch: Patch) -> None:
+        document = self._conversations(uid).document(cid)
+        await document.set(FirestorePatch.to_sdk(patch), merge=True)
 
+    async def merge_message(self, uid: str, cid: str, mid: str, patch: Patch) -> None:
+        document = self._messages(uid, cid).document(mid)
+        await document.set(FirestorePatch.to_sdk(patch), merge=True)
+
+    async def begin_turn(
+        self, uid: str, cid: str, user: NewMessage, reply: NewMessage, patch: Patch
+    ) -> tuple[str, str]:
+        """One transaction: the SDK re-runs [run] with fresh reads when it contends."""
+        firestore = self._sdk()
         conv_ref = self._conversations(uid).document(cid)
         messages = self._messages(uid, cid)
-        transaction = self._client.transaction()
 
-        @firestore.transactional
-        def run(tx):
-            snapshot = conv_ref.get(transaction=tx)
+        @firestore.async_transactional
+        async def run(tx: Any) -> tuple[str, str]:
+            snapshot = await conv_ref.get(transaction=tx)
             if not snapshot.exists:
                 raise NotFound("No such conversation")
-            data = snapshot.to_dict() or {}
-            if data.get("active_turn"):
+            conversation = StoredConversation.model_validate(self._fields(snapshot))
+            if conversation.active_turn:
                 raise TurnInProgress("The wizard is still typing")
-            count = int(data.get("message_count") or 0)
+            count = conversation.message_count
             user_ref, reply_ref = messages.document(), messages.document()
-            tx.set(user_ref, to_firestore({**user_message, "seq": count + 1, "reply_id": reply_ref.id}))
-            tx.set(reply_ref, to_firestore({**wizard_message, "seq": count + 2}))
+            tx.set(
+                user_ref,
+                FirestorePatch.to_sdk(
+                    user.model_copy(update={"seq": count + 1, "reply_id": reply_ref.id})
+                ),
+            )
+            tx.set(reply_ref, FirestorePatch.to_sdk(reply.model_copy(update={"seq": count + 2})))
             tx.set(
                 conv_ref,
-                to_firestore({**patch, "message_count": count + 2, "active_turn": _active_turn(reply_ref.id)}),
+                FirestorePatch.to_sdk(
+                    {
+                        **patch,
+                        "message_count": count + 2,
+                        "active_turn": ConversationDocuments.active_turn(reply_ref.id),
+                    }
+                ),
                 merge=True,
             )
             return user_ref.id, reply_ref.id
 
-        return run(transaction)
-
-    def put_image(self, uid, cid, image_id, data, mime_type):
-        path = image_path(uid, cid, image_id)
-        blob = self._bucket_ref().blob(path)
-        blob.cache_control = "private, max-age=31536000"
-        blob.upload_from_string(data, content_type=mime_type)
-        return path
-
-    def get_image(self, path):
-        from google.api_core import exceptions
-
-        try:
-            return self._bucket_ref().blob(path).download_as_bytes()
-        except exceptions.NotFound:
-            return None
-
-    def image_uri(self, path):
-        """`gs://bucket/path`, for handing the screenshot to Vertex without reading it here.
-        Not checked for existence: a missing object costs one failed generation, while a
-        `blobs.exists()` per image per turn is the round-trip this exists to avoid."""
-        return f"gs://{self._bucket_ref().name}/{path}" if path else None
+        return await run(self._client.transaction())

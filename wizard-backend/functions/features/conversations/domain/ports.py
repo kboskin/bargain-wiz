@@ -1,41 +1,64 @@
-"""What [service.ConversationService] needs the outside world to provide.
+"""What the conversation service and worker need the outside world to provide.
 
-The implementations live under `..data` (Firestore + Cloud Storage, Cloud Tasks); the service
-only ever sees these two shapes, which is what lets the tests run the whole flow in memory.
+Three ports, each with one job: the documents (Firestore), the screenshots (Cloud Storage) and
+the queue (Cloud Tasks). Everything that reaches outside the process is `async`; `new_id` and
+`uri` are not, because they compute locally. The implementations live under `..data`; the
+tests have in-memory ones with the same semantics, which is what lets them run the whole flow
+without Firebase.
 """
+
 from typing import Protocol
 
+from core.firestore import Patch
+from core.storage.cloud import BlobReader
+
+from .documents import NewConversation, NewMessage, StoredConversation, StoredMessage
 from .models import GenerationTask
 
 
 class ConversationStore(Protocol):
+    """The conversation and message documents, in and out as models: reads come back
+    validated, new documents go in whole, and changes go in as merge [Patch]es."""
+
     def new_id(self) -> str: ...
 
-    def get_conversation(self, uid: str, cid: str) -> dict | None: ...
+    async def get_conversation(self, uid: str, cid: str) -> StoredConversation | None: ...
 
-    def list_conversations(self, uid: str, *, limit: int = 100) -> list[dict]:
-        """Active conversations, newest activity first."""
+    async def list_conversations(self, uid: str, *, limit: int) -> list[StoredConversation]:
+        """Active conversations, newest activity first, at most [limit]."""
 
-    def set_conversation(self, uid: str, cid: str, data: dict, *, merge: bool = False) -> None: ...
+    async def list_messages(self, uid: str, cid: str) -> list[StoredMessage]:
+        """All messages in `seq` order."""
 
-    def list_messages(self, uid: str, cid: str) -> list[dict]:
-        """All messages in `seq` order, each with its `id`."""
+    async def create_conversation(self, uid: str, cid: str, document: NewConversation) -> None: ...
 
-    def set_message(self, uid: str, cid: str, mid: str, data: dict, *, merge: bool = False) -> None: ...
+    async def add_message(self, uid: str, cid: str, mid: str, document: NewMessage) -> None: ...
 
-    def begin_turn(self, uid: str, cid: str, user_message: dict, wizard_message: dict, patch: dict) -> tuple[str, str]:
+    async def merge_conversation(self, uid: str, cid: str, patch: Patch) -> None:
+        """Firestore `set(merge=True)`: nested maps merge, lists and values replace, markers
+        apply."""
+
+    async def merge_message(self, uid: str, cid: str, mid: str, patch: Patch) -> None: ...
+
+    async def begin_turn(
+        self, uid: str, cid: str, user: NewMessage, reply: NewMessage, patch: Patch
+    ) -> tuple[str, str]:
         """Atomically append the user turn and the pending wizard placeholder, assign `seq`,
         apply [patch] and set `active_turn`. Raises TurnInProgress when a turn is running."""
 
-    def put_image(self, uid: str, cid: str, image_id: str, data: bytes, mime_type: str) -> str: ...
 
-    def image_uri(self, path: str) -> str | None:
-        """`gs://bucket/path`, for handing a stored screenshot to Vertex. The service never
-        reads the bytes back — that is the point of the URI — so there is no `get_image`
-        here; the concrete stores keep one for tests that check what was written."""
+class ScreenshotStore(BlobReader, Protocol):
+    """A conversation's screenshots. The domain never reads the bytes back — the model is
+    handed the `gs://` URI, and a provider that cannot fetch it gets the bytes through
+    [read], as the model manager's blob reader."""
+
+    async def put(self, uid: str, cid: str, data: bytes, mime_type: str) -> str:
+        """Store one screenshot of conversation [cid]; the object path messages refer to it by."""
+
+    def uri(self, path: str) -> str | None:
+        """`gs://bucket/path` for a stored object, None for a path that names none."""
 
 
 class Dispatcher(Protocol):
-    def dispatch(self, task: GenerationTask) -> None:
-        """Schedule the model call; must not block the caller on the model."""
-
+    async def dispatch(self, task: GenerationTask) -> None:
+        """Schedule the model call; in the cloud this returns once the task is queued."""

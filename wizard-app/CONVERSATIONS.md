@@ -175,6 +175,8 @@ and the profile through the `profile` function.
 | `error` | `{code, message}`? | when `failed`; message is user-safe |
 | `revision` | int | incremented on Redo; the previous text is not kept |
 | `model`, `latency_ms` | string?, int? | telemetry, safe to expose |
+| `usage` | `{prompt_tokens, cached_tokens, output_tokens, thought_tokens}`? | wizard turns: the tokens the call that wrote this revision used, as the provider counts them (`thought_tokens` is Gemini's thinking, billed as output; a local model reports only prompt and output). Absent when the provider reported none, and replaced on Redo. Telemetry, safe to expose; the app does not read it |
+| `options_usage` | same shape? | the "Give me options" call's tokens, kept apart from the reply's `usage`; removed with the `lines` it paid for on a Pro Redo |
 | `created_at`, `updated_at` | timestamp | |
 
 **The `system` record.** `POST /conversations` writes one message at `seq` 0 holding the
@@ -244,7 +246,7 @@ One 2nd-gen function `conversations` (60 s timeout, 512 MB) routes on `req.path`
 | `DELETE /conversations/{cid}` | | **archives** (`active: false`): gone from the app's list, kept; idempotent |
 
 Requests carry `Authorization: Bearer <ID token>` (required) and `X-Firebase-AppCheck` (required
-in production). Bodies are pydantic models validated through `validation.validate_model`. `profile` is the
+in production). Bodies are pydantic models validated through `Validation.parse` (`core/utils/`). `profile` is the
 buyer profile the AI functions take, nested under that name:
 `{"answers": [{"key", "value", "prompt"?}], "locale"}` — one entry per *pick*, so a
 multi-select is several entries sharing a key, in onboarding screen order, each carrying the
@@ -484,23 +486,33 @@ token counts. Never message text, never image bytes, never tokens. `logger.info`
 Modules in `wizard-backend/functions/` (implemented):
 
 - `features/conversations/domain/`: `models.py` (the pydantic bodies `CreateBody`, `TurnBody`,
-  `ActionBody`, `PatchBody` and the queue payload), `ports.py` (`ConversationStore` and
-  `Dispatcher`, what the service needs from the outside) and `service.py` (the
-  `ConversationService` turn flow and the worker).
+  `ActionBody`, `PatchBody` and the queue payload `GenerationTask`), `documents.py` (every
+  document as a model: `StoredConversation` / `StoredMessage` as read back, `NewConversation`
+  / `NewMessage` as created, `ImageRef` and `ExpressRecord` for the values inside them, and
+  `ConversationPatches` for every change), `history.py` (`ChatHistory`: which turns a generation reads, screenshots by
+  URI within the budget), `screenshots.py` (re-encode and store a turn's images), `service.py`
+  (`ConversationService`, the turn flow), `generations.py` (one class per kind of generation —
+  reply, Express answer, options — saying what it asks and writes), `worker.py`
+  (`GenerationWorker`: `job()` says what
+  will be asked, `run()` asks, writes and records the outcome) and `ports.py`
+  (`ConversationStore`, `Dispatcher`).
 - `features/conversations/data/`: `store.py` — `FirestoreConversationStore` (Firestore
-  transactions for `seq`/placeholder, Storage upload/download, recursive delete, per-day turn
-  counter) and `InMemoryConversationStore` for tests — and `dispatchers.py` (Cloud Tasks, plus
-  the inline one the emulator uses).
-- `features/conversations/presentation/routes.py`: `dispatch`, the sub-path routing.
-- `core/storage/images.py`: magic-number check, Pillow decode, bound to 1600 px, re-encode as
-  metadata-free JPEG.
+  transactions for `seq`/placeholder), `screenshots.py` — `CloudScreenshotStore`, the
+  bucket (the tests use in-memory ones with the same semantics, `tests/support/`) — and
+  `dispatchers.py`
+  (Cloud Tasks, plus the inline one the emulator uses).
+- `features/conversations/presentation/controller.py`: `ConversationsController`, auth and
+  the sub-path routing.
+- `core/storage/images.py`: `ImageProcessor` — magic-number check, Pillow decode, bound to
+  1600 px, re-encode as metadata-free JPEG.
 - `core/auth/firebase.py`: `Authenticator` (`optional`, `require`, `verify_app_check`) with the
-  Firebase implementation and a static test double; `core/errors.py`: one exception → HTTP
-  mapping; `core/http/endpoint.py`: JSON helpers and the `@json_endpoint` decorator;
-  `core/config.py`: every tunable as a Firebase param fed from `.env`.
-- `main.py`: the `@https_fn.on_request` functions themselves, samples-style (`initialize_app`,
-  `set_global_options`); collaborators are built per request, nothing is shared between
-  requests. The stateless AI functions stay until the app has moved.
+  Firebase implementation and a static one for tests; `core/errors.py`: one exception → HTTP
+  mapping; `core/http/endpoint.py`: `JsonEndpoint` and the JSON helpers;
+  `core/config/settings.py`: every tunable, declared on the typed section that reads it.
+- `module.py`: `ConversationsModule`, which wires all of the above for one invocation.
+- `main.py`: the functions themselves, each making a `Container` (`container.py`) for the
+  invocation; nothing is shared between requests. The stateless AI functions stay until the
+  app has moved.
 
 Project setup:
 
@@ -528,7 +540,8 @@ Project setup:
    the stored screenshots with it, since lifecycle rules are OR'd.
 4. Runtime service account: `roles/datastore.user`, `roles/storage.objectAdmin` on the bucket,
    `roles/firebaseappcheck.tokenVerifier` (plus the existing Vertex and Remote Config roles).
-5. Requirements: `Pillow`, `google-cloud-storage` (pulled in by `firebase-admin`).
+5. Requirements: `Pillow`, `google-cloud-firestore` (its `AsyncClient`), `google-cloud-storage`
+   (pulled in by `firebase-admin`).
 
 ## 9. App changes
 

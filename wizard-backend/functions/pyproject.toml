@@ -1,6 +1,8 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# A coroutine that is never awaited only warns; make it fail the test that forgot the await.
+filterwarnings = ["error::RuntimeWarning"]
 
 [tool.ruff]
 line-length = 100
@@ -10,3 +12,7 @@ target-version = "py312"
 # Pydantic turns ValueError (not TypeError) raised inside validators into a 400-able
 # ValidationError, so type checks in validators must raise ValueError.
 ignore = ["TRY004"]
+
+[tool.ruff.lint.isort]
+# `tests/support.py` is imported as a top-level module by the tests next to it.
+known-first-party = ["support"]

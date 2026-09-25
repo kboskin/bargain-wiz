@@ -165,7 +165,7 @@ Partial update: nested maps merge, a `null` leaf deletes the field, `onboarding_
 true` stamps `completed_at`. `app.last_opened_at` is an ISO-8601 time, stored as a Firestore
 timestamp. Returns the merged document. `identity` is server-managed.
 
-`referral.code` is **write-once** (`WRITE_ONCE` in `domain/profile.py`): the first code a
+`referral.code` is **write-once** (`WRITE_ONCE` in `domain/service.py`): the first code a
 profile is given stands, and a later PATCH carrying one is dropped and logged instead of
 re-attributing an install that is already credited. An explicit `null` still clears it, and
 the next code after that is treated as the first. The app hides the field (below), so this is
@@ -300,7 +300,8 @@ Files: `core/services/user_profile_service.dart`, `core/services/profile_sync_se
 `features/profile/domain/profile_fields.dart`,
 `features/profile/data/datasources/profile_remote_datasource.dart`,
 `features/profile/data/models/profile_api_models.dart`; backend
-`functions/features/profile/` (`domain/profile.py` + `data/store.py`).
+`functions/features/profile/` (`domain/patches.py`, `domain/service.py`, `data/store.py`,
+`presentation/controller.py`).
 
 ## Decisions and open points
 

@@ -1,4 +1,4 @@
-"""Firebase Cloud Functions (2nd gen, Python) for Bargain Wiz.
+"""Firebase Cloud Functions (2nd gen, Python) for Bargain Wiz — entry points only.
 
 - `lines_that_land`   GET   public content for the Lines tab            wizard-app/LINES_THAT_LAND.md
 - `express_dealmaker` POST  screenshots/text → three lines (stateless)  wizard-app/AI_INTEGRATION.md
@@ -10,207 +10,90 @@
                       are the rate limiter and its `RetryConfig` the retry policy.
 - `refresh_lines`     schedule that regenerates the Lines tab content with the same model.
 
-Nothing is kept between requests: each function builds what it needs from the environment
-(`config.py`) and the Admin SDK, which caches its own clients. Tests replace the constructors
-imported below (`VertexGenerator`, `FirestoreProfileStore`, …) with fakes.
+The Firebase CLI discovers functions as decorated module-level callables, so this is the one
+module that has them. Firebase calls them synchronously; each makes a [Container] for its
+invocation and runs it on an event loop of its own (`asyncio.run`), handing the request to the
+feature module that serves it (`container.py`). Nothing is kept between requests. The
+decorators take the params themselves (`Section.param`), so the deploy manifest carries them.
+Tests replace [Container] with a factory wired to in-memory stores.
 """
-import logging
-import os
-from email.utils import format_datetime
+
+import asyncio
 
 from firebase_admin import initialize_app
 from firebase_functions import https_fn, options, scheduler_fn, tasks_fn
 
-from core import config
-from core.ai.vertex import VertexGenerator
-from core.auth.firebase import FirebaseAuthenticator
-from core.http.endpoint import json_body, json_endpoint, json_response
-from core.serialization import jsonable
-from features.conversations.data.dispatchers import CloudTasksDispatcher, InlineDispatcher
-from features.conversations.data.store import FirestoreConversationStore
-from features.conversations.domain.ports import Dispatcher
-from features.conversations.domain.service import ConversationService
-from features.conversations.presentation.routes import dispatch
-from features.lines_that_land.data.store import FirestoreLinesStore
-from features.lines_that_land.domain.content import categories_json, current, locales_of
-from features.lines_that_land.domain.generation import generate_categories
-from features.negotiation.domain.lines import (
-    EXPRESS_SCHEMA,
-    OPTIONS_SCHEMA,
-    REPLY_SCHEMA,
-    express_result,
-    options_result,
-    reply_result,
-)
-from features.negotiation.domain.prompts import express_parts, pro_parts, system_prompt
-from features.negotiation.presentation.requests import parse_express_request, parse_pro_request
-from features.profile.data.store import FirestoreProfileStore
-from features.profile.domain.profile import Identity, apply_patch, read_profile
+from container import Container
+from core.config import LinesSettings, QueueSettings, RuntimeSettings
+from core.http.endpoint import JsonEndpoint
+from core.observability import LoggingSetup
+from core.utils import RuntimeEnvironment
 
-# Python's root logger defaults to WARNING; without this the request logs never reach Cloud Logging.
-logging.basicConfig(level=logging.INFO)
-logging.getLogger().setLevel(logging.INFO)
-logger = logging.getLogger("functions")
-
+# Process setup, once per instance: the SDK's default app, and where log lines go.
 initialize_app()
+LoggingSetup.configure(RuntimeEnvironment.current())
 
 options.set_global_options(
     region="us-central1",
-    memory=config.INSTANCE_MEMORY_MB,
-    timeout_sec=config.REQUEST_TIMEOUT_SEC,
-    max_instances=config.MAX_INSTANCES,
+    memory=RuntimeSettings.param("memory_mb"),
+    timeout_sec=RuntimeSettings.param("timeout_sec"),
+    max_instances=RuntimeSettings.param("max_instances"),
 )
 
-CORS = options.CorsOptions(cors_origins="*", cors_methods=["get", "post", "patch", "delete"])
 
-
-def conversation_service() -> ConversationService:
-    """A service wired for this request: Firestore, Gemini, and the queue that paces it."""
-    return ConversationService(FirestoreConversationStore(), VertexGenerator(), _dispatcher())
-
-
-def _described(profile) -> int:
-    """How many answers the client described. Zero at steady state on a shipped app means
-    the Remote Config template lost its `prompt` keys (AI_INTEGRATION.md)."""
-    return sum(1 for answer in profile.answers if answer.prompt)
-
-
-def _dispatcher() -> Dispatcher:
-    """Cloud Tasks in the cloud. The Functions emulator only has a Cloud Tasks host when the
-    tasks emulator runs; without it we generate inline so local development still works."""
-    if os.environ.get("FUNCTIONS_EMULATOR") == "true" and not os.environ.get("CLOUD_TASKS_EMULATOR_HOST"):
-        logger.info("no Cloud Tasks emulator: generating inline")
-        return InlineDispatcher(conversation_service)
-    return CloudTasksDispatcher()
-
-
-@https_fn.on_request(invoker="public", cors=CORS)
-@json_endpoint(methods=("GET",))
+@https_fn.on_request(invoker="public", cors=JsonEndpoint.CORS)
 def lines_that_land(req: https_fn.Request) -> https_fn.Response:
-    """The current "Lines that land" categories in every locale; the app picks the language.
-    No auth (public content), cacheable for the refresh interval."""
-    content = current(FirestoreLinesStore())
-    hours = config.LINES_REFRESH_INTERVAL_HOURS.value
-    max_age = hours * 3600
-    return json_response(
-        {
-            "categories": categories_json(content.categories),
-            "locales": locales_of(content.categories),
-            "updated_at": content.updated_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
-            "refresh_interval_hours": hours,
-            "source": content.source,
-        },
-        headers={
-            "Cache-Control": f"public, max-age={max_age}, s-maxage={max_age}",
-            "Last-Modified": format_datetime(content.updated_at, usegmt=True),
-        },
-    )
+    app = Container.for_request("lines_that_land", req)
+    return asyncio.run(app.serve(req, ("GET",), lambda c: c.lines.controller.get))
 
 
-@https_fn.on_request(invoker="public", cors=CORS)
-@json_endpoint(methods=("POST",))
-def express_dealmaker(req: https_fn.Request) -> dict:
-    """{images|text, keyword?, …profile} → {"seeing", "lines": [{intent, text, why}], "model"}."""
-    auth = FirebaseAuthenticator().optional(req)
-    request = parse_express_request(json_body(req))
-    generator = VertexGenerator()
-    raw = generator.generate_json(system=system_prompt(request.profile), parts=express_parts(request), schema=EXPRESS_SCHEMA)
-    logger.info(
-        "express_dealmaker uid=%s images=%d text=%s prompts=%d",
-        auth and auth.uid, len(request.images), bool(request.text), _described(request.profile),
-    )
-    return {**express_result(raw), "model": generator.model}
+@https_fn.on_request(invoker="public", cors=JsonEndpoint.CORS)
+def express_dealmaker(req: https_fn.Request) -> https_fn.Response:
+    app = Container.for_request("express_dealmaker", req)
+    return asyncio.run(app.serve(req, ("POST",), lambda c: c.negotiation.controller.express))
 
 
-@https_fn.on_request(invoker="public", cors=CORS)
-@json_endpoint(methods=("POST",))
-def pro_deal_closer(req: https_fn.Request) -> dict:
-    """{messages: [{role, text, images?}], mode: reply|options, regenerate?, …profile}
-    → reply mode {"reply", "model"}; options mode {"lines", "model"}."""
-    auth = FirebaseAuthenticator().optional(req)
-    request = parse_pro_request(json_body(req))
-    generator = VertexGenerator()
-    schema = OPTIONS_SCHEMA if request.mode == "options" else REPLY_SCHEMA
-    raw = generator.generate_json(system=system_prompt(request.profile), parts=pro_parts(request), schema=schema)
-    logger.info(
-        "pro_deal_closer uid=%s mode=%s messages=%d prompts=%d",
-        auth and auth.uid, request.mode, len(request.messages), _described(request.profile),
-    )
-    result = options_result(raw) if request.mode == "options" else reply_result(raw)
-    return {**result, "model": generator.model}
+@https_fn.on_request(invoker="public", cors=JsonEndpoint.CORS)
+def pro_deal_closer(req: https_fn.Request) -> https_fn.Response:
+    app = Container.for_request("pro_deal_closer", req)
+    return asyncio.run(app.serve(req, ("POST",), lambda c: c.negotiation.controller.pro))
 
 
-@https_fn.on_request(invoker="public", cors=CORS)
-@json_endpoint(methods=("GET", "PATCH"))
-def profile(req: https_fn.Request) -> dict:
-    """The caller's profile document at `users/{uid}`. Requires a Firebase ID token
-    (anonymous users included) — every install signs in before its first call.
-
-    GET                 → the document, 404 when none exists yet.
-    PATCH {preferences?, onboarding_status?, referral?, app?}
-          → partial update (nested maps merge, null deletes a leaf); returns the document.
-            `referral.code` is write-once: a code sent over one already recorded is dropped.
-    """
-    auth = FirebaseAuthenticator().require(req)
-    identity = Identity(uid=auth.uid, provider=auth.provider)
-    store = FirestoreProfileStore()
-    if req.method == "GET":
-        return jsonable(read_profile(store, identity))
-    body = json_body(req)
-    doc = apply_patch(store, identity, body)
-    logger.info("profile patch doc=%s sections=%s", identity.doc_id, sorted(body))
-    return jsonable(doc)
+@https_fn.on_request(invoker="public", cors=JsonEndpoint.CORS)
+def profile(req: https_fn.Request) -> https_fn.Response:
+    app = Container.for_request("profile", req)
+    return asyncio.run(app.serve(req, ("GET", "PATCH"), lambda c: c.profile.controller.handle))
 
 
-@https_fn.on_request(invoker="public", cors=CORS)
-@json_endpoint(methods=("GET", "POST", "PATCH", "DELETE"))
-def conversations(req: https_fn.Request) -> dict:
-    """Deal conversations owned by the backend. Requires a Firebase ID token (anonymous users
-    included). One turn is outstanding per conversation, so writes carry no client key.
-
-    POST   /conversations                  {type, text?, images?, …profile}      → ids
-    POST   /conversations/{cid}/messages   {text?, images?, …profile}            → ids
-    POST   /conversations/{cid}/options    {message_id?, …profile}               → ids
-    POST   /conversations/{cid}/redo       {message_id?, keyword?, …profile}     → ids
-
-    Every write returns as soon as the turn is stored; the model call runs in the `generate`
-    queue and the app reads the answer through its Firestore listener.
-    PATCH  /conversations/{cid}            {title?, status?, price_before?, price_after?, vibe?}
-    GET    /conversations | /conversations/{cid}
-    DELETE /conversations | /conversations/{cid}
-    """
-    authenticator = FirebaseAuthenticator()
-    authenticator.verify_app_check(req)
-    auth = authenticator.require(req)
-    body = json_body(req) if req.method in ("POST", "PATCH") else {}
-    return dispatch(conversation_service(), auth, req.method, req.path, body)
+@https_fn.on_request(invoker="public", cors=JsonEndpoint.CORS)
+def conversations(req: https_fn.Request) -> https_fn.Response:
+    app = Container.for_request("conversations", req)
+    methods = ("GET", "POST", "PATCH", "DELETE")
+    return asyncio.run(app.serve(req, methods, lambda c: c.conversations.controller.handle))
 
 
 @tasks_fn.on_task_dispatched(
-    retry_config=options.RetryConfig(max_attempts=config.QUEUE_MAX_ATTEMPTS),
+    retry_config=options.RetryConfig(max_attempts=QueueSettings.param("max_attempts")),
     rate_limits=options.RateLimits(
-        max_concurrent_dispatches=config.QUEUE_MAX_CONCURRENT_DISPATCHES,
-        max_dispatches_per_second=config.QUEUE_MAX_DISPATCHES_PER_SECOND,
+        max_concurrent_dispatches=QueueSettings.param("max_concurrent_dispatches"),
+        max_dispatches_per_second=QueueSettings.param("max_dispatches_per_second"),
     ),
 )
 def generate(req: tasks_fn.CallableRequest) -> None:
-    """Runs one queued model call and completes the message it belongs to. Enqueued by
-    `conversations`; the queue's rate limits pace every Gemini call in the project."""
+    """One queued model call. Enqueued by `conversations`; the queue's rate limits pace every
+    model call in the project."""
     attempt = int(req.raw_request.headers.get("X-CloudTasks-TaskRetryCount") or 0)
-    conversation_service().generate(req.data, attempt=attempt)
+    app = Container.for_background("generate")
+    asyncio.run(app.run(lambda c: c.conversations.worker.run(req.data, attempt=attempt)))
 
 
 # A schedule is fixed at deploy time, so this reads the interval now rather than per call;
 # change LINES_REFRESH_INTERVAL_HOURS in .env and redeploy to change the cadence.
-@scheduler_fn.on_schedule(schedule=f"every {config.LINES_REFRESH_INTERVAL_HOURS.value} hours")
+@scheduler_fn.on_schedule(
+    schedule=f"every {LinesSettings.param('refresh_interval_hours').value} hours"
+)
 def refresh_lines(event: scheduler_fn.ScheduledEvent) -> None:
-    """Regenerates the Lines tab content with Gemini (structured output, same generator as the
-    chat) and stores it. A failure leaves the previous content in place; the next run retries."""
-    generator = VertexGenerator()
-    categories = generate_categories(generator)
-    content = FirestoreLinesStore().write(categories, model=generator.model)
-    logger.info(
-        "lines regenerated: %d categories, %d lines",
-        len(content.categories),
-        sum(len(category.tips) for category in content.categories),
-    )
+    """Regenerates the Lines tab content. A failure leaves the previous content in place; the
+    next run retries."""
+    app = Container.for_background("refresh_lines")
+    asyncio.run(app.run(lambda c: c.lines.generator.refresh()))

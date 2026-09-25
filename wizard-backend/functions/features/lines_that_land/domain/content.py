@@ -1,78 +1,75 @@
-"""What the Lines tab shows, and the schema Gemini is held to when it writes it.
+"""What the Lines tab shows, and the schema the model is held to when it writes it.
 
 [GeneratedLines] is the response schema the generation is constrained to, the validation of
 what comes back, the shape stored in Firestore and the shape served — one declaration, no
-normalisation step. [current] is what the endpoint asks for: the stored content when there is
-some, else [FALLBACK_CATEGORIES], so the tab always has something to show.
+normalisation step. When nothing has been generated yet, the tab shows
+[LinesContent.fallback], so it always has something to show.
 
 Which categories and which languages a generation must produce are configuration
-([category_ids], [locales]). They reach Gemini as part of the response schema, which the SDK
-builds per call — so a change in `.env` changes what the model may answer, while content
-stored or bundled under an older setting still reads back.
+(`LinesSettings`). They reach the model as part of the response schema, which is built per
+call — so a change in `.env` changes what the model may answer, while content stored or
+bundled under an older setting still reads back.
 """
-import logging
-from datetime import UTC, datetime
-from typing import Annotated, Literal, Protocol
+
+from datetime import datetime
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
-from core import config
-
-logger = logging.getLogger("lines_that_land")
+from core.config import LinesSettings
 
 
-def category_ids() -> tuple[str, ...]:
-    """The categories one generation must produce, in the order the app renders them."""
-    return _csv(config.LINES_CATEGORY_IDS.value)
+class LocaleTexts:
+    """A text in several languages: `{BCP-47 tag: text}`."""
 
-
-def locales() -> tuple[str, ...]:
-    """The languages every generated text must carry."""
-    return _csv(config.LINES_LOCALES.value)
-
-
-def _csv(value: str) -> tuple[str, ...]:
-    return tuple(part.strip() for part in value.split(",") if part.strip())
-
-
-# ── the shape of the content (and the response schema Gemini is held to) ──────
-
-
-def _texts(value: object) -> dict[str, str]:
-    """`{tag: text}`, trimmed. Which tags must be there is the schema's job (see below), so a
-    text that arrives with fewer — bundled content, a document from an older setting — is kept
-    rather than rejected."""
-    if not isinstance(value, dict):
-        raise ValueError("must be a map of language tag to text")
-    texts = {str(tag): text.strip() for tag, text in value.items() if isinstance(text, str) and text.strip()}
-    if not texts:
-        raise ValueError("must have a text in at least one language")
-    return texts
-
-
-LocaleText = Annotated[dict[str, str], BeforeValidator(_texts)]
-
-
-def _as_locale_text(schema: dict) -> None:
-    """Turn a `{tag: text}` map into the object Gemini has to fill: one required string per
-    configured language. Written when the schema is built (once per call, by the SDK), which
-    is what lets the languages live in `.env`."""
-    tags = list(locales())
-    schema.pop("additionalProperties", None)
-    schema["type"] = "object"
-    schema["properties"] = {
-        tag: {
-            "type": "string",
-            "description": f"The text in the language of the BCP-47 tag {tag}, as a native "
-            "speaker would write it — not a word-for-word translation of another language.",
+    @staticmethod
+    def clean(value: object) -> dict[str, str]:
+        """Trimmed. Which tags must be there is the schema's job ([schema]), so a text that
+        arrives with fewer — bundled content, a document from an older setting — is kept
+        rather than rejected."""
+        if not isinstance(value, dict):
+            raise ValueError("must be a map of language tag to text")
+        texts = {
+            str(tag): text.strip()
+            for tag, text in value.items()
+            if isinstance(text, str) and text.strip()
         }
-        for tag in tags
-    }
-    schema["required"] = tags
+        if not texts:
+            raise ValueError("must have a text in at least one language")
+        return texts
+
+    @staticmethod
+    def schema(schema: dict) -> None:
+        """Turn a `{tag: text}` map into the object the model has to fill: one required string
+        per configured language. Written when the schema is built (once per call), which is
+        what lets the languages live in `.env`."""
+        tags = list(LinesSettings.current().locales)
+        schema.pop("additionalProperties", None)
+        schema["type"] = "object"
+        schema["properties"] = {
+            tag: {
+                "type": "string",
+                "description": f"The text in the language of the BCP-47 tag {tag}, as a native "
+                "speaker would write it — not a word-for-word translation of another language.",
+            }
+            for tag in tags
+        }
+        schema["required"] = tags
+
+    @staticmethod
+    def schema_of_items(schema: dict) -> None:
+        LocaleTexts.schema(schema["items"])
+
+    @staticmethod
+    def schema_of_ids(schema: dict) -> None:
+        schema.update(enum=list(LinesSettings.current().category_ids))
 
 
-# Docstrings and `Field(description=…)` below travel to Gemini as the response schema, so they
-# are prompt as much as documentation.
+LocaleText = Annotated[dict[str, str], BeforeValidator(LocaleTexts.clean)]
+
+
+# Docstrings and `Field(description=…)` below travel to the model as the response schema, so
+# they are prompt as much as documentation.
 class Category(BaseModel):
     """One card in the Lines tab: a named group of ready-to-paste lines."""
 
@@ -80,16 +77,15 @@ class Category(BaseModel):
 
     id: str = Field(
         min_length=1,
-        json_schema_extra=lambda schema: schema.update(enum=list(category_ids())),
+        json_schema_extra=LocaleTexts.schema_of_ids,
         description="Which category this is.",
     )
     name: LocaleText = Field(
-        json_schema_extra=_as_locale_text,
-        description="The category title, two or three words.",
+        json_schema_extra=LocaleTexts.schema, description="The category title, two or three words."
     )
     tips: list[LocaleText] = Field(
         min_length=1,
-        json_schema_extra=lambda schema: _as_locale_text(schema["items"]),
+        json_schema_extra=LocaleTexts.schema_of_items,
         description="The lines of this category, each one complete message the buyer can send as it is.",
     )
 
@@ -111,71 +107,76 @@ class LinesContent(BaseModel):
     updated_at: datetime  # timezone-aware UTC; when the content was generated
     source: Literal["generated", "fallback"]
 
+    def categories_json(self) -> list[dict]:
+        """Plain JSON: what the endpoint sends and what Firestore stores."""
+        return [category.model_dump() for category in self.categories]
 
-def categories_json(categories: list[Category]) -> list[dict]:
-    """Plain JSON: what the endpoint sends and what Firestore stores."""
-    return [category.model_dump() for category in categories]
-
-
-def locales_of(categories: list[Category]) -> list[str]:
-    """The languages this content actually has — [locales] for a generation, but the bundled
-    fallback keeps the two it was written in whatever the config says."""
-    return sorted({tag for category in categories for text in (category.name, *category.tips) for tag in text})
-
-
-# Built-in content: served until the first generation lands, and whenever one fails.
-FALLBACK_CATEGORIES: tuple[Category, ...] = (
-    Category(
-        id="opening",
-        name={"en": "Opening lines", "es": "Frases de apertura"},
-        tips=[
-            {"en": "Is there flexibility on the price?", "es": "¿Hay flexibilidad en el precio?"},
-            {"en": "What's the best you can do?", "es": "¿Cuál es lo mejor que puedes hacer?"},
+    def locales(self) -> list[str]:
+        """The languages this content actually has — LINES_LOCALES for a generation, but the
+        bundled fallback keeps the two it was written in whatever the config says."""
+        return sorted(
             {
-                "en": "I've seen similar for less—can you match that?",
-                "es": "He visto algo similar por menos, ¿puedes igualarlo?",
-            },
-        ],
-    ),
-    Category(
-        id="followup",
-        name={"en": "Follow-ups", "es": "Seguimientos"},
-        tips=[
-            {"en": "I'm ready to move if we can agree on X.", "es": "Estoy listo para cerrar si acordamos X."},
-            {"en": "Can we meet in the middle?", "es": "¿Nos encontramos a mitad de camino?"},
-            {"en": "If I take two, would that help on the price?", "es": "Si me llevo dos, ¿ayudaría con el precio?"},
-        ],
-    ),
-    Category(
-        id="closing",
-        name={"en": "Closing", "es": "Cierre"},
-        tips=[
-            {"en": "That works for me. Let's do it.", "es": "Me funciona. Hagámoslo."},
-            {"en": "I can commit today at that price.", "es": "Puedo comprometerme hoy a ese precio."},
-            {"en": "Done. When can I pick it up?", "es": "Hecho. ¿Cuándo puedo recogerlo?"},
-        ],
-    ),
-)
+                tag
+                for category in self.categories
+                for text in (category.name, *category.tips)
+                for tag in text
+            }
+        )
 
+    @classmethod
+    def fallback(cls, now: datetime) -> Self:
+        """The bundled lines: served until the first generation lands, and whenever one fails."""
+        return cls(categories=cls.fallback_categories(), updated_at=now, source="fallback")
 
-class LinesStore(Protocol):
-    def read(self) -> LinesContent | None:
-        """The stored content, or None before the first generation."""
-
-    def write(self, categories: list[Category], *, model: str) -> LinesContent:
-        """Replace the stored content and return what a reader would now see."""
-
-
-def fallback_content() -> LinesContent:
-    """The bundled lines, used until a generation lands."""
-    return LinesContent(categories=list(FALLBACK_CATEGORIES), updated_at=datetime.now(UTC), source="fallback")
-
-
-def current(store: LinesStore) -> LinesContent:
-    """What the endpoint serves: the generated content when there is some, else the bundled one."""
-    try:
-        stored = store.read()
-    except Exception as exc:  # noqa: BLE001 - the tab must never fail on a storage hiccup
-        logger.warning("could not read the stored lines (%s); serving the bundled ones", exc)
-        stored = None
-    return stored or fallback_content()
+    @staticmethod
+    def fallback_categories() -> list[Category]:
+        return [
+            Category(
+                id="opening",
+                name={"en": "Opening lines", "es": "Frases de apertura"},
+                tips=[
+                    {
+                        "en": "Is there flexibility on the price?",
+                        "es": "¿Hay flexibilidad en el precio?",
+                    },
+                    {
+                        "en": "What's the best you can do?",
+                        "es": "¿Cuál es lo mejor que puedes hacer?",
+                    },
+                    {
+                        "en": "I've seen similar for less—can you match that?",
+                        "es": "He visto algo similar por menos, ¿puedes igualarlo?",
+                    },
+                ],
+            ),
+            Category(
+                id="followup",
+                name={"en": "Follow-ups", "es": "Seguimientos"},
+                tips=[
+                    {
+                        "en": "I'm ready to move if we can agree on X.",
+                        "es": "Estoy listo para cerrar si acordamos X.",
+                    },
+                    {
+                        "en": "Can we meet in the middle?",
+                        "es": "¿Nos encontramos a mitad de camino?",
+                    },
+                    {
+                        "en": "If I take two, would that help on the price?",
+                        "es": "Si me llevo dos, ¿ayudaría con el precio?",
+                    },
+                ],
+            ),
+            Category(
+                id="closing",
+                name={"en": "Closing", "es": "Cierre"},
+                tips=[
+                    {"en": "That works for me. Let's do it.", "es": "Me funciona. Hagámoslo."},
+                    {
+                        "en": "I can commit today at that price.",
+                        "es": "Puedo comprometerme hoy a ese precio.",
+                    },
+                    {"en": "Done. When can I pick it up?", "es": "Hecho. ¿Cuándo puedo recogerlo?"},
+                ],
+            ),
+        ]

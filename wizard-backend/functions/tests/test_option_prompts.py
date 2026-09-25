@@ -5,6 +5,7 @@ Nothing here knows what an answer means, so what is worth testing is the renderi
 (order, fencing, one-line-ness) and the warning for an answer nobody described.
 See wizard-app/AI_INTEGRATION.md.
 """
+
 import json
 import logging
 from pathlib import Path
@@ -12,12 +13,18 @@ from pathlib import Path
 import pytest
 
 from core.errors import BadRequest
-from features.negotiation.domain import prompts
-from features.negotiation.presentation import requests
+from core.observability import StructuredLogger
+from core.utils import Validation
+from features.negotiation.domain.models import Profile
+from features.negotiation.domain.prompts import PromptBuilder
+
+prompts = PromptBuilder(StructuredLogger.named("negotiation"))
 
 # The app's bundled Remote Config defaults, two directories up in the same repo. Reading them
 # here is what turns "an option nobody described" from a silent no-op into a failing test.
-DEFAULTS = Path(__file__).resolve().parents[3] / "wizard-app/assets/config/remote_config_defaults.json"
+DEFAULTS = (
+    Path(__file__).resolve().parents[3] / "wizard-app/assets/config/remote_config_defaults.json"
+)
 
 # Answers the funnel collects that describe nothing to the model: the referral code is an
 # attribution fact, not something the coach should read. Nothing in the function knows this
@@ -35,11 +42,11 @@ def answers(*picks) -> list[dict]:
 
 
 def parse(body: dict):
-    return requests.parse_profile(body)
+    return Validation.parse(Profile, body)
 
 
 def prompt(body: dict) -> str:
-    return prompts.system_prompt(parse(body))
+    return prompts.system(parse(body))
 
 
 def block(body: dict) -> list[str]:
@@ -64,24 +71,39 @@ def test_an_answer_this_function_has_never_heard_of_renders_too():
     """The point of the design: a new option, or a whole new question, needs nothing here.
     There is no list of known keys left to be absent from — `experience_level` is an answer
     like any other, carried whole, and it reaches the model with its value intact."""
-    profile = parse({"answers": answers(
-        ("marketplace", "vinted", "Marketplace etiquette on Vinted: bundles are the lever."),
-        ("experience_level", "pro", "Has haggled for years; skip the basics."),
-    )})
+    profile = parse(
+        {
+            "answers": answers(
+                (
+                    "marketplace",
+                    "vinted",
+                    "Marketplace etiquette on Vinted: bundles are the lever.",
+                ),
+                ("experience_level", "pro", "Has haggled for years; skip the basics."),
+            )
+        }
+    )
     assert prompts.buyer_block(profile) == [
         "Marketplace etiquette on Vinted: bundles are the lever.",
         "Has haggled for years; skip the basics.",
     ]
-    assert [(a.key, a.value) for a in profile.answers] == [("marketplace", "vinted"), ("experience_level", "pro")]
+    assert [(a.key, a.value) for a in profile.answers] == [
+        ("marketplace", "vinted"),
+        ("experience_level", "pro"),
+    ]
 
 
 def test_lines_keep_the_order_the_app_sent_them_in():
     """Order is the template's, through onboarding screen order — not a sequence in here."""
-    assert block({"answers": answers(
-        ("hurdles", "fair_price", "Weak spot — first."),
-        ("hurdles", "starting", "Weak spot — second."),
-        ("vibe", "friendly", "Tone: last."),
-    )}) == ["Weak spot — first.", "Weak spot — second.", "Tone: last."]
+    assert block(
+        {
+            "answers": answers(
+                ("hurdles", "fair_price", "Weak spot — first."),
+                ("hurdles", "starting", "Weak spot — second."),
+                ("vibe", "friendly", "Tone: last."),
+            )
+        }
+    ) == ["Weak spot — first.", "Weak spot — second.", "Tone: last."]
 
 
 def test_a_sentence_cannot_arrive_without_the_answer_it_describes():
@@ -95,10 +117,14 @@ def test_a_sentence_cannot_arrive_without_the_answer_it_describes():
 
 def test_numeric_answers_match_their_stop_ids():
     """The template writes stop ids as whole numbers, so `550.0` must never be the key."""
-    profile = parse({"answers": answers(
-        ("push", 60, "Push level: balanced."),
-        ("deal_size", 550, "Typical deal of $100-1000."),
-    )})
+    profile = parse(
+        {
+            "answers": answers(
+                ("push", 60, "Push level: balanced."),
+                ("deal_size", 550, "Typical deal of $100-1000."),
+            )
+        }
+    )
     assert prompts.buyer_block(profile) == ["Push level: balanced.", "Typical deal of $100-1000."]
     assert [a.value for a in profile.answers] == [60, 550]
 
@@ -128,11 +154,15 @@ def test_a_sentence_is_uncapped_and_a_bad_one_costs_only_its_line():
     unbounded. A description that is not a sentence drops to None — the answer survives and
     is reported as undescribed, which is the same outcome as a template that forgot it."""
     long_text = "x" * 2000
-    parsed = parse({"answers": [
-        {"key": "vibe", "value": "friendly", "prompt": long_text},
-        {"key": "push", "value": 60, "prompt": 7},
-        {"key": "marketplace", "value": "ebay", "prompt": None},
-    ]})
+    parsed = parse(
+        {
+            "answers": [
+                {"key": "vibe", "value": "friendly", "prompt": long_text},
+                {"key": "push", "value": 60, "prompt": 7},
+                {"key": "marketplace", "value": "ebay", "prompt": None},
+            ]
+        }
+    )
     assert parsed.answers[0].prompt == long_text  # no cap: the template's words reach the model
     assert [a.prompt for a in parsed.answers[1:]] == [None, None]
     assert [a.key for a in parsed.answers] == ["vibe", "push", "marketplace"]
@@ -155,25 +185,46 @@ def test_a_malformed_answer_is_a_400_rather_than_a_silent_drop():
 # ── the drift signal ──────────────────────────────────────────────────────────
 
 
+def undescribed(caplog) -> list[tuple]:
+    """`(field, value)` of every "undescribed onboarding answer" warning, from its log fields."""
+    return [
+        (record.fields["field"], record.fields["value"])
+        for record in caplog.records
+        if record.getMessage() == "undescribed onboarding answer"
+    ]
+
+
 def test_an_undescribed_answer_is_logged_and_says_nothing(caplog):
     with caplog.at_level(logging.WARNING, logger="negotiation"):
-        lines = block({"answers": answers(("marketplace", "vinted"), ("vibe", "friendly", "Tone: warm."))})
+        lines = block(
+            {"answers": answers(("marketplace", "vinted"), ("vibe", "friendly", "Tone: warm."))}
+        )
     assert lines == ["Tone: warm."]
-    assert "field=marketplace value=vinted" in caplog.text
+    assert undescribed(caplog) == [("marketplace", "vinted")]
 
 
 def test_a_profile_nothing_describes_has_no_buyer_block(caplog):
     """With no server-side option list left, an undescribed profile carries no buyer block at
     all — the standing rules and the task, and nothing about this person."""
     with caplog.at_level(logging.WARNING, logger="negotiation"):
-        text = prompt({"answers": answers(
-            ("vibe", "friendly"), ("push", 60), ("marketplace", "ebay"), ("hurdles", "starting"),
-        )})
+        text = prompt(
+            {
+                "answers": answers(
+                    ("vibe", "friendly"),
+                    ("push", 60),
+                    ("marketplace", "ebay"),
+                    ("hurdles", "starting"),
+                )
+            }
+        )
     assert "<buyer_profile>" not in text
     assert text.startswith("You are Bargain Wiz")
-    for missed in ("field=vibe value=friendly", "field=push value=60",
-                   "field=marketplace value=ebay", "field=hurdles value=starting"):
-        assert missed in caplog.text
+    assert undescribed(caplog) == [
+        ("vibe", "friendly"),
+        ("push", 60),
+        ("marketplace", "ebay"),
+        ("hurdles", "starting"),
+    ]
 
 
 def test_the_buyer_block_is_fenced_once_anything_describes_itself():
@@ -198,7 +249,9 @@ def offered_option_ids() -> dict[str, list[str]]:
             offered[key] = [str(o.get("value")) for o in screen["metadata"]["options"]]
         for group in screen.get("groups") or []:
             if group.get("answer_key_name"):
-                offered[group["answer_key_name"]] = [str(o.get("value")) for o in group.get("options") or []]
+                offered[group["answer_key_name"]] = [
+                    str(o.get("value")) for o in group.get("options") or []
+                ]
     return offered
 
 
@@ -218,7 +271,11 @@ def described_option_ids() -> dict[str, dict[str, str]]:
             take(key, screen["metadata"]["options"], lambda o: o.get("prompt"))
         for group in screen.get("groups") or []:
             if group.get("answer_key_name"):
-                take(group["answer_key_name"], group.get("options") or [], lambda o: (o.get("metadata") or {}).get("prompt"))
+                take(
+                    group["answer_key_name"],
+                    group.get("options") or [],
+                    lambda o: (o.get("metadata") or {}).get("prompt"),
+                )
     return described
 
 
@@ -253,4 +310,6 @@ def test_the_templates_sentences_survive_this_functions_validation():
         [(k, o, t) for k, table in described.items() for o, t in table.items()],
         strict=True,
     ):
-        assert (answer.key, answer.prompt) == (key, text), f"{key}.{option} was rewritten by validation"
+        assert (answer.key, answer.prompt) == (key, text), (
+            f"{key}.{option} was rewritten by validation"
+        )

@@ -40,6 +40,21 @@ exercised. Set `CLOUD_TASKS_EMULATOR_HOST` only if you actually start one.
 **Scheduled functions are not reachable over HTTP in the emulator.** Trigger `refresh_lines`
 from the Emulator UI at http://localhost:4000, not with curl.
 
+**The model is the one thing not emulated.** By default the functions still call real Vertex
+AI. To keep it local, run Ollama with a multimodal model and switch the emulator to it in
+`functions/.env.local` (read over `.env` for the emulator only, never deployed, git-ignored):
+
+```bash
+ollama pull qwen2.5vl:7b          # any multimodal tag; text-only models reject screenshots
+# functions/.env.local
+AI_MODEL=ollama/qwen2.5vl:7b
+REQUEST_TIMEOUT_SEC=300           # local models are slower, and the first call loads the model
+```
+
+Restart the emulators to pick it up. The function log shows one `model_call` metric line per call.
+Without a Cloud Tasks emulator generation runs inline, so a conversation POST waits for the
+model and the app gives up after its 70 s POST timeout — pick a model that answers faster.
+
 ## 2. App
 
 ```bash
@@ -73,5 +88,9 @@ Host per platform: Android emulator `10.0.2.2`, iOS simulator `127.0.0.1` — ha
   user at all, but a `users/inst_<uuid>` document — the `profile` function accepts
   unauthenticated callers and keys them by `installation_id`, while `conversations` does not.
 - **Generation fails with 403 `SERVICE_DISABLED`** — the emulator still calls real Vertex AI,
-  which is disabled in `wizard-app-dev`. That is an environment blocker, not a code bug.
+  which is disabled in `wizard-app-dev`. That is an environment blocker, not a code bug; use
+  the Ollama switch above to test locally.
+- **`Ollama call failed: HTTP 404 … not found`** — the model in `AI_MODEL` is not pulled.
+  **HTTP 400 "does not support multimodal requests"** — it is text-only and the turn had a
+  screenshot. **"did not answer"** — `ollama serve` is not running, or `OLLAMA_URL` is wrong.
 - Ports already bound: another emulator run is alive. Stop it rather than changing ports.

@@ -9,15 +9,22 @@ part that should move — `EXPECTED` staying byte-identical is the proof that a 
 how the profile travels changed nothing about what the model reads. When a *sentence* in
 the template changes, this test failing is correct and the new text goes in `EXPECTED`.
 """
+
 import json
 from pathlib import Path
 
 import pytest
 
-from features.negotiation.domain import prompts
-from features.negotiation.presentation import requests
+from core.observability import StructuredLogger
+from core.utils import Validation
+from features.negotiation.domain.models import Profile
+from features.negotiation.domain.prompts import PromptBuilder
 
-DEFAULTS = Path(__file__).resolve().parents[3] / "wizard-app/assets/config/remote_config_defaults.json"
+prompts = PromptBuilder(StructuredLogger.named("negotiation"))
+
+DEFAULTS = (
+    Path(__file__).resolve().parents[3] / "wizard-app/assets/config/remote_config_defaults.json"
+)
 
 # One buyer who answers every screen, including two picks on the multi-select — enough that
 # every shape the template can produce (select, slider, slider_lottie, select_group, multi)
@@ -65,7 +72,11 @@ def template_sentences() -> dict[str, dict[str, str]]:
             take(key, screen["metadata"]["options"], lambda o: o.get("prompt"))
         for group in screen.get("groups") or []:
             if group.get("answer_key_name"):
-                take(group["answer_key_name"], group.get("options") or [], lambda o: (o.get("metadata") or {}).get("prompt"))
+                take(
+                    group["answer_key_name"],
+                    group.get("options") or [],
+                    lambda o: (o.get("metadata") or {}).get("prompt"),
+                )
     return described
 
 
@@ -83,12 +94,12 @@ def profile_of(answers: dict):
         for pick in (answers[key] if isinstance(answers[key], list) else [answers[key]])
         if str(pick) in table
     ]
-    return requests.parse_profile({"answers": sent, "locale": "en"})
+    return Validation.parse(Profile, {"answers": sent, "locale": "en"})
 
 
 @pytest.mark.skipif(not DEFAULTS.exists(), reason="the app half of the repo is not checked out")
 def test_the_prompt_one_buyer_gets_is_exactly_this():
-    assert prompts.system_prompt(profile_of(ANSWERS)) == EXPECTED
+    assert prompts.system(profile_of(ANSWERS)) == EXPECTED
 
 
 @pytest.mark.skipif(not DEFAULTS.exists(), reason="the app half of the repo is not checked out")

@@ -5,7 +5,8 @@
 > `CONVERSATIONS.md`). The stateless `express_dealmaker` / `pro_deal_closer` endpoints below
 > stay deployed for direct calls and tests; request bodies and the prompting rules are shared.
 
-Both AI features call Gemini on **Vertex AI** through two plain HTTPS Cloud Functions in
+Both AI features call the model `AI_MODEL` names — Gemini on **Vertex AI** when deployed, a
+local Ollama model in the emulator — through two plain HTTPS Cloud Functions in
 `wizard-backend/functions/` (Python 3.12, 2nd gen). The app never holds a model key; prompts,
 model choice and limits live in the functions. Simple-first: no server-side entitlement
 check yet, no persistence of requests, in-memory image preparation on the device.
@@ -162,18 +163,42 @@ assigned by position, empty lines dropped).
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `AI_MODEL` | `vertex/gemini-3.8-flash` | Which model answers, as `<provider>/<model>`: `vertex/…` (Gemini on Vertex AI) or `ollama/…` (a local model — emulator only, set in `functions/.env.local`). Gemini 2.5 Flash retires in Oct 2026 |
+| `AI_MAX_OUTPUT_TOKENS` | `2048` | Max output tokens per call, every provider |
+| `AI_TEMPERATURE` | empty | Empty = the model's default (1.0 for Gemini 3, which Google strongly recommends keeping) |
 | `VERTEX_LOCATION` | `us-central1` | Vertex AI region |
-| `VERTEX_MODEL` | `gemini-3.8-flash` | Model id (Gemini 2.5 Flash retires in Oct 2026) |
 | `VERTEX_THINKING_LEVEL` | `low` | Gemini 3 thinking level `low` / `medium` / `high`; 3.x Flash rejects `minimal` and cannot switch thinking off, and thinking tokens bill as output. Empty = not sent (model defaults to `high`) |
-| `VERTEX_TEMPERATURE` | `1.0` | Google strongly recommends the Gemini 3 default; empty = not sent |
 | `VERTEX_MEDIA_RESOLUTION` | `high` | Tokens per screenshot: `low` 280, `medium` 560, `high` 1,120. Chat screenshots need `high` |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama server for `ollama/…` models |
+| `OLLAMA_CONTEXT_TOKENS` | `32768` | `num_ctx` per call; Ollama silently drops the start of a prompt longer than its window |
 
-Every call logs one line, `gemini usage model=… prompt_tokens=… cached_tokens=… output_tokens=…
-thought_tokens=… total_tokens=…`, at INFO. `cached_tokens` is Vertex's implicit prompt caching
-(on by default for Gemini 2.5+; 3.x Flash needs a prompt of at least 4,096 tokens and an
-identical prefix, which is why the screenshots go before the transcript in `pro_parts`).
-`thought_tokens` is the number to watch: it is billed as output and Google publishes no
-figure for `low`. Build the cost dashboard from these lines before trusting any estimate.
+The declarations, with their full descriptions, are the typed sections in
+`functions/core/config/settings.py`, so a value the code cannot use fails as a `ConfigError`
+naming the variable.
+
+**One way to a model.** Every call goes through `ModelManager.generate(prompt, AnswerModel,
+operation=…)` (`functions/core/ai/manager.py`). The answer models — `ExpressAnswer`,
+`ReplyAnswer`, `OptionsAnswer` in `features/negotiation/domain/answers.py`, and
+`GeneratedLines` for the Lines tab — are both the JSON schema the output is constrained to and
+the validation of what comes back; the wire shapes above are their `model_dump()`.
+
+**Local model.** With `AI_MODEL=ollama/<tag>` every function asks Ollama's `/api/chat`
+(`core/ai/providers/ollama.py`) with the same prompts and answer models. Two differences are
+covered: a stored screenshot is downloaded and sent as base64 (under the emulator that reads
+the Storage emulator, where the app put it; Vertex would look in the real bucket), and the
+response schema is also written into the system prompt, because Ollama's `format` constrains
+the output without showing the model the field descriptions. Answers are only as good as the
+local model, so judge prompt quality on Gemini. The backend's tests use the same local model.
+
+Every call emits one `model_call` metric — a structured log entry with `provider`, `model`,
+`operation`, `outcome`, `latency_ms`, `images` and the token counts `prompt_tokens`,
+`cached_tokens`, `output_tokens`, `thought_tokens` (`functions/README.md`, "Logs and
+metrics"). `cached_tokens` is Vertex's implicit prompt caching (on by default for Gemini 2.5+;
+3.x Flash needs a prompt of at least 4,096 tokens and an identical prefix, which is why the
+screenshots go before the transcript in the prompt). `thought_tokens` is the number to watch:
+it is billed as output and Google publishes no figure for `low`. Build the cost dashboard from
+these entries before trusting any estimate. In a conversation the same counts are also kept
+on the wizard message the call wrote (`usage`, `options_usage`; `CONVERSATIONS.md`).
 
 Requirements on the project: Vertex AI API enabled; the function's runtime service account
 needs **Vertex AI User** (`roles/aiplatform.user`). A stored screenshot is handed to Gemini

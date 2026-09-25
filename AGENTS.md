@@ -15,8 +15,8 @@ Two projects in one folder, one git repo. **The git root is this folder (`bwiz/`
 | Layer | What we use |
 |---|---|
 | Client | Flutter 3.44.6 / Dart 3.12.2 (always through `fvm`), BLoC + Cubit, GetIt, `dartz` `Either`, go_router, Dio, `json_serializable` |
-| Functions | Python 3.12 on Cloud Functions **2nd gen** (`firebase-functions`), pydantic **v2** request models, `firebase-admin` for Firestore / Storage / Auth, Pillow for image re-encoding |
-| Model | Gemini (`gemini-3.8-flash` by default, thinking level `low`, media resolution `high`) on **Vertex AI** via the `google-genai` SDK — JSON-schema-constrained output only, never free text |
+| Functions | Python 3.12 on Cloud Functions **2nd gen** (`firebase-functions`), pydantic **v2** request models, `firebase-admin` for Storage / Auth / Tasks and Firestore's async client, Pillow for image re-encoding |
+| Model | Chosen by `AI_MODEL=<provider>/<model>` behind one `ModelManager`: Gemini (`vertex/gemini-3.8-flash` by default, thinking level `low`, media resolution `high`) on **Vertex AI** via the `google-genai` SDK when deployed; a local Ollama model (`ollama/qwen2.5vl:7b`) in the emulator and the backend tests. JSON-schema-constrained output only, never free text |
 | Async work | Cloud Tasks queue `generate` (also the project-wide rate limiter) + Cloud Scheduler job `refresh_lines` |
 | Data | Firestore (profiles, conversations, generated Lines content), Cloud Storage (screenshots), Firebase Remote Config (screen templates and `api_url`) |
 | Identity | Firebase Auth — anonymous from first launch, upgraded in place to Google / Apple; App Check behind a flag |
@@ -48,9 +48,10 @@ These came from the project owner; treat them as standing instructions.
 
 - **Simplicity wins.** Prefer the smaller change. Do not build a framework where a function
   will do, and do not mirror a server rule in the client by hand when one side can simply own it.
-- **No global state in functions.** Every tunable is a Firebase param declared once in
-  `wizard-backend/functions/config.py` and read at call time — never a module constant, never a
-  value cached across requests.
+- **No global state in functions.** Every tunable is a Firebase param declared once, on the
+  typed section that reads it in `wizard-backend/functions/core/config/settings.py`, and read
+  at call time — never a module constant, never a value cached across requests. No
+  module-level functions or state outside `main.py` either (`wizard-backend/AGENTS.md`).
 - **The client owns payload size.** The app compresses screenshots before upload; the function's
   byte caps are a backstop against a tampered client, not a contract the app has to hit.
 - **Soft delete only.** Closing a deal sets `active: false`; nothing deletes conversation data.

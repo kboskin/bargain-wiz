@@ -5,16 +5,14 @@ and it is what the prompt is built from. There is no client request id — one t
 outstanding per conversation at a time, so `active_turn` is the idempotency key.
 Contract: wizard-app/CONVERSATIONS.md.
 """
-from typing import Literal
+
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from core import config
-from core.firestore import DELETE
-from core.validation import clip_text, trimmed
-from features.negotiation.domain.models import Image, Profile
-
-SCHEMA_VERSION = 1
+from core.firestore import FieldOp
+from core.utils import Text
+from features.negotiation.domain.models import Image, Images, Profile
 
 Kind = Literal["pro", "express"]
 
@@ -22,15 +20,19 @@ Kind = Literal["pro", "express"]
 OverrideValue = str | int | float | bool
 
 
-def clean_overrides(value: object) -> object:
-    """`{answer key: value}` for the answers this deal overrides, or None when the body says
-    nothing about them. Which keys are allowed is the app's call — the template marks an
-    answer `scope: "conversation"` — so this end only checks the shape."""
-    if value is None:
-        return None
-    if not isinstance(value, dict):
-        raise ValueError("must be a map of answer key to value")
-    return {str(k).strip().lower(): v for k, v in value.items() if str(k).strip()}
+class Overrides:
+    """The answers one deal overrides (`{answer key: value}`). Which keys are allowed is the
+    app's call — the template marks an answer `scope: "conversation"` — so this end only
+    checks the shape."""
+
+    @staticmethod
+    def clean(value: object) -> object:
+        """The map with its keys normalised, or None when the body says nothing about it."""
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("must be a map of answer key to value")
+        return {str(k).strip().lower(): v for k, v in value.items() if str(k).strip()}
 
 
 class ActionBody(BaseModel):
@@ -43,6 +45,8 @@ class ActionBody(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    MAX_ID_CHARS: ClassVar[int] = 120
+
     profile: Profile = Field(default_factory=Profile)
     overrides: dict[str, OverrideValue] | None = None
     message_id: str | None = None
@@ -51,12 +55,12 @@ class ActionBody(BaseModel):
     @field_validator("message_id", "keyword", mode="before")
     @classmethod
     def _short_text(cls, value: object) -> str | None:
-        return clip_text(value, 120)
+        return Text.clip(value, cls.MAX_ID_CHARS)
 
     @field_validator("overrides", mode="before")
     @classmethod
     def _overrides(cls, value: object) -> object:
-        return clean_overrides(value)
+        return Overrides.clean(value)
 
 
 class TurnBody(ActionBody):
@@ -68,23 +72,16 @@ class TurnBody(ActionBody):
     @field_validator("text", mode="before")
     @classmethod
     def _text(cls, value: object) -> str | None:
-        return trimmed(value)
+        return Text.trim(value)
 
     @field_validator("images", mode="before")
     @classmethod
     def _images(cls, value: object) -> list:
-        if value is None:
-            return []
-        if not isinstance(value, list):
-            raise ValueError("must be a list")
-        if len(value) > config.MAX_IMAGES.value:
-            raise ValueError(f"at most {config.MAX_IMAGES.value} images per message")
-        return value
+        return Images.validate(value, per="message")
 
     @model_validator(mode="after")
     def _has_material(self) -> "TurnBody":
-        if sum(len(image.data) for image in self.images) > config.MAX_TOTAL_IMAGE_BYTES.value:
-            raise ValueError(f"images together must be under {config.MAX_TOTAL_IMAGE_BYTES.value // 1_000_000} MB")
+        Images.check_total(self.images)
         if not self.images and not self.text:
             raise ValueError("send text or at least one screenshot")
         return self
@@ -106,6 +103,9 @@ class PatchBody(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    MAX_TITLE_CHARS: ClassVar[int] = 120
+    MAX_PRICE_CHARS: ClassVar[int] = 40
+
     title: str | None = None
     status: Literal["open", "won", "lost"] | None = None
     price_before: str | None = None
@@ -118,17 +118,17 @@ class PatchBody(BaseModel):
     @field_validator("title", mode="before")
     @classmethod
     def _title(cls, value: object) -> str | None:
-        return clip_text(value, 120)
+        return Text.clip(value, cls.MAX_TITLE_CHARS)
 
     @field_validator("price_before", "price_after", mode="before")
     @classmethod
     def _short(cls, value: object) -> str | None:
-        return clip_text(value, 40)
+        return Text.clip(value, cls.MAX_PRICE_CHARS)
 
     @field_validator("overrides", mode="before")
     @classmethod
     def _overrides(cls, value: object) -> object:
-        return clean_overrides(value)
+        return Overrides.clean(value)
 
     @field_validator("status", mode="before")
     @classmethod
@@ -136,7 +136,10 @@ class PatchBody(BaseModel):
         return value.lower() if isinstance(value, str) else value
 
     def to_patch(self) -> dict:
-        return {name: DELETE if getattr(self, name) is None else getattr(self, name) for name in self.model_fields_set}
+        return {
+            name: FieldOp.DELETE if getattr(self, name) is None else getattr(self, name)
+            for name in self.model_fields_set
+        }
 
 
 class GenerationTask(BaseModel):
@@ -152,4 +155,3 @@ class GenerationTask(BaseModel):
     regenerate: bool = False
     keyword: str | None = None
     profile: Profile
-

@@ -1,55 +1,32 @@
-"""HTTP-level tests for express_dealmaker / pro_deal_closer with a fake Gemini."""
+"""HTTP-level tests for express_dealmaker / pro_deal_closer.
+
+Validation, auth and failure mapping ask no model; the answers come from the local model."""
+
 import base64
+import io
 import json
 
 import pytest
 from flask import Flask, request
+from PIL import Image as PilImage
 
 import main
-from core.auth.firebase import StaticAuthenticator
-from core.errors import UpstreamError
-from features.negotiation.domain.lines import EXPRESS_SCHEMA, OPTIONS_SCHEMA, REPLY_SCHEMA
+from core.observability import ModelCall
+from support import InMemoryMetrics, StaticAuthenticator, call, install
 
-PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
-LINES = [
-    {"intent": "opener", "text": "Is the Kallax still available? $140 cash today.", "why": "Anchors low."},
-    {"intent": "counter", "text": "$160 is my max.", "why": "Firm ceiling."},
-    {"intent": "close", "text": "Deal at $160. Send the address.", "why": "Closes."},
-]
+INTENTS = {"opener", "counter", "close"}
 
 
-class FakeGenerator:
-    model = "fake-gemini"
-
-    def __init__(self, result=None, error=None):
-        self.result, self.error, self.calls = result, error, []
-
-    def generate_json(self, *, system, parts, schema):
-        self.calls.append({"system": system, "parts": parts, "schema": schema})
-        if self.error:
-            raise self.error
-        return self.result
+def _jpeg() -> str:
+    buf = io.BytesIO()
+    PilImage.new("RGB", (120, 80), "white").save(buf, format="JPEG")
+    return base64.b64encode(buf.getvalue()).decode()
 
 
-@pytest.fixture(autouse=True)
-def _restore_main(monkeypatch):
-    """Tests swap the constructors `main` uses for fakes; monkeypatch puts the real ones back."""
-    monkeypatch.setattr(main, "VertexGenerator", main.VertexGenerator)
-    monkeypatch.setattr(main, "FirebaseAuthenticator", main.FirebaseAuthenticator)
-
-
-# The app always sends the buyer's tone and push level; `_post` adds them so each test can
-# say only what it is about.
-# What each tone means is the template's to say, and the app forwards it with every request
-# (AI_INTEGRATION.md) — there is no server-side tone list any more, so a fixture that omitted
-# this would produce a prompt with no Tone line.
 VIBE_PROMPTS = {
     "friendly": "Friendly Collaborator: warm and polite, still anchors below the asking price.",
     "no_nonsense": "No-Nonsense Buyer: direct and brief, states numbers plainly.",
-    "tactical": "Tactical Strategist: uses comparable prices and flaws as leverage.",
-    "quiet_closer": "Quiet Closer: low-pressure, yet always moves the deal to a close.",
 }
-
 
 
 def _profile(vibe="friendly", locale="en") -> dict:
@@ -63,100 +40,100 @@ def _profile(vibe="friendly", locale="en") -> dict:
     }
 
 
-def _install(result=None, error=None, auth=None):
-    """Make the functions use a fake Gemini (and identity); returns the function map and the fake."""
-    gen = FakeGenerator(result, error)
-    main.VertexGenerator = lambda: gen
-    main.FirebaseAuthenticator = lambda: auth or StaticAuthenticator(None)
-    return {"/express_dealmaker": main.express_dealmaker, "/pro_deal_closer": main.pro_deal_closer}, gen
+@pytest.fixture
+def metrics(monkeypatch) -> InMemoryMetrics:
+    metrics = InMemoryMetrics()
+    install(monkeypatch, metrics=metrics, authenticator=StaticAuthenticator(None))
+    return metrics
 
 
-def _post(path, functions, body, method="POST", headers=None, profile=True):
-    app = Flask(__name__)
-    if profile and isinstance(body, dict):
-        # `vibe` and `locale` are written flat by the callers below for brevity; the wire nests them.
-        body = dict(body)
-        vibe, locale = body.pop("vibe", "friendly"), body.pop("locale", "en")
-        body = {"profile": _profile(vibe, locale), **body}
-    with app.test_request_context(path, method=method, json=body, headers=headers or {}):
-        res = functions[path](request)
-    return res.status_code, json.loads(res.get_data(as_text=True))
+def _post(function, body, **kwargs):
+    if isinstance(body, dict) and "profile" not in body:
+        body = {"profile": _profile(), **body}
+    status, response, _ = call(function, "POST", "/", body, **kwargs)
+    return status, response
 
 
-def test_express_returns_seeing_and_lines():
-    c, gen = _install({"seeing": "IKEA Kallax · $180", "lines": LINES})
-    status, body = _post(
-        "/express_dealmaker",
-        c,
-        {"images": [{"mime_type": "image/png", "data": PNG}], "keyword": "scuff", "vibe": "no_nonsense", "locale": "en"},
-    )
-    assert status == 200
-    assert body["seeing"] == "IKEA Kallax · $180"
-    assert [line["intent"] for line in body["lines"]] == ["opener", "counter", "close"]
-    assert body["model"] == "fake-gemini"
-    call = gen.calls[0]
-    assert "No-Nonsense" in call["system"]
-    assert call["parts"][0]["type"] == "image" and call["schema"] is EXPRESS_SCHEMA
+# ── no model needed ───────────────────────────────────────────────────────────
 
 
-def test_express_accepts_text_only():
-    c, _ = _install({"seeing": "Text listing", "lines": LINES[:1]})
-    status, body = _post("/express_dealmaker", c, {"text": "Selling bike $300, some rust"})
-    assert status == 200 and len(body["lines"]) == 1
-
-
-def test_express_rejects_empty_and_non_post():
-    c, _ = _install({"seeing": "", "lines": LINES})
-    status, body = _post("/express_dealmaker", c, {}, profile=False)
+def test_express_rejects_empty_and_non_post(metrics):
+    status, body = _post(main.express_dealmaker, {})
     assert status == 400 and body["error"]["status"] == "INVALID_ARGUMENT"
-    status, body = _post("/express_dealmaker", c, None, method="GET")
+    status, body, _ = call(main.express_dealmaker, "GET", "/")
     assert status == 405 and body["error"]["status"] == "METHOD_NOT_ALLOWED"
+    assert metrics.of(ModelCall) == []  # rejected before any model was asked
 
 
-def test_express_maps_model_failures_to_502():
-    c, _ = _install(error=UpstreamError("quota"))
-    status, body = _post("/express_dealmaker", c, {"text": "x"})
-    assert status == 502 and body["error"]["status"] == "UPSTREAM_ERROR"
-    assert "quota" not in body["error"]["message"]  # internals never leak
-    c, _ = _install({"seeing": "x", "lines": []})
-    status, body = _post("/express_dealmaker", c, {"text": "x"})
-    assert status == 502 and body["error"]["status"] == "UPSTREAM_ERROR"
-
-
-def test_unexpected_exceptions_are_a_bare_500():
-    c, _ = _install(error=RuntimeError("secret detail"))
-    status, body = _post("/express_dealmaker", c, {"text": "x"})
-    assert status == 500 and body["error"] == {"status": "INTERNAL", "message": "Unexpected error."}
-
-
-def test_express_rejects_invalid_bearer_token():
-    c, _ = _install({"seeing": "x", "lines": LINES}, auth=StaticAuthenticator(None, invalid_token=True))
-    status, body = _post("/express_dealmaker", c, {"text": "x"}, headers={"Authorization": "Bearer nope"})
+def test_express_rejects_an_invalid_bearer_token(monkeypatch):
+    install(monkeypatch, authenticator=StaticAuthenticator(None, invalid_token=True))
+    status, body = _post(
+        main.express_dealmaker, {"text": "x"}, headers={"Authorization": "Bearer nope"}
+    )
     assert status == 401 and body["error"]["status"] == "UNAUTHENTICATED"
 
 
-def test_pro_reply_and_options():
-    c, gen = _install({"reply": "Open at $140 and offer pickup today."})
-    messages = [{"role": "user", "text": "Kallax listed at $180, what do I say?"}]
-    status, body = _post("/pro_deal_closer", c, {"messages": messages, "vibe": "friendly"})
-    assert status == 200 and body["reply"].startswith("Open at $140")
-    assert gen.calls[0]["schema"] is REPLY_SCHEMA
-
-    c, gen = _install({"lines": LINES})
-    status, body = _post("/pro_deal_closer", c, {"messages": messages, "mode": "options"})
-    assert status == 200 and len(body["lines"]) == 3
-    assert gen.calls[0]["schema"] is OPTIONS_SCHEMA
-
-
-def test_pro_validation():
-    c, _ = _install({"reply": "x"})
-    status, body = _post("/pro_deal_closer", c, {"messages": []})
+def test_pro_validation(metrics):
+    status, body = _post(main.pro_deal_closer, {"messages": []})
     assert status == 400 and body["error"]["status"] == "INVALID_ARGUMENT"
+    status, body = _post(
+        main.pro_deal_closer, {"messages": [{"role": "user", "text": "x"}], "mode": "essay"}
+    )
+    assert status == 400
 
 
-def test_express_accepts_json_without_content_type():
-    _install({"seeing": "x", "lines": LINES})
-    app = Flask(__name__)
-    with app.test_request_context("/", method="POST", data=json.dumps({"profile": _profile(), "text": "bike $300"}), content_type="text/plain"):
+@pytest.mark.usefixtures("unreachable_model")
+def test_a_model_outage_is_a_502_that_leaks_nothing(metrics):
+    status, body = _post(main.express_dealmaker, {"text": "Selling bike $300"})
+    assert status == 502 and body["error"]["status"] == "UPSTREAM_ERROR"
+    assert "127.0.0.1" not in body["error"]["message"]  # internals never leak
+    assert metrics.of(ModelCall)[0].outcome == "call_failed"
+
+
+# ── the local model ───────────────────────────────────────────────────────────
+
+
+def _assert_lines(lines):
+    assert 1 <= len(lines) <= 3
+    for line in lines:
+        assert line["intent"] in INTENTS and line["text"].strip()
+        assert set(line) == {"intent", "text", "why"}
+
+
+def test_express_returns_seeing_and_lines_from_screenshots(metrics, local_model):
+    status, body = _post(
+        main.express_dealmaker,
+        {
+            "images": [{"mime_type": "image/jpeg", "data": _jpeg()}],
+            "text": "IKEA Kallax, $180, slight scuff",
+            "keyword": "scuff",
+        },
+    )
+    assert status == 200, body
+    assert set(body) == {"seeing", "lines", "model"} and body["model"] == local_model
+    assert body["seeing"].strip()
+    _assert_lines(body["lines"])
+    [model_call] = metrics.of(ModelCall)
+    assert (model_call.operation, model_call.outcome, model_call.images) == ("express", "ok", 1)
+
+
+def test_pro_reply_and_options(metrics, local_model):
+    messages = [{"role": "user", "text": "Kallax listed at $180, what do I say?"}]
+    status, body = _post(main.pro_deal_closer, {"messages": messages})
+    assert status == 200 and set(body) == {"reply", "model"} and body["reply"].strip()
+
+    status, body = _post(main.pro_deal_closer, {"messages": messages, "mode": "options"})
+    assert status == 200 and set(body) == {"lines", "model"}
+    _assert_lines(body["lines"])
+    assert [c.operation for c in metrics.of(ModelCall)] == ["reply", "options"]
+
+
+def test_express_accepts_json_without_content_type(metrics, local_model):
+    with Flask(__name__).test_request_context(
+        "/",
+        method="POST",
+        data=json.dumps({"profile": _profile(), "text": "bike $300"}),
+        content_type="text/plain",
+    ):
         res = main.express_dealmaker(request)
     assert res.status_code == 200

@@ -26,12 +26,17 @@ fvm flutter analyze lib test 2>&1 | grep -E "error •|warning •"
 ## Backend (`wizard-backend/functions/`)
 
 ```bash
-venv/bin/python -m pytest -q
+venv/bin/python -m pytest -q -rs
 venv/bin/ruff check .
 ```
 
-- Changed `.env` or `config.py`? Start the emulators once — the CLI rejects the whole `.env`
-  on a reserved key, and that only shows at startup.
+- `-rs` lists what was skipped and why. Model tests run against the local Ollama model
+  (`TEST_AI_MODEL`, default `ollama/qwen2.5vl:7b`) and skip with the `ollama pull …` that
+  fixes it; say which ran and which skipped when handing work back. Never fake a model to make
+  them run.
+- Changed `.env` or `core/config/settings.py`? The CLI rejects the whole `.env` on a reserved
+  key, and that only shows when the emulator or a deploy loads it; run the manifest discovery
+  in `functions/README.md` to check the params still resolve.
 - Changed a query? Confirm the composite index exists in `firestore.indexes.json`.
 
 ## Both
