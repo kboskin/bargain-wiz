@@ -111,6 +111,14 @@ MainPageConfig _$MainPageConfigFromJson(
   proOptionsCta: MainPageConfig._multilocaleFromJson(json['pro_options_cta']),
   proRedoCta: MainPageConfig._multilocaleFromJson(json['pro_redo_cta']),
   proAttachCta: PluralText.fromJson(json['pro_attach_cta']),
+  dealCloserObjectiveTitle: MainPageConfig._multilocaleFromJson(
+    json['deal_closer_objective_title'],
+  ),
+  dealCloserObjectives:
+      (json['deal_closer_objectives'] as List<dynamic>?)
+          ?.map((e) => DealObjective.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      [],
   offlineBanner: MainPageConfig._multilocaleFromJson(json['offline_banner']),
 );
 
@@ -158,6 +166,7 @@ Map<String, dynamic> _$MainPageConfigToJson(
   'pro_options_cta': instance.proOptionsCta,
   'pro_redo_cta': instance.proRedoCta,
   'pro_attach_cta': MainPageConfig._pluralToJson(instance.proAttachCta),
+  'deal_closer_objective_title': instance.dealCloserObjectiveTitle,
   'offline_banner': instance.offlineBanner,
 };
 

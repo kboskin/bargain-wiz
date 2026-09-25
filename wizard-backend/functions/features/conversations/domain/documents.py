@@ -85,6 +85,8 @@ class StoredConversation(_Stored):
     active_turn: dict | None = None
     keyword: str | None = None
     thumbnail: ImageRef | None = None
+    # What the deal is for, as `POST /conversations` stored it (plain text).
+    objective: str | None = None
 
 
 class StoredMessage(_Stored):
@@ -147,6 +149,7 @@ class NewConversation(FirestoreDocument):
     overrides: dict[str, Any] = Field(default_factory=dict)
     locale: str | None = None
     keyword: str | None = None
+    objective: str | None = None
     title: str
     preview: str = ""
     message_count: int = 0
@@ -184,6 +187,7 @@ class ConversationDocuments:
             overrides=turn.overrides or {},
             locale=turn.profile.locale,
             keyword=turn.keyword if turn.type == "express" else None,
+            objective=turn.objective,
             title=title,
         )
 

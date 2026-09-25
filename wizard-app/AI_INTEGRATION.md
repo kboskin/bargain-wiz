@@ -67,6 +67,7 @@ asked to look at.
   "mode": "reply",            // or "options"
   "regenerate": false,
   "replacing": "…",           // optional: the reply a redo replaces; the new one takes another tactic
+  "objective": "Objective: get a discount — …",  // optional, plain text (express_dealmaker takes it too)
   "profile": {
     "answers": [{"key": "vibe", "value": "friendly",
                  "prompt": "Tone: Friendly Collaborator — warm and polite, builds rapport, asks nicely…"}],
@@ -187,6 +188,26 @@ counter to send). The reasoning a coach would write out goes in `seeing`, which 
 A Wizard turn in the transcript is introduced as a message the Wizard *suggested*: whether the
 buyer sent it, and what the seller said back, is for the later turns to show. Pro options are
 not asked for a `why` — the option rows show the line alone.
+
+**A deal has an objective — the deal's, not the buyer's.** Before the first message the Pro
+chat asks "What's the mission? ⚡" under the greeting, with one chip per entry of
+`main_page_config.deal_closer_objectives` (`label`, `emoji`, `prompt`; today *Start the chat*,
+*Get a discount*, *Follow up*). An objective is plain text — its `prompt` — with no id: the
+app sends the text, the conversation stores the text, and a reopened chat shows the chip whose
+text it is. Picking one is optional and can change until the chat exists; then the chip is a
+record. The app sends it once, as `objective` on `POST /conversations`, and the conversation
+keeps it (`CONVERSATIONS.md`); the worker reads it off the conversation for every reply,
+options call and redo, so it never rides in the `profile` or the queue task. The config and
+the backend are not tied to Pro: any conversation type stores an objective, and the Express
+prompt renders it the same way, so the regular deal closer can ask later with no backend
+change. In the prompt it is a fenced `<objective>` block after the material and before the
+transcript — constant across a chat's turns, so inside the prefix they share — and the task
+says to serve it. As with an answer's sentence, the meaning is the template's, and a changed
+`prompt` reaches the next deal with no deploy. The stateless `pro_deal_closer` and
+`express_dealmaker` take the same `objective` on their bodies. With
+`qwen2.5vl:7b` the three steer visibly — from the same material, *Start the chat* checks the
+item is still available, *Get a discount* makes an offer with a reason, *Follow up* restates
+the last offer to a quiet seller.
 
 **The standing rules, beyond tone.** The system prompt states the goal (the best price with
 lines the buyer is comfortable sending) and three rules every ask follows:

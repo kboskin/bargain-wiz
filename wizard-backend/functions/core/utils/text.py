@@ -34,6 +34,14 @@ class Text:
         return (cut or text[:max_chars]) + cls.ELLIPSIS
 
     @staticmethod
+    def one_line(value: object) -> str | None:
+        """A client-written sentence as one prompt line — whitespace collapsed, nothing else
+        changed — or None when it is not a sentence at all (so it is dropped, not rejected)."""
+        if not isinstance(value, str) or not value.split():
+            return None
+        return " ".join(value.split())
+
+    @staticmethod
     def strip(value: object) -> object:
         """A string stripped of surrounding whitespace; anything else unchanged (for pydantic
         `BeforeValidator`s, so the type check still reports a non-string)."""

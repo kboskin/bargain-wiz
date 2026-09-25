@@ -338,6 +338,31 @@ def test_pro_prompt_reads_screenshots_and_messages_alike_whichever_are_there():
         assert len(tail) == 1
 
 
+def test_a_deals_objective_is_plain_text_in_a_fenced_block_of_its_own():
+    objective = "  Objective: get a discount —\n anchor. "
+    block = "<objective>\nObjective: get a discount — anchor.\n</objective>"
+    chat = {"messages": [{"role": "user", "text": "Kallax $180"}]}
+    for mode in ("reply", "options"):
+        req = parse_pro({**chat, "mode": mode, "objective": objective})
+        assert req.objective == "Objective: get a discount — anchor."
+        text = prompts.pro(req).parts[-1].text
+        assert block in text and text.index(block) < text.index("Buyer: Kallax $180")
+        assert "serving the objective above" in text
+        # It is the deal's, not the buyer's: the system prompt does not change.
+        assert "objective" not in prompts.system(req.profile)
+
+    # Not a Pro thing: an Express deal reads the same block.
+    express = prompts.express(parse_express({"text": "Kallax $180", "objective": objective}))
+    assert (
+        block in express.parts[-1].text and "serving the objective above" in express.parts[-1].text
+    )
+
+    plain = prompts.pro(parse_pro(chat)).parts[-1].text
+    assert "<objective>" not in plain and "serving the objective" not in plain
+    # Anything that is not a sentence is dropped, not a 400.
+    assert parse_pro({**chat, "objective": {"id": "x"}}).objective is None
+
+
 def test_the_lines_follow_the_sellers_language_and_the_rest_the_buyers():
     # The app's locale is the buyer's language; what they paste goes to the seller.
     system = prompts.system(parse_profile({"locale": "es"}))

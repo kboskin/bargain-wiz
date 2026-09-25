@@ -15,12 +15,14 @@ class SendCall {
     required this.text,
     required this.attachmentPaths,
     required this.overrides,
+    this.objective,
   });
 
   final String? conversationId;
   final String? text;
   final List<String> attachmentPaths;
   final Map<String, dynamic> overrides;
+  final String? objective;
 }
 
 /// In-memory stand-in for the backend + listener: `send` stores the user turn and a wizard
@@ -55,12 +57,14 @@ class FakeProDealCloserRepository implements ProDealCloserRepository {
     List<String> attachmentPaths = const [],
     required Map<String, dynamic> overrides,
     required String locale,
+    String? objective,
   }) async {
     sendCalls.add(SendCall(
       conversationId: conversationId,
       text: text,
       attachmentPaths: attachmentPaths,
       overrides: overrides,
+      objective: objective,
     ));
     final f = failure;
     if (f != null) return Left(f);

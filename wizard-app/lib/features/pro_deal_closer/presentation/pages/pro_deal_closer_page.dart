@@ -10,6 +10,7 @@ import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/gallery_picker_helper.dart';
 import 'package:appwizard/core/utils/template_text.dart';
+import 'package:appwizard/core/widgets/wiz/fade_up.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_header.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
 import 'package:appwizard/features/home/data/models/main_page_config.dart';
@@ -19,6 +20,7 @@ import 'package:appwizard/features/pro_deal_closer/presentation/cubit/pro_deal_c
 import 'package:appwizard/features/pro_deal_closer/presentation/cubit/pro_deal_closer_state.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/widgets/pro_composer.dart';
 import 'package:appwizard/features/pro_deal_closer/presentation/widgets/pro_message_tile.dart';
+import 'package:appwizard/features/pro_deal_closer/presentation/widgets/deal_objective_picker.dart';
 import 'package:appwizard/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -241,6 +243,9 @@ class _MessageList extends StatelessWidget {
     final readingLabel = TemplateText.textOf(context, config?.proReadingLabel, fallback: 'Reading…');
     final optionsLabel = TemplateText.textOf(context, config?.proOptionsCta, fallback: '✨ Give me options');
     final redoLabel = TemplateText.textOf(context, config?.proRedoCta, fallback: '↻ Redo');
+    final objectiveTitle =
+        TemplateText.textOf(context, config?.dealCloserObjectiveTitle, fallback: "What's the mission? ⚡");
+    final objectives = config?.dealCloserObjectives ?? const [];
 
     return BlocBuilder<ProDealCloserCubit, ProDealCloserState>(
       builder: (context, state) {
@@ -260,18 +265,39 @@ class _MessageList extends StatelessWidget {
               );
             }
             final message = state.messages[index];
+            final tile = ProMessageTile(
+              message: message,
+              readingLabel: readingLabel,
+              optionsLabel: optionsLabel,
+              redoLabel: redoLabel,
+              copiedToast: 'Copied to clipboard',
+              onOptions: () => unawaited(cubit.requestOptions(message.id)),
+              onRedo: () => unawaited(cubit.redo(message.id)),
+            );
+            // The objective question sits right under the greeting, part of the same opening.
+            final withObjective = message.id == ProDealCloserCubit.greetingId && objectives.isNotEmpty;
             return Padding(
               key: ValueKey(message.id),
               padding: const EdgeInsets.only(bottom: 10),
-              child: ProMessageTile(
-                message: message,
-                readingLabel: readingLabel,
-                optionsLabel: optionsLabel,
-                redoLabel: redoLabel,
-                copiedToast: 'Copied to clipboard',
-                onOptions: () => unawaited(cubit.requestOptions(message.id)),
-                onRedo: () => unawaited(cubit.redo(message.id)),
-              ),
+              child: !withObjective
+                  ? tile
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        tile,
+                        const SizedBox(height: 10),
+                        FadeUp(
+                          enabled: !message.restored,
+                          delay: const Duration(milliseconds: 150),
+                          child: DealObjectivePicker(
+                            title: objectiveTitle,
+                            objectives: objectives,
+                            selected: state.objective,
+                            onSelect: state.canPickObjective ? cubit.selectObjective : null,
+                          ),
+                        ),
+                      ],
+                    ),
             );
           },
         );

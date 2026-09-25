@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from core.firestore import FieldOp
 from core.utils import Text
-from features.negotiation.domain.models import Image, Images, Profile
+from features.negotiation.domain.models import Image, Images, Objectives, Profile
 
 Kind = Literal["pro", "express"]
 
@@ -88,9 +88,17 @@ class TurnBody(ActionBody):
 
 
 class CreateBody(TurnBody):
-    """`POST /conversations`: the first turn opens the conversation."""
+    """`POST /conversations`: the first turn opens the conversation — and may say what the deal
+    is for. The objective ([Objectives]) is set here once and stored on the conversation; later
+    turns do not carry it."""
 
     type: Kind = "pro"
+    objective: str | None = None
+
+    @field_validator("objective", mode="before")
+    @classmethod
+    def _objective(cls, value: object) -> str | None:
+        return Objectives.clean(value)
 
     @field_validator("type", mode="before")
     @classmethod

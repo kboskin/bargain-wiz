@@ -173,9 +173,7 @@ class Answer(BaseModel):
 
         Anything that is not a sentence is dropped rather than rejected: an undescribed
         answer costs that one line and is logged, exactly as one the template forgot."""
-        if not isinstance(value, str) or not value.split():
-            return None
-        return " ".join(value.split())
+        return Text.one_line(value)
 
 
 class Profile(BaseModel):
@@ -225,6 +223,21 @@ class Profile(BaseModel):
         return sum(1 for answer in self.answers if answer.prompt)
 
 
+class Objectives:
+    """What one deal is for, picked before it starts: plain text, the sentence the app's Remote
+    Config writes for the option picked (`main_page_config.deal_closer_objectives`).
+
+    It belongs to the deal, not the buyer: `POST /conversations` stores it on the conversation
+    document and every generation of that deal reads it from there. As with an answer's
+    sentence, the meaning is the client's to say — nothing here knows the options — and it
+    lands in a fenced block of its own."""
+
+    @staticmethod
+    def clean(value: object) -> str | None:
+        """One prompt line, or None when it is not a sentence (dropped, not rejected)."""
+        return Text.one_line(value)
+
+
 class ExpressRequest(BaseModel):
     """`express_dealmaker` body: screenshots and/or text plus the buyer profile."""
 
@@ -238,11 +251,18 @@ class ExpressRequest(BaseModel):
     keyword: str | None = None
     # A redo's previous lines: the new ones must not repeat them.
     replacing: list[str] = Field(default_factory=list)
+    # What this deal is for; the conversation worker reads it off the conversation document.
+    objective: str | None = None
 
     @field_validator("images", mode="before")
     @classmethod
     def _images(cls, value: object) -> list:
         return Images.validate(value, per="request")
+
+    @field_validator("objective", mode="before")
+    @classmethod
+    def _objective(cls, value: object) -> str | None:
+        return Objectives.clean(value)
 
     @field_validator("replacing", mode="before")
     @classmethod
@@ -307,6 +327,13 @@ class ProRequest(BaseModel):
     regenerate: bool = False
     # A redo's previous reply: the new one must take another approach.
     replacing: str | None = None
+    # What this deal is for; the conversation worker reads it off the conversation document.
+    objective: str | None = None
+
+    @field_validator("objective", mode="before")
+    @classmethod
+    def _objective(cls, value: object) -> str | None:
+        return Objectives.clean(value)
 
     @field_validator("replacing", mode="before")
     @classmethod

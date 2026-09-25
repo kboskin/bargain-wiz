@@ -13,6 +13,7 @@ Map<String, dynamic> _$CreateConversationRequestToJson(
   'text': ?instance.text,
   'images': ?instance.images?.map((e) => e.toJson()).toList(),
   'keyword': ?instance.keyword,
+  'objective': ?instance.objective,
   'overrides': instance.overrides,
 };
 

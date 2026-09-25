@@ -787,6 +787,47 @@ def test_the_answer_descriptions_survive_the_queue_and_reach_the_prompt(app, que
     assert "Bulldozer: never blinks." in _prompt(app, delivered).system
 
 
+OBJECTIVE = "Objective: get a discount — anchor with a number."
+OBJECTIVE_BLOCK = f"<objective>\n{OBJECTIVE}\n</objective>"
+
+
+def test_the_objective_is_set_once_on_the_conversation_and_every_generation_reads_it(
+    app, store, queue
+):
+    """Picked before the chat starts and sent with the create only: the conversation keeps it,
+    so a later turn, options and a redo are all asked for the same objective."""
+    _, first = _start_pro(objective=OBJECTIVE)
+    cid, rid = first["conversation_id"], first["reply_id"]
+    assert store.conversation("u1", cid)["objective"] == OBJECTIVE
+    assert OBJECTIVE_BLOCK in _prompt(app, queue.tasks[-1]).parts[-1].text
+
+    _reply_lands(store, cid, rid)
+    assert _call("POST", f"/conversations/{cid}/options", {"message_id": rid})[0] == 200
+    assert (queue.tasks[-1].action, len(queue.tasks)) == ("options", 2)
+    assert OBJECTIVE_BLOCK in _prompt(app, queue.tasks[-1]).parts[-1].text
+    store.seed_message("u1", cid, rid, {"pending_options": False}, merge=True)
+
+    status, second = _call("POST", f"/conversations/{cid}/messages", {"text": "He said $170"})
+    assert status == 200 and len(queue.tasks) == 3
+    assert "objective" not in queue.tasks[-1].model_dump()  # the task never carries it
+    assert OBJECTIVE_BLOCK in _prompt(app, queue.tasks[-1]).parts[-1].text
+
+    _reply_lands(store, cid, second["reply_id"])
+    assert _call("POST", f"/conversations/{cid}/redo", {})[0] == 200
+    assert queue.tasks[-1].regenerate and len(queue.tasks) == 4
+    assert OBJECTIVE_BLOCK in _prompt(app, queue.tasks[-1]).parts[-1].text
+
+
+def test_an_express_deal_keeps_its_objective_too_and_a_deal_without_one_has_none(app, store, queue):
+    _, express = _start_express(images=[IMG], objective=OBJECTIVE)
+    assert store.conversation("u1", express["conversation_id"])["objective"] == OBJECTIVE
+    assert OBJECTIVE_BLOCK in _prompt(app, queue.tasks[-1]).parts[-1].text
+
+    _, pro = _start_pro()
+    assert "objective" not in store.conversation("u1", pro["conversation_id"])
+    assert "<objective>" not in _prompt(app, queue.tasks[-1]).parts[-1].text
+
+
 @pytest.mark.usefixtures("unreachable_model")
 def test_only_the_last_attempt_records_a_failure(app, store, queue, metrics):
     _start_pro()

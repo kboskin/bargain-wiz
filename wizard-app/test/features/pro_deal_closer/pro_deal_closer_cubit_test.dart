@@ -105,6 +105,63 @@ void main() {
     });
   });
 
+  group('objective', () {
+    const discount = 'Objective: get a discount.';
+    const followUp = 'Objective: follow up.';
+
+    test('is picked before the chat starts, cleared by tapping it again, and sent with the turn',
+        () async {
+      await startFresh();
+      expect(cubit.state.canPickObjective, isTrue);
+
+      cubit
+        ..selectObjective(followUp)
+        ..selectObjective(followUp);
+      expect(cubit.state.objective, isNull);
+      cubit.selectObjective(discount);
+      expect(cubit.state.objective, discount);
+
+      await cubit.send(text: 'They ask 180');
+      await pumpEventQueue();
+
+      expect(repo.sendCalls.single.objective, discount);
+      // The conversation now keeps it: it cannot change for the rest of the chat.
+      expect(cubit.state.canPickObjective, isFalse);
+      cubit.selectObjective(followUp);
+      expect(cubit.state.objective, discount);
+    });
+
+    test('stays open to change after a first send that failed', () async {
+      await startFresh();
+      cubit.selectObjective(discount);
+      repo.failure = const ServerFailure('offline');
+
+      await cubit.send(text: 'hello');
+      await pumpEventQueue();
+
+      expect(cubit.state.conversationId, isNull);
+      expect(cubit.state.canPickObjective, isTrue);
+      cubit.selectObjective(followUp);
+      expect(cubit.state.objective, followUp);
+    });
+
+    test('a reopened chat shows the objective it was started for, locked', () async {
+      conversations.store['c1'] = Conversation(
+        id: 'c1',
+        type: ConversationType.proDealCloser,
+        createdAt: DateTime(2026, 9),
+        objective: followUp,
+      );
+      repo.store['c1'] = const [ProDealCloserMessage(id: 'm1', text: 'hi', seq: 1)];
+
+      await cubit.start(conversationId: 'c1', overrides: const {}, locale: 'en');
+      await pumpEventQueue();
+
+      expect(cubit.state.objective, followUp);
+      expect(cubit.state.canPickObjective, isFalse);
+    });
+  });
+
   group('send: text', () {
     test('shows the bubble at once, creates the conversation and renders the reply', () async {
       await startFresh(vibe: 'no_nonsense');

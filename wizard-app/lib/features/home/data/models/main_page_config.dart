@@ -1,6 +1,7 @@
 import 'package:appwizard/features/shared/data/models/multilocale_text.dart';
 import 'package:appwizard/features/shared/data/models/plural_text.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/gradient_background_config.dart';
+import 'package:appwizard/features/shared/data/models/deal_objective.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 part 'main_page_config.g.dart';
@@ -51,6 +52,8 @@ class MainPageConfig {
     this.proOptionsCta,
     this.proRedoCta,
     this.proAttachCta,
+    this.dealCloserObjectiveTitle,
+    this.dealCloserObjectives = const [],
     this.offlineBanner,
   });
 
@@ -199,6 +202,15 @@ class MainPageConfig {
 
   @JsonKey(name: 'pro_attach_cta', fromJson: PluralText.fromJson, toJson: _pluralToJson)
   final PluralText? proAttachCta;
+
+  /// The wizard's question above the objective chips, before a deal starts.
+  @JsonKey(name: 'deal_closer_objective_title', fromJson: _multilocaleFromJson)
+  final dynamic dealCloserObjectiveTitle;
+
+  /// What a deal can be started for, in chip order; empty hides the question. Not tied to
+  /// one flow: the Pro chat asks today, and any deal closer can reuse the same list.
+  @JsonKey(name: 'deal_closer_objectives', defaultValue: <DealObjective>[], includeToJson: false)
+  final List<DealObjective> dealCloserObjectives;
 
   @JsonKey(name: 'offline_banner', fromJson: _multilocaleFromJson)
   final dynamic offlineBanner;

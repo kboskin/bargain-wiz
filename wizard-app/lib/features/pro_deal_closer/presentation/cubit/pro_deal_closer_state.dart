@@ -118,6 +118,7 @@ class ProDealCloserState extends Equatable {
     this.isTyping = false,
     this.overrides = const {},
     this.locale = 'en',
+    this.objective,
     this.failure,
     this.errorCount = 0,
   });
@@ -136,11 +137,18 @@ class ProDealCloserState extends Equatable {
   /// written in rather than in whatever the profile default has since become.
   final Map<String, dynamic> overrides;
   final String locale;
+  /// What this chat is for — the objective's text — or none. It belongs to the conversation:
+  /// sent with the request that creates it, read back on reopen.
+  final String? objective;
   /// Last failure; [errorCount] increments on each new one so listeners can react.
   final Failure? failure;
   final int errorCount;
 
   bool get hasUserMessages => messages.any((m) => m.isUser);
+
+  /// The objective can change until the chat exists: the first turn is in flight or done
+  /// once [isTyping] or a [conversationId] says so. A first send that failed leaves it open.
+  bool get canPickObjective => conversationId == null && !isTyping;
 
   ProChatMessage? messageById(String id) => messages.where((m) => m.id == id).firstOrNull;
 
@@ -153,6 +161,7 @@ class ProDealCloserState extends Equatable {
     bool? isTyping,
     Map<String, dynamic>? overrides,
     String? locale,
+    Object? objective = _unset,
     Object? failure = _unset,
     int? errorCount,
   }) =>
@@ -165,6 +174,7 @@ class ProDealCloserState extends Equatable {
         isTyping: isTyping ?? this.isTyping,
         overrides: overrides ?? this.overrides,
         locale: locale ?? this.locale,
+        objective: objective == _unset ? this.objective : objective as String?,
         failure: failure == _unset ? this.failure : failure as Failure?,
         errorCount: errorCount ?? this.errorCount,
       );
@@ -179,6 +189,7 @@ class ProDealCloserState extends Equatable {
         isTyping,
         overrides,
         locale,
+        objective,
         failure,
         errorCount,
       ];

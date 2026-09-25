@@ -168,6 +168,7 @@ class Conversation extends Equatable {
     this.priceAfter,
     this.seeing,
     this.overrides,
+    this.objective,
     this.preview,
     this.thumbnailStoragePath,
     this.messageCount = 0,
@@ -207,6 +208,9 @@ class Conversation extends Equatable {
   /// edited by the chips in its header. Reopening a deal coaches from these, not from the
   /// profile, so the thread keeps the voice it was written in (CONVERSATIONS.md).
   final Map<String, dynamic>? overrides;
+  /// What the deal was started for: the objective's text, set once when the conversation was
+  /// created (`main_page_config.deal_closer_objectives`).
+  final String? objective;
   /// Last message text, clipped by the server.
   final String? preview;
   /// First screenshot stored for this deal (Cloud Storage path).
@@ -254,6 +258,7 @@ class Conversation extends Equatable {
     String? priceAfter,
     String? seeing,
     Map<String, dynamic>? overrides,
+    String? objective,
     String? preview,
     String? thumbnailStoragePath,
     int? messageCount,
@@ -276,6 +281,7 @@ class Conversation extends Equatable {
         priceAfter: priceAfter ?? this.priceAfter,
         seeing: seeing ?? this.seeing,
         overrides: overrides ?? this.overrides,
+        objective: objective ?? this.objective,
         preview: preview ?? this.preview,
         thumbnailStoragePath: thumbnailStoragePath ?? this.thumbnailStoragePath,
         messageCount: messageCount ?? this.messageCount,
@@ -300,6 +306,7 @@ class Conversation extends Equatable {
         priceAfter,
         seeing,
         overrides,
+        objective,
         preview,
         thumbnailStoragePath,
         messageCount,

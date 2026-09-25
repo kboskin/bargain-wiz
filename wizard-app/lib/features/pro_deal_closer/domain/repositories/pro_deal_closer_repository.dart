@@ -10,15 +10,18 @@ abstract class ProDealCloserRepository {
   /// [MessageStatus.pending] is the typing indicator.
   Stream<List<ProDealCloserMessage>> watchMessages(String conversationId);
 
-  /// Sends one user turn. Without [conversationId] a new conversation is created. The wizard
-  /// reply arrives through [watchMessages]. The server refuses a second turn while one is in
-  /// flight (409), so a turn needs no client key to tell it apart from another.
+  /// Sends one user turn. Without [conversationId] a new conversation is created — for
+  /// [objective] (its text), when one was picked; the conversation keeps it, so a follow-up
+  /// turn does not send it again. The wizard reply arrives through [watchMessages]. The server refuses
+  /// a second turn while one is in flight (409), so a turn needs no client key to tell it
+  /// apart from another.
   Future<Either<Failure, ChatSendResult>> send({
     String? conversationId,
     String? text,
     List<String> attachmentPaths = const [],
     required Map<String, dynamic> overrides,
     required String locale,
+    String? objective,
   });
 
   /// Asks for three lines (opener / counter / close) on the wizard reply [messageId]. The

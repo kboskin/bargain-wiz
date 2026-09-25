@@ -150,6 +150,7 @@ and the profile through the `profile` function.
 | --- | --- | --- |
 | `type` | `"express" \| "pro"` | drives the UI |
 | `title` | string | server-derived (`ProConversationTitle` logic moves server-side) unless the user renames |
+| `objective` | string? | What the deal is for, as plain text — the objective picked before it started, worded by `main_page_config.deal_closer_objectives`. Set once by `POST /conversations` and never changed; every generation of the deal (reply, options, redo) reads it from here, so later turns do not send it. Any type may carry one (the Pro chat asks today). Not part of the buyer `profile`: it describes the deal, not the person. Reopening the chat shows the chip whose text it is |
 | `overrides` | map | `{answer key: value}` for the answers this deal carries rather than the person — the ones a screen marks `scope: "conversation"`, today `vibe` and `marketplace`. Snapshotted at creation from the profile, re-stamped by any turn or `redo` that sends them, and what reopening the deal coaches from, so a thread keeps the voice it was written in. It replaced the typed `marketplace` / `vibe` columns: which answers are the deal's is the template's to say, not this schema's |
 | `status` | `"open" \| "won" \| "lost"` | user-set via PATCH |
 | `active`, `archived_at` | bool, timestamp? | `false` once the user removes the deal (soft delete). The app's listener queries `active == true` (composite index with `updated_at`) |
@@ -238,7 +239,7 @@ One 2nd-gen function `conversations` (60 s timeout, 512 MB) routes on `req.path`
 
 | method and path | body | effect |
 | --- | --- | --- |
-| `POST /conversations` | `{type, text?, images?, keyword?, overrides?, profile}` | the first turn opens the conversation |
+| `POST /conversations` | `{type, text?, images?, keyword?, objective?, overrides?, profile}` | the first turn opens the conversation; its `objective` (plain text) is stored on it here and only here |
 | `POST /conversations/{cid}/messages` | `{text?, images?, overrides?, profile}` | appends the user turn, generates the wizard reply (pro only) |
 | `POST /conversations/{cid}/options` | `{message_id?, overrides?, profile}` | queues three lines for that wizard turn (default: the latest); `pending_options` marks it meanwhile |
 | `POST /conversations/{cid}/redo` | `{message_id?, keyword?, overrides?, profile}` | regenerates that wizard turn in place, `revision + 1`; for express this is "Get More" / a chip or keyword change |

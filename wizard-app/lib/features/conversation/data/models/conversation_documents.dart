@@ -26,6 +26,7 @@ class ConversationDocuments {
       seeing: string(express?['seeing']),
       keyword: string(express?['keyword'] ?? data['keyword']),
       overrides: _map(data['overrides']),
+      objective: string(data['objective']),
       preview: string(data['preview']),
       thumbnailStoragePath: thumbnail?.storagePath,
       messageCount: (data['message_count'] as num?)?.toInt() ?? 0,

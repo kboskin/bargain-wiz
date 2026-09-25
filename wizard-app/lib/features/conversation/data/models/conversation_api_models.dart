@@ -41,6 +41,7 @@ class CreateConversationRequest {
     this.text,
     this.images,
     this.keyword,
+    this.objective,
   });
 
   /// "pro" | "express"
@@ -49,6 +50,9 @@ class CreateConversationRequest {
   final List<AiImagePayload>? images;
   /// Express only: what the buyer wants to focus on.
   final String? keyword;
+  /// What the deal is for, picked before it started — plain text, the objective's sentence.
+  /// Set here and nowhere else: the conversation keeps it for every later turn.
+  final String? objective;
 
   /// The conversation-scoped answers this deal carries; stored on the conversation so
   /// reopening it restores them (CONVERSATIONS.md).

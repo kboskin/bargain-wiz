@@ -112,5 +112,5 @@ class GenerationWorker:
         chat = ChatHistory.as_chat(
             turns, uri_of=self._screenshots.uri, max_images=self._limits.max_images
         )
-        request = self._generations.for_task(task).request(task, chat, target)
+        request = self._generations.for_task(task).request(task, chat, target, conversation)
         return GenerationJob(task=task, target=target, turns=turns, request=request)

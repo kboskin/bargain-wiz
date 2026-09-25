@@ -58,6 +58,7 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
     List<String> attachmentPaths = const [],
     required Map<String, dynamic> overrides,
     required String locale,
+    String? objective,
   }) async {
     try {
       final images = await _encodeAll(attachmentPaths);
@@ -70,6 +71,7 @@ class ProDealCloserRepositoryImpl implements ProDealCloserRepository {
               overrides: overrides,
               text: payloadText,
               images: images.isEmpty ? null : images,
+              objective: objective,
             ))
           : await _api.send(
               conversationId,

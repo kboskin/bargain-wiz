@@ -83,6 +83,7 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
       // A reopened thread keeps the answers it was written with, not today's profile
       // defaults — the transcript above was coached in that voice (CONVERSATIONS.md).
       overrides: conversation?.overrides,
+      objective: conversation?.objective,
       messages: [_greeting(restored: true)],
     ));
     _subscribe(conversationId);
@@ -94,6 +95,14 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
   /// the listener.
   Future<void> send({final String text = '', final List<String> paths = const []}) =>
       _send(text: text.trim(), paths: List<String>.from(paths));
+
+  /// Picks the objective this chat is for — or, tapping the picked one again, none. Only
+  /// until the chat exists: it goes out with the request that creates the conversation, and
+  /// the conversation keeps it for every later turn.
+  void selectObjective(final String objective) {
+    if (!state.canPickObjective) return;
+    emit(state.copyWith(objective: state.objective == objective ? null : objective));
+  }
 
   Future<void> _send({required final String text, required final List<String> paths}) async {
     if (text.isEmpty && paths.isEmpty) return;
@@ -114,6 +123,7 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
       attachmentPaths: paths,
       overrides: state.overrides,
       locale: state.locale,
+      objective: state.objective,
     );
     if (isClosed) return;
     result.fold(

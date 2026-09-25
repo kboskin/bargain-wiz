@@ -17,7 +17,14 @@ from core.observability import Stopwatch
 from features.negotiation.domain.models import ChatMessage, ExpressRequest, ProRequest
 from features.negotiation.domain.service import NegotiationService
 
-from .documents import ConversationPatches, ExpressRecord, Role, StoredMessage, Summaries
+from .documents import (
+    ConversationPatches,
+    ExpressRecord,
+    Role,
+    StoredConversation,
+    StoredMessage,
+    Summaries,
+)
 from .models import GenerationTask
 from .ports import ConversationStore
 
@@ -45,19 +52,28 @@ class Generation(ABC):
         self._summaries = summaries
 
     def request(
-        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+        self,
+        task: GenerationTask,
+        chat: list[ChatMessage],
+        target: StoredMessage,
+        conversation: StoredConversation,
     ) -> ExpressRequest | ProRequest:
         """The request the prompt is built from; a 400 when the chat holds nothing to answer.
         [target] is the message the generation completes — on a redo it still holds the answer
-        being replaced, which the prompt shows so the new one differs."""
+        being replaced, which the prompt shows so the new one differs. [conversation] holds
+        what the chat itself was set up with (a Pro chat's objective)."""
         try:
-            return self._request(task, chat, target)
+            return self._request(task, chat, target, conversation)
         except ValueError as exc:
             raise BadRequest(f"nothing to answer yet: {exc}") from exc
 
     @abstractmethod
     def _request(
-        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+        self,
+        task: GenerationTask,
+        chat: list[ChatMessage],
+        target: StoredMessage,
+        conversation: StoredConversation,
     ) -> ExpressRequest | ProRequest: ...
 
     @abstractmethod
@@ -100,13 +116,18 @@ class ReplyGeneration(Generation):
     """The wizard's reply to the buyer's latest Pro message (or a redo of it)."""
 
     def _request(
-        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+        self,
+        task: GenerationTask,
+        chat: list[ChatMessage],
+        target: StoredMessage,
+        conversation: StoredConversation,
     ) -> ProRequest:
         return ProRequest(
             messages=chat,
             mode="reply",
             regenerate=task.regenerate,
             replacing=target.text if task.regenerate else None,
+            objective=conversation.objective,
             profile=task.profile,
         )
 
@@ -130,7 +151,11 @@ class ExpressGeneration(Generation):
     written on the message and on the conversation, which is where the Express flow reads it."""
 
     def _request(
-        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+        self,
+        task: GenerationTask,
+        chat: list[ChatMessage],
+        target: StoredMessage,
+        conversation: StoredConversation,
     ) -> ExpressRequest:
         text = "\n\n".join(m.text for m in chat if m.role == Role.USER and m.text) or None
         images = [image for m in chat for image in m.images]
@@ -139,6 +164,7 @@ class ExpressGeneration(Generation):
             text=text,
             keyword=task.keyword,
             replacing=target.line_texts if task.regenerate else [],
+            objective=conversation.objective,
             profile=task.profile,
         )
 
@@ -170,9 +196,15 @@ class OptionsGeneration(Generation):
     leave the turn alone."""
 
     def _request(
-        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+        self,
+        task: GenerationTask,
+        chat: list[ChatMessage],
+        target: StoredMessage,
+        conversation: StoredConversation,
     ) -> ProRequest:
-        return ProRequest(messages=chat, mode="options", profile=task.profile)
+        return ProRequest(
+            messages=chat, mode="options", objective=conversation.objective, profile=task.profile
+        )
 
     async def complete(self, job: GenerationJob, watch: Stopwatch) -> None:
         generated = await self._negotiation.options(job.request)
