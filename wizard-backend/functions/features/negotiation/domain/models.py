@@ -236,11 +236,22 @@ class ExpressRequest(BaseModel):
     images: list[Material] = Field(default_factory=list)
     text: str | None = None
     keyword: str | None = None
+    # A redo's previous lines: the new ones must not repeat them.
+    replacing: list[str] = Field(default_factory=list)
 
     @field_validator("images", mode="before")
     @classmethod
     def _images(cls, value: object) -> list:
         return Images.validate(value, per="request")
+
+    @field_validator("replacing", mode="before")
+    @classmethod
+    def _replacing(cls, value: object) -> list:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("must be a list of lines")
+        return [line for line in (Text.trim(v) for v in value) if line]
 
     @field_validator("text", mode="before")
     @classmethod
@@ -294,6 +305,13 @@ class ProRequest(BaseModel):
     messages: list[ChatMessage]
     mode: Literal["reply", "options"] = "reply"
     regenerate: bool = False
+    # A redo's previous reply: the new one must take another approach.
+    replacing: str | None = None
+
+    @field_validator("replacing", mode="before")
+    @classmethod
+    def _replacing(cls, value: object) -> str | None:
+        return Text.trim(value)
 
     @field_validator("messages", mode="before")
     @classmethod

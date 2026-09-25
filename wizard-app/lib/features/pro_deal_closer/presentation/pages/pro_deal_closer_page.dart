@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:appwizard/core/config/attachment_limits.dart';
 import 'package:appwizard/core/config/feature_gate_policy.dart';
 import 'package:appwizard/core/di/injection_container.dart' as di;
 import 'package:appwizard/core/routing/app_routes.dart';
@@ -122,11 +123,10 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
     }
   }
 
-  Future<void> _attach() async {
-    final cubit = context.read<ProDealCloserCubit>();
+  /// The composer stages what this returns; nothing is sent until Send.
+  Future<List<String>> _pickScreenshots() async {
     final picked = await GalleryPickerHelper.pickImages(context);
-    if (!mounted || picked.isEmpty) return;
-    await cubit.sendAttachments(picked.map((x) => x.path).toList());
+    return [for (final x in picked) x.path];
   }
 
   /// Scroll to the bottom now and again shortly after, so late layout
@@ -201,11 +201,20 @@ class _ProDealCloserViewState extends State<_ProDealCloserView> {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: ProComposer(
-                          onSend: (text) => unawaited(context.read<ProDealCloserCubit>().sendText(text)),
-                          onAttach: () => unawaited(_attach()),
-                          showMic: _config?.showMic ?? true,
-                          bottomPadding: composerBottom,
+                        child: BlocBuilder<ProDealCloserCubit, ProDealCloserState>(
+                          buildWhen: (final prev, final curr) => prev.isTyping != curr.isTyping,
+                          builder: (final context, final state) => ProComposer(
+                            enabled: !state.isTyping,
+                            onSend: (final text, final paths) => unawaited(
+                              context.read<ProDealCloserCubit>().send(text: text, paths: paths),
+                            ),
+                            onAttach: _pickScreenshots,
+                            showMic: _config?.showMic ?? true,
+                            removeScreenshotLabel: l10n?.proRemoveScreenshot ?? 'Remove screenshot',
+                            screenshotLimitText: l10n?.proScreenshotLimit(AttachmentLimits.maxImages) ??
+                                'Up to ${AttachmentLimits.maxImages} screenshots per message',
+                            bottomPadding: composerBottom,
+                          ),
                         ),
                       ),
                     ],

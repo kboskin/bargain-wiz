@@ -33,9 +33,10 @@ The functions codebase (`lines-that-land`) runs from `functions/venv`. If startu
 CLI rejects `FIREBASE_*` and names like `FUNCTION_MEMORY_MB`; rename it (see
 `wizard-backend/AGENTS.md`).
 
-**No Cloud Tasks emulator runs by default.** `main._dispatcher()` notices and generates
-inline, so conversations still work locally; queue rate limits and retries are simply not
-exercised. Set `CLOUD_TASKS_EMULATOR_HOST` only if you actually start one.
+**The queue.** Recent Firebase CLIs start a Cloud Tasks emulator for the `generate` queue
+(it shows as `tasks`, port 9499, in `curl -s localhost:4400/emulators`), and a turn is then
+queued as in the cloud. Without one, `RuntimeEnvironment.queues_inline` has the worker run
+inside the request, so conversations still work; the POST just waits for the model.
 
 **Scheduled functions are not reachable over HTTP in the emulator.** Trigger `refresh_lines`
 from the Emulator UI at http://localhost:4000, not with curl.
@@ -55,7 +56,25 @@ Restart the emulators to pick it up. The function log shows one `model_call` met
 Without a Cloud Tasks emulator generation runs inline, so a conversation POST waits for the
 model and the app gives up after its 70 s POST timeout — pick a model that answers faster.
 
-## 2. App
+## 2. Backend end to end
+
+With the suite up, `tests/test_e2e.py` drives the real functions the way the app does — an
+anonymous Auth-emulator user, a Pro deal (reply, options, redo, follow-up), an Express deal,
+the history list, the profile, the Lines tab — and checks the documents the listener would see
+(`usage`, image refs, `seq`, `active_turn`). It is opt-in:
+
+```bash
+cd wizard-backend/functions
+E2E=1 venv/bin/python -m pytest tests/test_e2e.py -rs      # ~1–3 min with qwen2.5vl:7b
+```
+
+**Restart the emulators after changing backend code**: the Python functions are loaded when
+the suite starts, so an old suite runs old code. Each run signs up a fresh anonymous user, so
+its data stays under that uid (browse it in the Emulator UI). `E2E_TIMEOUT_SEC` (default 300)
+bounds each wait for the model; a failed generation fails the test at once with the error the
+backend recorded.
+
+## 3. App
 
 ```bash
 cd wizard-app && fvm flutter run --flavor local -t lib/main.dart

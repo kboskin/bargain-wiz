@@ -33,10 +33,6 @@ class AppConfig {
   // Logging level
   static bool get verboseLogging => isDev || isLocal;
 
-  /// `--dart-define=MOCK_AI=true` keeps the canned Express / Pro answers (UI work without
-  /// the Cloud Functions). Default: real `express_dealmaker` / `pro_deal_closer` functions.
-  static const bool useMockAi = bool.fromEnvironment('MOCK_AI');
-
   // ── Firebase emulators (local flavor) ────────────────────────────────────
 
   /// Host the emulators listen on, as seen from the device. The Android emulator reaches the
@@ -58,21 +54,10 @@ class AppConfig {
   /// in the local flavor): `http://<host>:5001/<project>/us-central1`.
   static String localApiUrl(String projectId, {String region = 'us-central1'}) =>
       'http://$emulatorHost:$emulatorFunctionsPort/$projectId/$region';
-
-  // Payment provider type
-  static PaymentProviderType get paymentProviderType {
-    // Can be overridden via environment variable
-    const provider = String.fromEnvironment(
-      'PAYMENT_PROVIDER',
-      defaultValue: 'iap',
-    );
-    return provider == 'stripe'
-        ? PaymentProviderType.stripe
-        : PaymentProviderType.iap;
-  }
 }
 
-/// Payment provider type enum
+/// Which store the paywall charges through — chosen by Remote Config
+/// (`paywall_config.payment_provider`, see [RemoteConfigService.getPaymentProviderType]).
 enum PaymentProviderType {
   iap,
   stripe,

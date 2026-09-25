@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:appwizard/core/config/attachment_limits.dart';
 import 'package:appwizard/core/theme/wiz_theme.dart';
 import 'package:appwizard/core/utils/speech_locale.dart';
+import 'package:appwizard/core/widgets/attachment_image.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_buttons.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_text_field.dart';
 import 'package:appwizard/core/widgets/wiz/wiz_toast.dart';
@@ -12,22 +14,35 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 /// Pro Deal Closer composer: "+" (attach) · text field · press-and-hold mic · send (↑).
 /// Sits at the bottom of the screen over a fade from transparent to the app teal tint.
+///
+/// A turn is whatever the composer holds when Send is tapped: picked screenshots are staged
+/// in a strip above the field (removable, up to [AttachmentLimits.maxImages]) and go out
+/// together with the typed text, either of which may be empty. Nothing is sent on pick.
 class ProComposer extends StatefulWidget {
   const ProComposer({
     super.key,
     required this.onSend,
     required this.onAttach,
+    this.enabled = true,
     this.showMic = true,
     this.hintText = 'Type a line...',
     this.speechUnavailableText = 'Speech recognition is not available on this device',
+    this.removeScreenshotLabel = 'Remove screenshot',
+    this.screenshotLimitText = 'Up to ${AttachmentLimits.maxImages} screenshots per message',
     this.bottomPadding = WizSpacing.homeIndicator,
   });
 
-  final ValueChanged<String> onSend;
-  final VoidCallback onAttach;
+  /// The typed text (trimmed) and the staged screenshot paths, in the order picked.
+  final void Function(String text, List<String> paths) onSend;
+  /// Opens the picker; resolves to the picked file paths (empty when cancelled).
+  final Future<List<String>> Function() onAttach;
+  /// False while the wizard is answering: the draft stays, Send waits.
+  final bool enabled;
   final bool showMic;
   final String hintText;
   final String speechUnavailableText;
+  final String removeScreenshotLabel;
+  final String screenshotLimitText;
   /// Bottom inset below the row (34 + safe area, or less when the keyboard is up).
   final double bottomPadding;
 
@@ -56,6 +71,8 @@ class _ProComposerState extends State<ProComposer> {
 
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focus = FocusNode();
+  /// Screenshots picked for the next turn, not sent yet.
+  final List<String> _staged = [];
   final stt.SpeechToText _speech = stt.SpeechToText();
 
   bool _isListening = false;
@@ -111,17 +128,29 @@ class _ProComposerState extends State<ProComposer> {
     WizToast.show(context, widget.speechUnavailableText);
   }
 
+  bool get _canSend => widget.enabled && (_controller.text.trim().isNotEmpty || _staged.isNotEmpty);
+
+  Future<void> _attach() async {
+    final picked = await widget.onAttach();
+    if (!mounted || picked.isEmpty) return;
+    final room = AttachmentLimits.maxImages - _staged.length;
+    setState(() => _staged.addAll(picked.take(room)));
+    if (picked.length > room) WizToast.show(context, widget.screenshotLimitText);
+  }
+
   void _send() {
+    if (!_canSend) return;
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    final paths = List<String>.of(_staged);
     _isPointerDown = false;
     if (_isListening) {
       setState(() => _isListening = false);
       unawaited(_enqueue(_speech.stop));
     }
     _controller.clear();
-    widget.onSend(text);
-    _focus.requestFocus();
+    setState(_staged.clear);
+    widget.onSend(text, paths);
+    if (text.isNotEmpty) _focus.requestFocus();
   }
 
   // ── Press-and-hold dictation ──
@@ -265,47 +294,122 @@ class _ProComposerState extends State<ProComposer> {
             stops: [0, 0.35],
           ),
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            WizRoundIconButton(
-              icon: Icons.add_rounded,
-              size: 46,
-              iconSize: 26,
-              onPressed: widget.onAttach,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: WizTextField(
-                controller: _controller,
-                focusNode: _focus,
-                hintText: widget.hintText,
-                height: 46,
-                radius: 23,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                textInputAction: TextInputAction.send,
-                textCapitalization: TextCapitalization.sentences,
-                style: WizType.fieldText.copyWith(fontWeight: FontWeight.w500),
-                onSubmitted: (_) => _send(),
+            if (_staged.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _StagedStrip(
+                  paths: _staged,
+                  removeLabel: widget.removeScreenshotLabel,
+                  onRemove: (final index) => setState(() => _staged.removeAt(index)),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            if (widget.showMic) ...[
-              _MicButton(
-                recording: _isListening,
-                onDown: _onMicDown,
-                onUp: _onMicUp,
-              ),
-              const SizedBox(width: 8),
-            ],
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _controller,
-              builder: (context, value, _) => WizRoundIconButton(
-                icon: Icons.arrow_upward_rounded,
-                size: 46,
-                onPressed: value.text.trim().isEmpty ? null : _send,
-              ),
-            ),
+            _row(),
           ],
+        ),
+      );
+
+  Widget _row() => Row(
+        children: [
+          WizRoundIconButton(
+            icon: Icons.add_rounded,
+            size: 46,
+            iconSize: 26,
+            onPressed: _staged.length < AttachmentLimits.maxImages ? () => unawaited(_attach()) : null,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: WizTextField(
+              controller: _controller,
+              focusNode: _focus,
+              hintText: widget.hintText,
+              height: 46,
+              radius: 23,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              textInputAction: TextInputAction.send,
+              textCapitalization: TextCapitalization.sentences,
+              style: WizType.fieldText.copyWith(fontWeight: FontWeight.w500),
+              onSubmitted: (_) => _send(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (widget.showMic) ...[
+            _MicButton(
+              recording: _isListening,
+              onDown: _onMicDown,
+              onUp: _onMicUp,
+            ),
+            const SizedBox(width: 8),
+          ],
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (final context, _, final __) => WizRoundIconButton(
+              icon: Icons.arrow_upward_rounded,
+              size: 46,
+              onPressed: _canSend ? _send : null,
+            ),
+          ),
+        ],
+      );
+}
+
+/// The screenshots staged for the next turn: 48×64 thumbnails in a row, each with a remove
+/// badge. Scrolls sideways once they no longer fit.
+class _StagedStrip extends StatelessWidget {
+  const _StagedStrip({required this.paths, required this.removeLabel, required this.onRemove});
+
+  static const double _width = 48;
+  static const double _height = 64;
+  /// Room for the badge that overhangs each thumbnail's top-right corner.
+  static const double _badgeInset = 6;
+
+  final List<String> paths;
+  final String removeLabel;
+  final ValueChanged<int> onRemove;
+
+  @override
+  Widget build(final BuildContext context) => SizedBox(
+        height: _height + _badgeInset,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: paths.length,
+          separatorBuilder: (_, final __) => const SizedBox(width: 4),
+          itemBuilder: (final context, final index) => Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: _badgeInset, right: _badgeInset),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: AttachmentImage(path: paths[index], width: _width, height: _height),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Semantics(
+                  button: true,
+                  label: removeLabel,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onRemove(index),
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: WizColors.ink,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
 }

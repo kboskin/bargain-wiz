@@ -236,7 +236,7 @@ def test_the_first_turn_asks_about_the_stored_screenshot_by_uri(app, store, queu
 
     assert "No-Nonsense" in prompt.system
     assert prompt.parts[0] == ImagePart(mime_type="image/jpeg", uri=f"gs://in-memory/{ref['path']}")
-    assert "Buyer: They ask $180 for the Kallax (screenshot attached)" in prompt.parts[-1].text
+    assert "Buyer: They ask $180 for the Kallax (screenshot 1 attached)" in prompt.parts[-1].text
 
 
 def test_the_local_model_completes_the_reply(inline, store, metrics, local_model):
@@ -405,7 +405,9 @@ def test_redo_regenerates_in_place_and_clears_options(app, store, queue):
     assert "lines" not in wizard and "options_usage" not in wizard
     assert store.conversation("u1", cid)["active_turn"]["message_id"] == rid
     prompt = _prompt(app, queue.tasks[-1])
-    assert "different angle" in prompt.parts[-1].text and "Quiet" in prompt.system
+    # The reply being replaced is shown, so the new one can differ from it.
+    assert "asked for another: 'Open at $140.'" in prompt.parts[-1].text
+    assert "Quiet" in prompt.system
 
 
 def test_the_local_model_regenerates_a_reply_in_place(inline, store, local_model):
@@ -470,8 +472,10 @@ def test_the_local_model_answers_an_express_deal(inline, store, local_model):
 
 def test_express_redo_asks_with_the_new_tone_and_keyword(app, store, queue):
     _, first = _start_express(images=[IMG])
-    cid = first["conversation_id"]
-    _reply_lands(store, cid, first["reply_id"], "Kallax")
+    cid, rid = first["conversation_id"], first["reply_id"]
+    _reply_lands(store, cid, rid, "Kallax")
+    lines = [{"intent": "opener", "text": "Would you take $140?", "why": "An anchor."}]
+    store.seed_message("u1", cid, rid, {"lines": lines}, merge=True)
 
     status, _ = _call(
         "POST", f"/conversations/{cid}/redo", {"vibe": "friendly", "keyword": "pickup"}
@@ -482,6 +486,8 @@ def test_express_redo_asks_with_the_new_tone_and_keyword(app, store, queue):
     assert conv["overrides"] == {"vibe": "friendly"} and conv["keyword"] == "pickup"
     prompt = _prompt(app, queue.tasks[-1])
     assert "Friendly" in prompt.system and "focus on: pickup" in prompt.parts[-1].text
+    # "Get More" shows the lines being replaced, so the new ones do not repeat them.
+    assert "asked for new ones:\n- Would you take $140?" in prompt.parts[-1].text
     assert _turns(store, cid)[1]["revision"] == 1
 
 

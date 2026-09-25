@@ -211,4 +211,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get referShareInvite => 'Share invite link';
+
+  @override
+  String get proRemoveScreenshot => 'Remove screenshot';
+
+  @override
+  String proScreenshotLimit(int count) {
+    return 'Up to $count screenshots per message';
+  }
 }

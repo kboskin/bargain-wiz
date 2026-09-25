@@ -59,24 +59,27 @@ class ProMessageTile extends StatelessWidget {
         onOptions: onOptions,
         onRedo: onRedo,
       );
-    } else if (message.hasAttachments) {
-      body = Align(
-        alignment: Alignment.centerRight,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: ProAttachmentBubble(
-            paths: message.attachmentPaths,
-            isUploading: message.isUploading,
-            readingLabel: readingLabel,
-          ),
-        ),
-      );
     } else {
+      // One turn can carry screenshots and text together: the screenshots first, the text
+      // under them — the order the wizard reads them in.
       body = Align(
         alignment: Alignment.centerRight,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
-          child: UserTextBubble(text: message.text),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (message.hasAttachments)
+                ProAttachmentBubble(
+                  paths: message.attachmentPaths,
+                  isUploading: message.isUploading,
+                  readingLabel: readingLabel,
+                ),
+              if (message.hasAttachments && message.text.isNotEmpty) const SizedBox(height: 6),
+              if (message.text.isNotEmpty || !message.hasAttachments) UserTextBubble(text: message.text),
+            ],
+          ),
         ),
       );
     }

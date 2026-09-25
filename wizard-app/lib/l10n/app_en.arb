@@ -268,5 +268,18 @@
   "referShareInvite": "Share invite link",
   "@referShareInvite": {
     "description": "CTA button to share referral / invite link"
+  },
+  "proRemoveScreenshot": "Remove screenshot",
+  "@proRemoveScreenshot": {
+    "description": "Pro chat composer: remove a staged screenshot before sending"
+  },
+  "proScreenshotLimit": "Up to {count} screenshots per message",
+  "@proScreenshotLimit": {
+    "description": "Pro chat composer: more screenshots picked than one message can carry",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

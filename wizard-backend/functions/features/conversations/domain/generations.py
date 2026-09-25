@@ -44,16 +44,20 @@ class Generation(ABC):
         self._negotiation = negotiation
         self._summaries = summaries
 
-    def request(self, task: GenerationTask, chat: list[ChatMessage]) -> ExpressRequest | ProRequest:
-        """The request the prompt is built from; a 400 when the chat holds nothing to answer."""
+    def request(
+        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+    ) -> ExpressRequest | ProRequest:
+        """The request the prompt is built from; a 400 when the chat holds nothing to answer.
+        [target] is the message the generation completes — on a redo it still holds the answer
+        being replaced, which the prompt shows so the new one differs."""
         try:
-            return self._request(task, chat)
+            return self._request(task, chat, target)
         except ValueError as exc:
             raise BadRequest(f"nothing to answer yet: {exc}") from exc
 
     @abstractmethod
     def _request(
-        self, task: GenerationTask, chat: list[ChatMessage]
+        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
     ) -> ExpressRequest | ProRequest: ...
 
     @abstractmethod
@@ -95,9 +99,15 @@ class Generation(ABC):
 class ReplyGeneration(Generation):
     """The wizard's reply to the buyer's latest Pro message (or a redo of it)."""
 
-    def _request(self, task: GenerationTask, chat: list[ChatMessage]) -> ProRequest:
+    def _request(
+        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+    ) -> ProRequest:
         return ProRequest(
-            messages=chat, mode="reply", regenerate=task.regenerate, profile=task.profile
+            messages=chat,
+            mode="reply",
+            regenerate=task.regenerate,
+            replacing=target.text if task.regenerate else None,
+            profile=task.profile,
         )
 
     async def complete(self, job: GenerationJob, watch: Stopwatch) -> None:
@@ -119,10 +129,18 @@ class ExpressGeneration(Generation):
     """What the screenshots show and three lines to send, for an Express deal. The answer is
     written on the message and on the conversation, which is where the Express flow reads it."""
 
-    def _request(self, task: GenerationTask, chat: list[ChatMessage]) -> ExpressRequest:
+    def _request(
+        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+    ) -> ExpressRequest:
         text = "\n\n".join(m.text for m in chat if m.role == Role.USER and m.text) or None
         images = [image for m in chat for image in m.images]
-        return ExpressRequest(images=images, text=text, keyword=task.keyword, profile=task.profile)
+        return ExpressRequest(
+            images=images,
+            text=text,
+            keyword=task.keyword,
+            replacing=target.line_texts if task.regenerate else [],
+            profile=task.profile,
+        )
 
     async def complete(self, job: GenerationJob, watch: Stopwatch) -> None:
         generated = await self._negotiation.express(job.request)
@@ -151,7 +169,9 @@ class OptionsGeneration(Generation):
     """Three lines for a Pro reply that is already there: they attach to that message and
     leave the turn alone."""
 
-    def _request(self, task: GenerationTask, chat: list[ChatMessage]) -> ProRequest:
+    def _request(
+        self, task: GenerationTask, chat: list[ChatMessage], target: StoredMessage
+    ) -> ProRequest:
         return ProRequest(messages=chat, mode="options", profile=task.profile)
 
     async def complete(self, job: GenerationJob, watch: Stopwatch) -> None:

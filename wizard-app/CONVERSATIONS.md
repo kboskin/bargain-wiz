@@ -16,7 +16,7 @@ per-day turn cap, soft delete via `active`, App Check hook behind `REQUIRE_APP_C
 Firestore listeners for history and chat (`ConversationRepositoryImpl`,
 `ProDealCloserRepositoryImpl`), optimistic bubbles retired by the echo, Express through
 `POST /conversations`, screenshots rendered from Storage (`AttachmentImage`), and an in-memory
-`FakeConversationsBackend` for `--dart-define=MOCK_AI=true` and tests. The SharedPreferences
+`FakeConversationsBackend` for tests. The SharedPreferences
 conversation store is gone.
 
 Not yet: Firebase App Check in the app (`firebase_app_check` + App Attest / Play Integrity),

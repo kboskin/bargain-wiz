@@ -493,6 +493,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Share invite link'**
   String get referShareInvite;
+
+  /// Pro chat composer: remove a staged screenshot before sending
+  ///
+  /// In en, this message translates to:
+  /// **'Remove screenshot'**
+  String get proRemoveScreenshot;
+
+  /// Pro chat composer: more screenshots picked than one message can carry
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {count} screenshots per message'**
+  String proScreenshotLimit(int count);
 }
 
 class _AppLocalizationsDelegate

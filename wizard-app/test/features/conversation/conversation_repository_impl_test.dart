@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
-import 'package:appwizard/features/conversation/data/datasources/fake_conversations_backend.dart';
 import 'package:appwizard/features/conversation/data/models/conversation_api_models.dart';
 import 'package:appwizard/features/conversation/data/repositories/conversation_repository_impl.dart';
 import 'package:appwizard/features/conversation/domain/conversation_changes.dart';
@@ -10,6 +9,8 @@ import 'package:appwizard/features/conversation/domain/entities/conversation.dar
 import 'package:appwizard/features/conversation/domain/repositories/conversation_repository.dart';
 import 'package:appwizard/features/profile/domain/profile_fields.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'fake_conversations_backend.dart';
 
 class _FakeAuth implements AuthService {
   _FakeAuth(this._uid);

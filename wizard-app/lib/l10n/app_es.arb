@@ -65,6 +65,7 @@
   "referBenefit1": "Dale a tus amigos acceso a Bargain Wiz: ofertas y negociación más inteligentes.",
   "referBenefit2": "Gana recompensas cuando tus amigos se unan con tu enlace.",
   "referBenefit3": "Cuanto más compartas, más puedes ganar.",
-  "referShareInvite": "Compartir enlace de invitación"
+  "referShareInvite": "Compartir enlace de invitación",
+  "proRemoveScreenshot": "Quitar captura",
+  "proScreenshotLimit": "Hasta {count} capturas por mensaje"
 }
-

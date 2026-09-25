@@ -154,8 +154,8 @@ class LinesContent(BaseModel):
                 name={"en": "Follow-ups", "es": "Seguimientos"},
                 tips=[
                     {
-                        "en": "I'm ready to move if we can agree on X.",
-                        "es": "Estoy listo para cerrar si acordamos X.",
+                        "en": "I'm ready to move today if we can agree on a price.",
+                        "es": "Estoy listo para cerrar hoy si acordamos un precio.",
                     },
                     {
                         "en": "Can we meet in the middle?",

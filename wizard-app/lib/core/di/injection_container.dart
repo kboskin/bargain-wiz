@@ -27,7 +27,6 @@ import 'package:appwizard/features/onboarding/data/datasources/onboarding_local_
 import 'package:appwizard/features/express_dealmaker/data/datasources/express_dealmaker_remote_datasource.dart';
 import 'package:appwizard/features/conversation/data/datasources/conversations_api.dart';
 import 'package:appwizard/features/conversation/data/datasources/conversations_stream.dart';
-import 'package:appwizard/features/conversation/data/datasources/fake_conversations_backend.dart';
 import 'package:appwizard/features/onboarding/data/mappers/onboarding_data_mapper.dart';
 import 'package:appwizard/features/onboarding/data/mappers/onboarding_screen_type_mapper.dart';
 import 'package:appwizard/features/express_dealmaker/data/mappers/express_dealmaker_mapper.dart';
@@ -138,14 +137,9 @@ Future<void> init() async {
       ),
     )
     // Backend-owned conversations (CONVERSATIONS.md): writes via the `conversations`
-    // function, reads via Firestore listeners. MOCK_AI swaps both for an in-memory fake.
-    ..registerLazySingleton<FakeConversationsBackend>(FakeConversationsBackend.new)
-    ..registerLazySingleton<ConversationsApi>(
-      () => AppConfig.useMockAi ? sl<FakeConversationsBackend>() : CloudConversationsApi(sl<CloudFunctionsApi>()),
-    )
-    ..registerLazySingleton<ConversationsStream>(
-      () => AppConfig.useMockAi ? sl<FakeConversationsBackend>() : FirestoreConversationsStream(),
-    )
+    // function, reads via Firestore listeners.
+    ..registerLazySingleton<ConversationsApi>(() => CloudConversationsApi(sl<CloudFunctionsApi>()))
+    ..registerLazySingleton<ConversationsStream>(FirestoreConversationsStream.new)
     ..registerLazySingleton<ScreenshotEncoder>(() => const ScreenshotEncoder())
     ..registerLazySingleton<ExpressDealmakerRemoteDataSource>(
       () => CloudExpressDealmakerRemoteDataSource(

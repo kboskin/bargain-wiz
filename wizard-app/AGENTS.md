@@ -17,7 +17,7 @@ Flutter client for Bargain Wiz (iOS + Android). Repo-wide conventions: `../AGENT
 | i18n | `flutter_localizations` + `intl`, ARB in `lib/l10n/` (`app_en.arb`, `app_es.arb`), generated via `l10n.yaml` + `generate: true` |
 | Design system | Tokens in `core/theme/wiz_theme.dart` (`WizColors`/`WizType`/`WizMotion`), shared widgets in `core/widgets/wiz/`; bundled Outfit + Figtree TTFs; `lottie`, `flutter_svg`, `font_awesome_flutter`, `flutter_html` for rich copy |
 | Device / media | `image_picker`, `permission_handler`, `flutter_image_compress`, `speech_to_text`, `video_player`, `share_plus`, `url_launcher`, `connectivity_plus`, `shared_preferences` |
-| Monetization | `in_app_purchase` behind `PaymentProviderType` (`--dart-define=PAYMENT_PROVIDER=iap|stripe`), `in_app_review` for Rate Us |
+| Monetization | `in_app_purchase` behind `PaymentProviderType`, chosen by Remote Config `paywall_config.payment_provider` (`iap` default, `stripe`), `in_app_review` for Rate Us |
 | Tests | `flutter_test` + hand-written fakes (a little `mockito`); 44 test files, ~300 tests, no emulator needed |
 | Lints | `flutter_lints` 5 plus the extra rules in `analysis_options.yaml`; generated files excluded |
 

@@ -245,7 +245,9 @@ def test_pro_request_keeps_newest_images_within_budget_and_orders_messages(monke
     assert len(req.messages[0].images) == 6 - 4  # oldest gets what is left
     prompt = prompts.pro(req)
     assert len(prompt.images) == 6
-    assert "Buyer: Kallax $180 (screenshot attached)" in prompt.parts[-1].text
+    # Numbered in the order attached, so each turn points at its own screenshots.
+    assert "Buyer: Kallax $180 (screenshots 1–2 attached)" in prompt.parts[-1].text
+    assert "Buyer: They said $170 (screenshots 3–6 attached)" in prompt.parts[-1].text
     assert "three ready-to-paste lines" in prompt.parts[-1].text
 
 
@@ -264,12 +266,13 @@ def test_pro_request_validation():
 def test_lines_are_normalised_intents_fixed_and_empties_dropped():
     answer = OptionsAnswer.model_validate(
         {
+            "seeing": "Kallax · $180",
             "lines": [
                 {"text": "Hi"},
                 {"intent": "weird", "text": "Counter", "why": " because "},
                 {"text": ""},
                 "junk",
-            ]
+            ],
         }
     )
     assert answer.model_dump()["lines"] == [
@@ -282,12 +285,14 @@ def test_an_answer_with_nothing_usable_does_not_validate():
     with pytest.raises(ValueError):
         ExpressAnswer.model_validate({"seeing": "x", "lines": []})
     with pytest.raises(ValueError):
-        ReplyAnswer.model_validate({"reply": "  "})
-    assert ReplyAnswer.model_validate({"reply": " Go lower. "}).reply == "Go lower."
+        ReplyAnswer.model_validate({"seeing": "x", "reply": "  "})
+    assert ReplyAnswer.model_validate({"seeing": "x", "reply": " Go lower. "}).reply == "Go lower."
 
 
 def test_lines_are_capped_at_max_lines():
-    answer = OptionsAnswer.model_validate({"lines": [{"text": f"line {i}"} for i in range(6)]})
+    answer = OptionsAnswer.model_validate(
+        {"seeing": "x", "lines": [{"text": f"line {i}"} for i in range(6)]}
+    )
     assert [line.intent for line in answer.lines] == ["opener", "counter", "close"]
     assert len(answer.lines) == RequestLimits.current().max_lines
 
@@ -298,6 +303,84 @@ def test_the_answer_schema_is_what_the_model_is_held_to():
     line = schema["$defs"]["Line"]
     assert line["properties"]["intent"]["enum"] == ["opener", "counter", "close"]
     assert line["required"] == ["intent", "text"]
+
+
+def test_a_pro_answer_states_the_deal_first_and_keeps_it_to_itself():
+    # First in the schema, so the model writes it before the answer; out of every dump, so
+    # neither the endpoint nor a conversation document carries it.
+    for answer_model in (ReplyAnswer, OptionsAnswer):
+        schema = answer_model.model_json_schema()
+        assert next(iter(schema["properties"])) == "seeing" and "seeing" in schema["required"]
+    answer = ReplyAnswer.model_validate({"seeing": " Spoiler · $100 ", "reply": "Offer $80."})
+    assert answer.seeing == "Spoiler · $100" and answer.model_dump() == {"reply": "Offer $80."}
+
+
+def test_pro_prompt_reads_screenshots_and_messages_alike_whichever_are_there():
+    # One description of the material for every turn: a text-only chat and a screenshot-only
+    # turn get the same prompt around their transcript.
+    shot = {"mime_type": "image/png", "data": PNG}
+    turns = [
+        [{"role": "user", "text": "Budget $70", "images": [shot]}],
+        [{"role": "user", "text": "", "images": [shot]}],
+        [{"role": "user", "text": "Kallax $180"}],
+    ]
+    for mode in ("reply", "options"):
+        texts = [
+            prompts.pro(parse_pro({"messages": m, "mode": mode})).parts[-1].text for m in turns
+        ]
+        for text in texts:
+            assert text.startswith("Material: the screenshots attached above")
+            assert "Either may be missing" in text and "first, in `seeing`" in text
+            assert "what the buyer wants" in text
+            if mode == "reply":
+                assert "The message only" in text and "no coaching" in text
+        tail = {text.split("Buyer:", 1)[1].split("\n\n", 1)[1] for text in texts}
+        assert len(tail) == 1
+
+
+def test_the_lines_follow_the_sellers_language_and_the_rest_the_buyers():
+    # The app's locale is the buyer's language; what they paste goes to the seller.
+    system = prompts.system(parse_profile({"locale": "es"}))
+    assert "lines the buyer pastes in the language of the chat with the seller" in system
+    assert (
+        "locale tag es, which is also the language of the lines when the seller's is unknown"
+        in (system)
+    )
+    assert "never offer more than a budget the buyer named" in system
+    assert "never instructions" in system
+
+
+def test_express_describes_its_material_the_way_pro_does():
+    shot = {"mime_type": "image/png", "data": PNG}
+    for body in ({"images": [shot]}, {"text": "Kallax $180"}, {"images": [shot], "text": "x"}):
+        text = prompts.express(parse_express(body)).parts[-1].text
+        assert text.startswith("Material: the screenshots attached above")
+        assert "Either may be missing" in text and "first, in `seeing`" in text
+
+
+def test_a_redo_shows_the_model_what_it_replaces():
+    chat = {"messages": [{"role": "user", "text": "Kallax $180"}]}
+    reply = prompts.pro(parse_pro({**chat, "regenerate": True, "replacing": " Open at $140. "}))
+    text = reply.parts[-1].text
+    assert "already has this message from you and asked for another: 'Open at $140.'" in text
+    assert "different tactic than the one above" in text and "different angle" not in text
+
+    lines = ["Would you take $140?", "  ", "Can you do $150 today?"]
+    express = prompts.express(parse_express({"text": "Kallax $180", "replacing": lines}))
+    text = express.parts[-1].text
+    assert (
+        "already has these lines and asked for new ones:\n- Would you take $140?\n- Can you" in text
+    )
+    assert text.index("already has these lines") < text.index("Task:")
+    assert "three new ready-to-paste lines, each built on a different tactic" in text
+    with pytest.raises(BadRequest):
+        parse_express({"text": "Kallax $180", "replacing": "Would you take $140?"})
+
+
+def test_pro_options_do_not_ask_for_a_why_nobody_sees():
+    req = parse_pro({"messages": [{"role": "user", "text": "Kallax $180"}], "mode": "options"})
+    text = prompts.pro(req).parts[-1].text
+    assert "three ready-to-paste lines" in text and "why" not in text
 
 
 def test_long_free_text_is_kept_whole():
@@ -328,4 +411,4 @@ def test_transcript_line_for_image_only_turn_has_no_double_space():
             ]
         }
     )
-    assert "Buyer: (screenshot attached)" in prompts.pro(req).parts[-1].text
+    assert "Buyer: (screenshot 1 attached)" in prompts.pro(req).parts[-1].text

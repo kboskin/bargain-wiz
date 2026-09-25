@@ -6,8 +6,8 @@ import 'package:appwizard/features/conversation/data/models/conversation_api_mod
 import 'package:appwizard/features/conversation/domain/entities/conversation.dart';
 import 'package:appwizard/features/shared/data/models/ai/ai_api_models.dart';
 
-/// In-memory stand-in for the `conversations` function **and** its Firestore listeners
-/// (`--dart-define=MOCK_AI=true`, widget work, tests).
+/// In-memory stand-in for the `conversations` function **and** its Firestore listeners, for
+/// tests.
 ///
 /// Mirrors the server: every write returns ids straight away, and the "queued" model call
 /// lands later — the canned reply after [replyDelay], options after [optionsDelay] with

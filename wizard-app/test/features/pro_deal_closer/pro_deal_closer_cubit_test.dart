@@ -98,18 +98,18 @@ void main() {
       // Profile screen's to change, and nothing in here moves it.
       await startFresh(vibe: 'friendly');
 
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
 
       expect(repo.sendCalls.single.overrides['vibe'], 'friendly');
     });
   });
 
-  group('sendText', () {
+  group('send: text', () {
     test('shows the bubble at once, creates the conversation and renders the reply', () async {
       await startFresh(vibe: 'no_nonsense');
 
-      final sending = cubit.sendText('  They ask 180  ');
+      final sending = cubit.send(text: '  They ask 180  ');
       expect(messages().last.text, 'They ask 180');
       expect(messages().last.isUser, isTrue);
       expect(cubit.state.isTyping, isTrue);
@@ -131,16 +131,16 @@ void main() {
 
     test('follow-ups reuse the conversation id and ignore sends while the wizard types', () async {
       await startFresh();
-      await cubit.sendText('first');
+      await cubit.send(text: 'first');
       await pumpEventQueue();
 
       repo.autoReply = false;
-      await cubit.sendText('second');
+      await cubit.send(text: 'second');
       await pumpEventQueue();
       expect(repo.sendCalls.last.conversationId, 'c1');
       expect(cubit.state.isTyping, isTrue); // pending placeholder from the server
 
-      await cubit.sendText('third while typing');
+      await cubit.send(text: 'third while typing');
       expect(repo.sendCalls, hasLength(2));
 
       repo.completeReply('c1', text: 'Late reply');
@@ -154,7 +154,7 @@ void main() {
       await startFresh();
       repo.failure = const ServerFailure('offline');
 
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
 
       expect(cubit.state.errorCount, 1);
@@ -169,7 +169,7 @@ void main() {
       await startFresh();
       repo.autoReply = false;
 
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
 
       // greeting + the user turn only: the wizard placeholder is still empty.
@@ -187,7 +187,7 @@ void main() {
     test('a failed wizard reply renders its error text with actions (Redo)', () async {
       await startFresh();
       repo.autoReply = false;
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
 
       repo.completeReply('c1', failed: true);
@@ -201,17 +201,17 @@ void main() {
 
     test('ignores empty text', () async {
       await startFresh();
-      await cubit.sendText('   ');
+      await cubit.send(text: '   ');
       expect(repo.sendCalls, isEmpty);
       expect(messages(), hasLength(1));
     });
   });
 
-  group('sendAttachments', () {
+  group('send: screenshots', () {
     test('keeps the local files for the bubble before and after the server echo', () async {
       await startFresh();
 
-      final sending = cubit.sendAttachments(['/tmp/a.jpg', '/tmp/b.jpg']);
+      final sending = cubit.send(paths: ['/tmp/a.jpg', '/tmp/b.jpg']);
       expect(messages().last.attachmentPaths, ['/tmp/a.jpg', '/tmp/b.jpg']);
       expect(messages().last.isUploading, isTrue);
       expect(cubit.state.isTyping, isTrue);
@@ -226,12 +226,34 @@ void main() {
       expect(user.attachmentPaths, ['/tmp/a.jpg', '/tmp/b.jpg']); // local paths win over stored refs
       expect(messages().last.text, 'Reply for friendly');
     });
+
+    test('screenshots and text picked together go out as one turn, one bubble', () async {
+      await startFresh();
+
+      final sending = cubit.send(text: '  My budget is 70  ', paths: ['/tmp/a.jpg']);
+      final pending = messages().last;
+      expect(pending.text, 'My budget is 70');
+      expect(pending.attachmentPaths, ['/tmp/a.jpg']);
+      expect(pending.isUploading, isTrue);
+
+      await sending;
+      await pumpEventQueue();
+
+      final call = repo.sendCalls.single;
+      expect(call.text, 'My budget is 70');
+      expect(call.attachmentPaths, ['/tmp/a.jpg']);
+      final user = messages()[1];
+      expect(user.text, 'My budget is 70');
+      expect(user.attachmentPaths, ['/tmp/a.jpg']);
+      expect(messages().where((final m) => m.isUser), hasLength(1));
+      expect(messages().last.text, 'Reply for friendly');
+    });
   });
 
   group('options and redo', () {
     test('requestOptions attaches the lines and hides the action row', () async {
       await startFresh();
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
       final reply = messages().last;
 
@@ -248,7 +270,7 @@ void main() {
 
     test('redo hides the old reply while the wizard works, then replaces it', () async {
       await startFresh();
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
       final reply = messages().last;
 
@@ -265,7 +287,7 @@ void main() {
 
     test('redo replaces the reply text in place', () async {
       await startFresh(vibe: 'quiet_closer');
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
       final reply = messages().last;
 
@@ -280,7 +302,7 @@ void main() {
 
     test('failures surface through errorCount without touching the messages()', () async {
       await startFresh();
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
       final before = messages();
       repo.failure = const ServerFailure('boom');
@@ -298,7 +320,7 @@ void main() {
       await startFresh(vibe: 'tactical');
       expect(await cubit.save(), isFalse);
 
-      await cubit.sendText('hello');
+      await cubit.send(text: 'hello');
       await pumpEventQueue();
 
       expect(await cubit.save(), isTrue);

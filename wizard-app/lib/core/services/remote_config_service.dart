@@ -454,24 +454,11 @@ class RemoteConfigService extends ChangeNotifier {
   
       });
 
-  /// Get payment provider type, primarily from paywall config.
-  /// Falls back to AppConfig.default (env) and then IAP.
-  PaymentProviderType getPaymentProviderType() {
-    try {
-      final paywall = getPaywallConfig();
-      final value = paywall?.paymentProvider?.toLowerCase().trim();
-      switch (value) {
-        case 'stripe':
-          return PaymentProviderType.stripe;
-        case 'iap':
-          return PaymentProviderType.iap;
-        default:
-          // Fallback to compile-time config if RC doesn't specify.
-          return AppConfig.paymentProviderType;
-      }
-    } catch (_) {
-      return AppConfig.paymentProviderType;
-    }
-  }
+  /// The payment provider `paywall_config.payment_provider` names (`iap` | `stripe`). Remote
+  /// Config is the only switch: anything else, or no paywall config, is IAP.
+  PaymentProviderType getPaymentProviderType() =>
+      getPaywallConfig()?.paymentProvider?.toLowerCase().trim() == 'stripe'
+          ? PaymentProviderType.stripe
+          : PaymentProviderType.iap;
 }
 

@@ -95,10 +95,16 @@ class StoredMessage(_Stored):
     revision: int = 0
     pending_options: bool = False
     images: list[ImageRef] = Field(default_factory=list)
+    # An Express answer's lines, or the options on a Pro reply; `{intent, text, why}` each.
+    lines: list[dict] = Field(default_factory=list)
 
     @property
     def is_wizard(self) -> bool:
         return self.role == Role.WIZARD
+
+    @property
+    def line_texts(self) -> list[str]:
+        return [str(line.get("text") or "") for line in self.lines if line.get("text")]
 
     @property
     def is_turn(self) -> bool:

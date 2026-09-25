@@ -13,7 +13,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 ///
 /// The server list (from [ProDealCloserRepository.watchMessages]) is the truth: a wizard
 /// message that is still `pending` is the typing indicator, `failed` renders with a Redo.
-/// A user bubble is shown immediately and retired when the echo lands — [_send] and the
+/// A user bubble is shown immediately and retired when the echo lands — [send] and the
 /// server both allow one turn at a time, so the first new user message to arrive is
 /// necessarily the one in flight and no correlation id is needed to recognise it.
 class ProDealCloserCubit extends Cubit<ProDealCloserState> {
@@ -38,7 +38,7 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
   StreamSubscription<List<ProDealCloserMessage>>? _subscription;
   List<ProDealCloserMessage> _server = const [];
   /// The turn this device has in flight, shown before the server echoes it. At most one:
-  /// [_send] bails while typing and the server answers 409 for a second one.
+  /// [send] bails while typing and the server answers 409 for a second one.
   ProChatMessage? _inFlight;
   /// User messages the server had when [_inFlight] was sent; a higher count means the echo
   /// arrived and the local bubble can go.
@@ -88,13 +88,14 @@ class ProDealCloserCubit extends Cubit<ProDealCloserState> {
     _subscribe(conversationId);
   }
 
-  /// Sends a user text line; the wizard reply arrives through the listener.
-  Future<void> sendText(String text) => _send(text: text.trim());
+  /// Sends one turn — what the composer holds when Send is tapped: the typed [text] and the
+  /// staged screenshot [paths] together, either of which may be empty. The screenshots show
+  /// as one bubble ("Reading…" until the server has them); the wizard reply arrives through
+  /// the listener.
+  Future<void> send({final String text = '', final List<String> paths = const []}) =>
+      _send(text: text.trim(), paths: List<String>.from(paths));
 
-  /// Sends screenshots as one attachment bubble ("Reading…" until the server has them).
-  Future<void> sendAttachments(List<String> paths) => _send(paths: List<String>.from(paths));
-
-  Future<void> _send({String text = '', List<String> paths = const []}) async {
+  Future<void> _send({required final String text, required final List<String> paths}) async {
     if (text.isEmpty && paths.isEmpty) return;
     if (state.isTyping) return; // the server takes one turn at a time (409 otherwise)
     final local = ProChatMessage(

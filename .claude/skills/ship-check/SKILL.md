@@ -38,6 +38,9 @@ venv/bin/ruff check .
   key, and that only shows when the emulator or a deploy loads it; run the manifest discovery
   in `functions/README.md` to check the params still resolve.
 - Changed a query? Confirm the composite index exists in `firestore.indexes.json`.
+- Changed a Firestore or Storage adapter, the queue, or a flow end to end? The in-memory tests
+  cannot see those; run `E2E=1 venv/bin/python -m pytest tests/test_e2e.py -rs` against a
+  freshly restarted emulator suite (`local-stack` skill) and say whether it ran.
 
 ## Both
 
