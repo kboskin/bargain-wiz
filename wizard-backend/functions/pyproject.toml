@@ -14,5 +14,5 @@ target-version = "py312"
 ignore = ["TRY004"]
 
 [tool.ruff.lint.isort]
-# `tests/support.py` is imported as a top-level module by the tests next to it.
+# `tests/support/` is imported as a top-level package by the tests next to it.
 known-first-party = ["support"]

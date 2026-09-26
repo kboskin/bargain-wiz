@@ -13,9 +13,10 @@ Work from `wizard-app/`, always with `fvm flutter`. Conventions and gotchas:
 ```
 lib/features/<feature>/
   data/        datasources/ · models/ (json_serializable) · repositories/ (impl)
-  domain/      entities/ · repositories/ (abstract) · usecases/
+  domain/      entities/ · repositories/ (abstract)   — no use-case classes
   presentation/ cubit/ · pages/ · widgets/
-  di.dart      registrations, called from core/di/injection_container.dart
+  di.dart      registrations, called from core/di/injection_container.dart (newer slices;
+               older ones register inline there — give a new feature its own di.dart)
 ```
 
 Rules the existing code follows, so follow them:
@@ -36,7 +37,8 @@ The app never writes conversation documents; it sends a turn and renders what th
 delivers. A pending wizard message with no text is a placeholder — skip it when projecting.
 
 Anything needing a uid must handle `null` (no Firebase user yet) by doing nothing, not by
-retrying — `AuthService` already retries on its own cooldown.
+retrying: `AuthService` throttles sign-in attempts (inside its 5 s cooldown a caller gets
+`null`, the next caller after it tries again), so a loop on top only hammers it.
 
 ## Verify
 
@@ -45,6 +47,7 @@ fvm flutter test
 fvm flutter analyze lib test 2>&1 | grep -E "error •|warning •"
 ```
 
-The analyzer carries ~2900 pre-existing infos; only fix lints in code you touched. Add tests
-next to the existing ones under `test/features/<feature>/` — cubit tests use the fakes in
-`test/features/*/fakes.dart`.
+The analyzer carries about 3,150 pre-existing infos; only fix lints in code you touched. Add
+tests next to the existing ones under `test/features/<feature>/`; cubit tests use hand-written
+fakes (see `test/features/pro_deal_closer/fakes.dart`). Some older features are `Bloc`s on
+`features/shared/presentation/bloc/base_bloc.dart`; new state is a Cubit.

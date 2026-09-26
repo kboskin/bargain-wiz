@@ -22,12 +22,11 @@ class ThingSettings(Section):
 ```
 
 Add the matching line to `.env` (`tests/test_config.py` fails until you do). Code never reads
-a param: services get their section in the constructor (the container passes
-`ThingSettings.current()`), and a pydantic validator, which has no constructor, calls
+a param: services get their section in the constructor (the feature's `module.py`, or
+`CoreServices` for core, passes `ThingSettings.current()`), and a pydantic validator, which has no constructor, calls
 `ThingSettings.current()` itself. A decorator in `main.py` that needs the param itself takes
-`ThingSettings.param("max_things")`. No module constants, no values cached across requests.
-Avoid `FIREBASE_*` and reserved names like `FUNCTION_MEMORY_MB` — the CLI rejects the whole
-file.
+`ThingSettings.param("max_things")`. Name it by the `.env` rule in the guide's Toolchain (a
+reserved name makes the CLI reject the whole file).
 
 ## 2. Request, answer and document models
 
@@ -38,31 +37,30 @@ re-implementing trimming or bounds, and put limits in `ClassVar` constants, not 
 
 Anything a model must answer is an answer model too (see `negotiation/domain/answers.py`):
 it is the JSON schema the output is constrained to and the validation of what comes back.
-Call it with `ModelManager.generate(prompt, AnswerModel, operation="…")` — never an SDK, never
-a hand-written schema, never parsing model text yourself. It returns a `Generated`: the
-`.answer`, the `.model` that wrote it and the call's `.usage` (None when the provider reported
-none); a document that stores the answer stores those two beside it. A new `operation` name labels the
-`model_call` metric.
+Call it with `ModelManager.generate(prompt, AnswerModel, operation="…")` ("The model" in the
+guide); a document that stores the answer stores `.model` and `.usage` beside it, and a new
+`operation` name labels the `model_call` metric.
 
 ## 3. Service logic
 
-Everything that does I/O is `async def` and awaited, from the controller to the store (see
-"Async all the way down" in `wizard-backend/AGENTS.md`). A new port method is `async` and speaks models: it
-returns validated pydantic documents and takes a `FirestoreDocument` or a merge `Patch` (see
-"Documents are models"). Its Firestore implementation awaits the invocation's `AsyncClient`,
-which the feature module hands it from `self._core.firestore.client`; only Storage and Tasks,
-which have no async SDK, wrap their call in `asyncio.to_thread`. Independent reads in a
-service run with `asyncio.gather`.
+Follow the guide's rules "Async all the way down" and "Documents are models": a new port
+method is `async`, returns validated documents and takes a `FirestoreDocument` or a merge
+`Patch`; its Firestore implementation awaits the `AsyncClient` the feature module hands it from
+`self._core.firestore.client`.
+
+A new store (a port with a Firestore implementation) also needs a way in for the tests: a
+keyword argument on `Container.__init__` (`container.py`, like `lines_store`) that its module
+uses instead of building the Firestore one, and an in-memory double in
+`tests/support/doubles.py`, exported from `tests/support/__init__.py`, so `install(monkeypatch,
+…)` can inject it — otherwise the tests reach for real Firestore.
 
 Put it in a class in `features/<feature>/domain/` — never in `main.py`, never in a
 controller, never in `data/`. It takes its collaborators and settings in the constructor,
 typed by the `Protocol`s in `domain/ports.py`, so a test passes the in-memory store and
 production the Firestore one from `data/`. A new feature gets its own package with the same
-three layers; anything two features need lives in `core/`, and a helper every layer needs in
-`core/utils/`. **No module-level functions or state**: a helper is a method of the class it
-serves, a constant is a `ClassVar` or an enum. Log through the logger the constructor gets
-(`telemetry.logger("feature")`), with keyword fields; a new measurement is a `MetricEvent`
-subclass in `core/observability/metrics.py`, emitted through `telemetry.metrics`.
+three layers; anything two features need lives in `core/`. No module-level functions or state,
+and log facts as fields (the guide's rules); a new measurement is a `MetricEvent` subclass,
+emitted through `telemetry.metrics`.
 
 ## 4. Controller, container, entry point
 
@@ -84,8 +82,8 @@ Firebase calls the function synchronously; `asyncio.run` gives the invocation it
 loop and `serve` closes what it opened before that loop ends. Queue workers use
 `@tasks_fn.on_task_dispatched` with `RetryConfig`/`RateLimits` taking
 `QueueSettings.param(...)`, build `Container.for_background("name")` and run the job with
-`asyncio.run(app.run(lambda c: c.conversations.worker.run(...)))`; enqueue their payload
-wrapped as `{"data": model.model_dump(mode="json")}`. Scheduled jobs use
+`asyncio.run(app.run(lambda c: c.conversations.worker.run(...)))`; enqueue the payload wrapped
+(the guide's "Enqueue task payloads wrapped"). Scheduled jobs use
 `@scheduler_fn.on_schedule` and bake the schedule at deploy time.
 
 ## 5. Rules, indexes, docs
@@ -93,10 +91,11 @@ wrapped as `{"data": model.model_dump(mode="json")}`. Scheduled jobs use
 - New Firestore query → add the composite index to `wizard-backend/firestore.indexes.json`.
 - New path or access pattern → `firestore.rules` / `storage.rules`. Clients read; only
   functions write conversation data.
-- Wire format changed → update `wizard-app/AI_INTEGRATION.md` or `wizard-app/CONVERSATIONS.md`
-  **and** `functions/README.md` in the same commit, then the Dart models in
-  `wizard-app/lib/features/*/data/models/` (`fvm dart run build_runner build`).
-- New param or metric → the tables in `functions/README.md` ("The model", "Logs and metrics").
+- Wire format changed → update the contract it belongs to (`wizard-app/CONVERSATIONS.md`,
+  `AI_INTEGRATION.md`, `PROFILE_SYNC.md` or `LINES_THAT_LAND.md`) in the same commit, then the Dart models in `wizard-app/lib/features/*/data/models/`
+  (`fvm dart run build_runner build`).
+- New model setting or metric → the tables in `wizard-backend/AGENTS.md` ("The model", "Logs and
+  metrics").
 
 ## 6. Verify
 
@@ -107,11 +106,8 @@ venv/bin/ruff check .
 
 Tests call the functions through `tests/support/` (`install(monkeypatch, …)` puts containers
 wired to its in-memory stores in front of `main` and returns one, `call(...)` makes the
-request) and set params with `monkeypatch.setenv`. A test that calls a coroutine directly wraps it in
-`asyncio.run(...)`; a forgotten `await` fails the run (`RuntimeWarning` is an error). Test doubles live there, never in the
-deployed code. **No fake models**: a test that needs an answer takes
-the `local_model` fixture and asks the local Ollama model; one about a failure takes
-`unreachable_model`; everything else asks nothing — check what would be asked on the prompt
-instead (see `_prompt` in `tests/test_conversations.py`). `tests/` stays flat, one file per
-feature. Then exercise it against the emulator (`local-stack` skill) if the change is more
+request) and set params with `monkeypatch.setenv`; the guide's Toolchain has the rest
+(`asyncio.run`, doubles, no fake models). A test that needs an answer takes the `local_model`
+fixture, one about a failure `unreachable_model`; everything else asks nothing and checks what
+would be asked on the prompt instead (see `_prompt` in `tests/test_conversations.py`). Then exercise it against the emulator (`local-stack` skill) if the change is more
 than a rename.

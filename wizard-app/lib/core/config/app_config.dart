@@ -4,7 +4,7 @@ import 'dart:io' show Platform;
 /// matching Android `--flavor`).
 ///
 /// `local` is `dev` pointed at the Firebase emulators (Auth, Firestore, Storage, Functions)
-/// started with `firebase emulators:start` in `wizard-backend/`; see README_FLAVORS.md.
+/// started with `firebase emulators:start` in `wizard-backend/`; see "Flavors" in wizard-app/AGENTS.md.
 class AppConfig {
   static const String flavor = String.fromEnvironment(
     'FLAVOR',

@@ -1,8 +1,9 @@
 # wizard-backend — agent guide
 
 Firebase project for Bargain Wiz: Cloud Functions (2nd gen, Python 3.12), Firestore rules and
-indexes, Storage rules. Repo-wide conventions: `../AGENTS.md`. Endpoint-by-endpoint reference:
-`functions/README.md`.
+indexes, Storage rules. Repo-wide conventions: `../AGENTS.md`. The wire contracts live with the
+app: `../wizard-app/CONVERSATIONS.md`, `AI_INTEGRATION.md`, `PROFILE_SYNC.md`,
+`LINES_THAT_LAND.md`.
 
 ## Tech stack
 
@@ -13,9 +14,9 @@ indexes, Storage rules. Repo-wide conventions: `../AGENTS.md`. Endpoint-by-endpo
 | Validation | **pydantic v2** for every request, response, answer, settings and document model; no dataclasses |
 | Model | `ModelManager` (`core/ai/manager.py`) in front of one `ModelProvider` per API, chosen by `AI_MODEL=<provider>/<model>`: `vertex/gemini-3.8-flash` (the `google-genai` SDK against **Vertex AI**) in the cloud, `ollama/qwen2.5vl:7b` (a local model) in the emulator and the tests. Output is always constrained to a pydantic answer model's JSON schema and validated against it |
 | Images | Pillow — server-side re-encode to JPEG (`IMAGE_MAX_SIDE` 1600, quality 85) before upload |
-| Concurrency | `async` from the entry point down: each invocation runs on an event loop of its own (`asyncio.run` in `main.py`, because Firebase calls Python functions synchronously). Native async clients, one per invocation: Firestore's `AsyncClient`, google-genai's `client.aio`, `httpx.AsyncClient`. `asyncio.to_thread` only where no async SDK exists (Cloud Storage, Auth / App Check verification, the Cloud Tasks enqueue) and for Pillow; `asyncio.gather` for independent I/O |
+| Concurrency | `async` from the entry point down, one event loop per invocation (`asyncio.run` in `main.py`) — see "Async all the way down" below |
 | Background work | Cloud Tasks queue `generate` (`RateLimits` + `RetryConfig` = the rate limiter and retry policy) and a Cloud Scheduler `refresh_lines` job |
-| Config | Every environment variable is declared once, on the typed section that reads it (`core/config/settings.py`, `FromEnv(params.XParam(...))`); values from `functions/.env`, with `functions/.env.local` (git-ignored) over it in the emulator |
+| Config | Every environment variable declared once on its typed section in `core/config/settings.py`; values from `functions/.env` (`.env.local` over it in the emulator) — see "Tunables are settings" |
 | Observability | A `Telemetry` per invocation: structured JSON logs for Cloud Logging with the function and the request's trace on every line, and metrics as log entries (`model_call`, `http_request`, `generation`, `lines_refresh`) for log-based metrics |
 | Tests / lint | `pytest` ≥8 (`tests/`, `pythonpath=["."]`), `ruff` ≥0.5 (line length 100, target py312) |
 | Local | Firebase CLI emulator suite — auth 9099, firestore 8080, functions 5001, storage 9199, UI 4000 (`firebase.json`, `singleProjectMode`); Ollama on 11434 for the model |
@@ -32,7 +33,7 @@ created with `uv venv venv --python 3.12` or `python3.12 -m venv venv`, then
 `uv pip install --python venv/bin/python -r requirements-dev.txt`):
 
 ```bash
-venv/bin/python -m pytest -q -rs      # tests/ — no emulator; model tests need Ollama (below)
+venv/bin/python -m pytest -q -rs      # tests/ — no emulator (test_e2e.py skips unless E2E=1); model tests need Ollama
 venv/bin/ruff check .                 # line-length 100, target py312
 venv/bin/ruff format .
 cd .. && firebase emulators:start --import=.emulator-data --export-on-exit   # see the local-stack skill
@@ -52,6 +53,79 @@ Tests call a coroutine with `asyncio.run(...)` (no pytest plugin); the in-memory
 
 `pyproject.toml` ignores `TRY004`: pydantic turns a `ValueError` raised in a validator into a
 400-able `ValidationError`, so type checks in validators raise `ValueError`, not `TypeError`.
+
+`functions/.env` keys must be `UPPER_SNAKE_CASE` and stay off the CLI's reserved names
+(`FUNCTION_*`, `FIREBASE_*`, `GCLOUD_PROJECT`, `PORT`, …): one bad key and the emulator refuses
+the whole file with a vague "Failed to load environment variables" — which is why the instance
+knobs are `INSTANCE_MEMORY_MB`, `REQUEST_TIMEOUT_SEC`, `MAX_INSTANCES`. `functions/.env.local`
+(git-ignored, read over `.env` by the emulator only, never deployed) is where
+`AI_MODEL=ollama/qwen2.5vl:7b` goes. One function without the emulator:
+`venv/bin/functions-framework --target=lines_that_land --source=main.py --port=8089`. The
+manifest discovery the emulator runs on start, by hand:
+
+```bash
+set -a && source .env && set +a
+GCLOUD_PROJECT=wizard-app-dev venv/bin/python -c "from firebase_functions.private.serving import *; print(functions_as_yaml(get_functions()))"
+```
+
+## The model
+
+Every call goes through `ModelManager.generate(prompt, AnswerModel, operation=…)`. The answer
+model is the JSON schema the output is constrained to *and* the validation of what comes back,
+so a caller gets a typed `Generated[Answer]` — the answer, the model that wrote it and the call's
+`TokenUsage` (None when the provider reported none) — or an `UpstreamError` (502): the provider
+could not be reached (`ModelCallFailed`) or answered in the wrong shape (`InvalidModelAnswer`).
+A misconfiguration — an `AI_MODEL` provider nobody registered, a stored screenshot with no blob
+reader to inline it — is a `ConfigError` (500). A provider (`core/ai/providers/`) does transport
+only:
+
+| Provider | `AI_MODEL` | Settings | Notes |
+|---|---|---|---|
+| `vertex` | `vertex/<gemini id>` | `VERTEX_LOCATION`, `VERTEX_THINKING_LEVEL`, `VERTEX_MEDIA_RESOLUTION` | reads stored screenshots itself by `gs://` URI |
+| `ollama` | `ollama/<tag>` | `OLLAMA_URL`, `OLLAMA_CONTEXT_TOKENS` | the manager inlines stored screenshots; the schema is also written into the system prompt |
+
+Settings (declared with full descriptions in `core/config/settings.py`; values in `.env`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AI_MODEL` | `vertex/gemini-3.8-flash` | `<provider>/<model>`; `ollama/…` is for the emulator, set in `functions/.env.local` |
+| `AI_MAX_OUTPUT_TOKENS` | `2048` | max output tokens per call, every provider |
+| `AI_TEMPERATURE` | empty | empty = the model's default (1.0 for Gemini 3, which Google recommends keeping) |
+| `REQUEST_TIMEOUT_SEC` | `60` | the longest a call (and a request) may take; `.env.local` raises it for slow local models |
+| `VERTEX_LOCATION` | `us-central1` | Vertex AI region |
+| `VERTEX_THINKING_LEVEL` | `low` | Gemini 3 thinking `low` / `medium` / `high` (3.x Flash rejects `minimal`; thinking bills as output); empty = not sent, the model uses `high` |
+| `VERTEX_MEDIA_RESOLUTION` | `high` | tokens per screenshot: `low` 280, `medium` 560, `high` 1,120 — chat screenshots need `high` |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama server for `ollama/…` models |
+| `OLLAMA_CONTEXT_TOKENS` | `32768` | `num_ctx` per call; Ollama silently drops the start of a longer prompt |
+
+A value the code cannot use fails as a `ConfigError` naming the variable. Adding a provider: see
+"Shape of the code" below.
+
+## Logs and metrics
+
+Every line is one JSON object on stdout, which Cloud Logging stores as a structured entry:
+`severity`, `message`, the logger, the function, the request's trace
+(`logging.googleapis.com/trace`, so a request's lines group together) and the call's facts as
+top-level fields (`log.info("turn queued", uid=…, cid=…)`). The emulator prints the same lines
+as `INFO conversations: turn queued uid=… cid=…`.
+
+Metrics are entries from the `metrics` logger with `jsonPayload.metric` naming them
+(`core/observability/metrics.py`); create a log-based metric per row to chart them:
+
+| `metric` | Emitted | Labels | Values |
+|---|---|---|---|
+| `model_call` | every model call | `provider`, `model`, `operation` (express / reply / options / lines), `outcome` (ok / call_failed / invalid_answer / config_error) | `latency_ms`, `images`, `prompt_tokens`, `cached_tokens`, `output_tokens`, `thought_tokens` |
+| `http_request` | every HTTPS call | `function`, `method`, `status`, `code` | `latency_ms` |
+| `generation` | every `generate` run | `kind`, `action`, `outcome` (ok / dropped / call_failed / …), `final` | `attempt`, `latency_ms` |
+| `lines_refresh` | every `refresh_lines` run | `outcome` | `categories`, `lines`, `latency_ms` |
+
+For example, model latency by outcome is a distribution metric on
+`jsonPayload.metric="model_call"` extracting `jsonPayload.latency_ms`, labelled by
+`jsonPayload.provider` and `jsonPayload.outcome`. The token fields are the bill;
+`thought_tokens` bills as output and is the one to watch on Gemini 3. A wizard message also
+stores its call's `usage` (and `options_usage`), so one deal's cost can be read off its
+messages; the metric stays the complete record — it also counts retried attempts, failed calls
+and the stateless endpoints, none of which leave a message.
 
 ## Shape of the code
 
@@ -88,14 +162,14 @@ functions/
   container.py                  Container: CoreServices + one module per feature, one per invocation
   core/
     config/settings.py          every environment variable, on its typed section (ModelSettings, …)
-    services.py                 CoreServices: runtime, clock, telemetry, auth, bucket, model, endpoint
+    services.py                 CoreServices: runtime, clock, telemetry, auth, firestore, bucket, model, endpoint
     ai/manager.py               ModelManager: provider from AI_MODEL, validation, metrics
     ai/images.py                StoredImageInliner: gs:// screenshots → bytes for providers that need them
     ai/provider.py              ModelProvider: the contract every model API implements
     ai/providers/vertex.py      Gemini on Vertex AI (google-genai)
     ai/providers/ollama.py      a local model through Ollama's /api/chat
     ai/providers/registry.py    ProviderRegistry: AI_MODEL's prefix → provider class
-    ai/types.py                 Prompt, TextPart, ImagePart, Completion, TokenUsage
+    ai/types.py                 Prompt, TextPart, ImagePart, Completion, TokenUsage, Generated
     observability/              Telemetry (per invocation), StructuredLogger, MetricEvent subclasses, Invocation
     http/endpoint.py            JsonEndpoint + JSON helpers
     auth/firebase.py            Authenticator: Firebase ID token + App Check
@@ -135,6 +209,7 @@ functions/
       module.py                 LinesModule: store, service, generator, controller
       domain/content.py         the content models = the response schema; the bundled fallback
       domain/service.py         LinesService (what the tab shows), LinesGenerator (the schedule)
+      domain/ports.py           LinesStore
       data/store.py             content/lines_that_land
       presentation/controller.py
     profile/
@@ -144,8 +219,10 @@ functions/
       domain/ports.py           ProfileStore
       data/store.py             users/{uid}
       presentation/controller.py
-  tests/                        flat, one file per feature; conftest.py has the model fixtures
-    support/                    in-memory stores, a static authenticator, InMemoryMetrics, install()/call()
+  tests/                        flat: one file per feature or core area; conftest.py has the model fixtures
+    support/                    in-memory stores, a static authenticator, InMemoryMetrics, install()/call();
+                                emulator.py: EmulatorSuite / EmulatorUser for test_e2e.py
+    test_e2e.py                 end to end against a running emulator suite, skipped unless E2E=1
 ```
 
 Adding an endpoint: the `backend-endpoint` skill walks the whole path. Adding a model API:
@@ -157,10 +234,10 @@ subclass `ModelProvider`, add it to `ProviderRegistry.default()`, and add its se
 - **Async all the way down.** Every method that does I/O is `async def` and is awaited — the
   ports, the stores, the model providers, the authenticator, the services, the controllers.
   Use the SDK's own async client wherever there is one: Firestore's `AsyncClient`, the Vertex
-  provider's `client.aio`, the Ollama provider's `httpx.AsyncClient`. Each is made per
-  invocation and closed before the invocation's event loop ends (`CoreServices.aclose`),
-  because a gRPC or HTTP client belongs to the loop it first ran on and every invocation gets
-  a new one — so never the Admin SDK's `firestore_async.client()`, which is cached per
+  provider's `client.aio`, the Ollama provider's `httpx.AsyncClient`. Each lives no longer
+  than the invocation's event loop — Firestore's and Vertex's are made per invocation and closed
+  by `CoreServices.aclose`, Ollama's is made per call inside `async with` — because a gRPC or
+  HTTP client belongs to the loop it first ran on and every invocation gets a new one — so never the Admin SDK's `firestore_async.client()`, which is cached per
   process and fails from the second request on ("Event loop is closed"). Stores take the
   client from `CoreServices.firestore`. Only an SDK with no async client (Cloud Storage, Auth
   / App Check verification, the Cloud Tasks enqueue) and CPU work (Pillow) go through
@@ -181,27 +258,23 @@ subclass `ModelProvider`, add it to `ProviderRegistry.default()`, and add its se
   classes, type aliases and `__all__` live at module scope.
 - **Tunables are settings.** A new knob is a field on the section that owns it in
   `core/config/settings.py`, declaring its variable with `FromEnv(params.XParam(...))`, plus a
-  line in `.env` (`tests/test_config.py` fails when the two disagree). Code reads the section
-  — injected by the container, or `Section.current()` inside a pydantic validator — never a
-  param and never a value cached across requests.
+  line in `.env` (`tests/test_config.py` fails when the two disagree; keys follow the naming
+  rule in Toolchain). Code reads the section — injected by the feature module or
+  `CoreServices`, or `Section.current()` inside a pydantic validator — never a param and never
+  a value cached across requests.
 - **Imports at the top**, except an SDK that costs over 0.1 s to import (Firestore, Storage,
   Auth, google-genai): its adapter imports it on first use with a one-line reason, because
   every function shares one image and a cold start pays for whatever `main` imports.
 - **Test doubles live in `tests/support/`**, never in the deployed code.
-- **One way to a model.** Everything goes through `ModelManager.generate(prompt, AnswerModel,
-  operation=…)`, which returns a `Generated` (`.answer`, `.model`, `.usage`): no SDK call
-  outside `core/ai/providers/`, no hand-written JSON schema, no parsing of model text anywhere
-  else. Whatever stores an answer stores its `model` and `usage` beside it, as the wizard
-  message does.
+- **One way to a model** ("The model" above): no SDK call outside `core/ai/providers/`, no
+  hand-written JSON schema, no parsing of model text anywhere else; whatever stores an answer
+  stores its `model` and `usage` beside it, as the wizard message does.
 - **No fake models, in tests or anywhere.** Use the local model (see Toolchain).
 - **Log facts as fields**: `self._log.info("turn queued", uid=uid, cid=cid)` with the logger
   the constructor got from `telemetry.logger(name)`, not formatted into the message. A new
   measurement is a `MetricEvent` subclass in `core/observability/metrics.py`.
 - **Pydantic for every request body.** Validators raise `ValueError`; `Validation.parse`
   turns that into a 400 with `field: message`.
-- **Reserved `.env` keys.** The Firebase CLI rejects the whole file if it sees keys like
-  `FUNCTION_MEMORY_MB` or anything `FIREBASE_*`-prefixed — that is why the instance knobs are
-  `INSTANCE_MEMORY_MB`, `REQUEST_TIMEOUT_SEC`, `MAX_INSTANCES`.
 - **Enqueue task payloads wrapped.** The Python Admin SDK sends the body verbatim, while
   `on_task_dispatched` reads `json.loads(request.data)["data"]`. Enqueue
   `{"data": task.model_dump(mode="json")}` or every task is rejected as "Invalid request".
@@ -224,7 +297,9 @@ users/{uid}/conversations/{cid}/messages/{mid}
 content/lines_that_land                      generated Lines content
 ```
 
-Storage: `users/{uid}/conversations/{cid}/*.jpg`, readable only by that uid.
+Storage: `users/{uid}/conversations/{cid}/*.jpg`, readable only by that uid, written only by
+the functions; `uploads/{uid}/{file}` is the one client-writable path (a staging area for
+direct uploads, images under 5 MB — unused today, screenshots still travel in the turn body).
 Rules: `firestore.rules`, `storage.rules`. Indexes: `firestore.indexes.json`
 (composite `active` + `updated_at` — add one whenever a new query needs it).
 
@@ -234,6 +309,17 @@ Rules: `firestore.rules`, `storage.rules`. Indexes: `firestore.indexes.json`
 firebase deploy --only functions
 firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
+
+The CLI expects the virtualenv at `functions/venv`. The project needs Blaze billing and the
+Cloud Functions, Cloud Build, Artifact Registry and Cloud Run APIs (the first deploy enables
+them), and the Vertex AI API. The runtime service account needs **Vertex AI User**
+(`roles/aiplatform.user`), `roles/datastore.user`, `roles/storage.objectAdmin` on the bucket and,
+once App Check is on, `roles/firebaseappcheck.tokenVerifier`. Stored screenshots reach Gemini as `gs://` URIs, so the object must be
+readable by whichever principal Vertex fetches it as: confirm on the first real run whether a
+same-project URI is read as the caller or as the Vertex AI Service Agent
+(`service-<project-number>@gcp-sa-aiplatform.iam.gserviceaccount.com`) — if the latter, that
+agent needs `roles/storage.objectViewer` on the bucket. Storage rules do not matter here: the
+Admin SDK and Vertex both bypass them.
 
 Blocked today: the authenticated account has no access to `wizard-app-dev`, and Vertex AI is
 disabled in that project. See "Environment state" in `../AGENTS.md`.

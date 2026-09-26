@@ -1,24 +1,7 @@
 # Lines that land
 
 "Lines that land" (the Lines tab and the home bottom sheet) is served by a Google Cloud
-Function, not read from Remote Config by the app and not part of the subscriptions service.
-
-> **Client loading (2026-09-18):** nothing is fetched at app start. The tab is primed from the
-> on-device copy (`LinesThatLandPrimed`, no network) and refreshes in the background only when
-> it becomes visible with a stale or missing copy (`LinesThatLandOpened`); the user can pull to
-> refresh (`LinesThatLandRefreshRequested`). Content on screen is never replaced by a spinner;
-> a failed refresh keeps it and shows a toast. Repository: `cached()` + `refresh()`.
-
-> **2026-09-18 — the content is generated, not authored.** A scheduled function,
-> `refresh_lines`, asks Gemini for the categories every `LINES_REFRESH_INTERVAL_HOURS` using
-> structured output and the same generator as the chat, then stores them in Firestore at
-> `content/lines_that_land`. `GET /lines_that_land` serves that document, falling back to the
-> bundled categories until the first generation lands or if one fails, so the tab always has
-> content. The Remote Config key `lines_that_land_categories` is no longer read by anything;
-> the model writes the lines now. `source` in the response is `generated` or `fallback`.
-> The interval is used three times: it is the schedule (baked in at deploy time), the
-> `Cache-Control` max-age and the `refresh_interval_hours` the app uses for its own cache and
-> the "new lines every day" caption.
+Function, not read from Remote Config by the app.
 
 ## Function
 
@@ -30,9 +13,9 @@ The app calls it with Dio:
 GET {api_url}/lines_that_land
 ```
 
-No body, no auth. `api_url` is a Remote Config key set per Firebase project
-(bundled default: the dev project's `https://us-central1-wizard-app-dev.cloudfunctions.net`).
-Errors come back as `{"error": {"status": "...", "message": "..."}}` with a 4xx/5xx status.
+No body, no auth: the content is public. `{api_url}` is the app's base URL (`AGENTS.md`); its
+bundled default is the local emulator's, and the `local` flavor ignores the key. Errors:
+`AI_INTEGRATION.md` "Errors".
 
 Response:
 
@@ -67,53 +50,45 @@ Response:
 - `updated_at` — when the content was generated (`generated_at` on the stored document).
 - `refresh_interval_hours` — **how often the content is refreshed.** One number, owned by
   the function (`LINES_REFRESH_INTERVAL_HOURS` in `functions/.env`, default 24). It drives
-  the regeneration schedule, the response's `Cache-Control: max-age`, the app's on-device
+  the regeneration schedule (fixed at deploy time), the response's `Cache-Control: max-age`, the app's on-device
   cache TTL, and the caption under the Lines tab title ("Updated today · new lines every day").
 - `source` — `generated` normally; `fallback` while no generation has landed yet, or when
   the stored document cannot be read. The app shows the content either way.
 
-The content comes from Gemini, not from a human: `refresh_lines` regenerates it on a schedule
-and the endpoint serves the stored document. There is nothing to author — no Remote Config
-parameter is read any more (`lines_that_land_categories` is dead), and the lines cannot be
-edited in the console. What is produced is configuration in `functions/.env`:
+The content comes from Gemini, not from a human: `refresh_lines` regenerates it on a
+schedule with the same model as the chat, stores it in Firestore at
+`content/lines_that_land`, and the endpoint serves that document. There is nothing to author —
+no Remote Config parameter is read, and the lines cannot be edited in the console. What is
+produced is configuration in `functions/.env`:
 `LINES_CATEGORY_IDS`, `LINES_PER_CATEGORY`, `LINES_LOCALES`, and the two prompts themselves
 (`LINES_SYSTEM_PROMPT`, `LINES_TASK_PROMPT`) — a prompt change is a redeploy, not a code
 change. The models behind them are in
 `wizard-backend/functions/features/lines_that_land/domain/`.
 That pydantic `GeneratedLines` model is the response schema Gemini is constrained to, so the
 payload above can only ever carry the configured ids and a full `{"en", "es"}` pair for every
-text. Deploy and local run:
-`wizard-backend/functions/README.md`.
+text. Model, deploy and local run: `wizard-backend/AGENTS.md`.
 
 ## App behaviour
 
-Structure (clean-architecture layers, reusable for any future function):
+Nothing is fetched at app start. The tab is primed from the on-device copy
+(`LinesThatLandPrimed`, no network) and refreshes in the background only when it becomes
+visible with a stale or missing copy (`LinesThatLandOpened`); the user can pull to refresh
+(`LinesThatLandRefreshRequested`). Content on screen is never replaced by a spinner; a failed
+refresh keeps it and shows a toast.
 
-- `core/network/cloud_functions_client.dart` — `CloudFunctionsApi` (interface) and
-  `CloudFunctionsClient` (Dio). `GET {api_url}{path}` decoded with a `fromJson`;
-  the base URL is `RemoteConfigService.getApiUrl()` (key `api_url`,
-  set per Firebase project; bundled default is the dev project). A function error body
-  surfaces as `CloudFunctionException`, anything else unexpected as `StateError`. A new
-  function only needs `api.get('/my_function', fromJson: MyResponse.fromJson)`.
-- `features/lines_that_land/data/models/lines_that_land_response.dart` —
-  `LinesThatLandResponse` / `LinesCategoryDto`, json_serializable models of the payload
-  (texts as `MultilocaleText`); also the on-device cache format.
-- `data/datasources/lines_that_land_api_datasource.dart` — `GET /lines_that_land` through
-  `CloudFunctionsApi`.
-- `data/datasources/lines_that_land_local_cache.dart` — `SharedPreferences` cache
-  (`lines_that_land_cache` / `lines_that_land_fetched_at`), fresh for `refresh_interval_hours`.
-- `data/mappers/lines_that_land_mapper.dart` — DTOs → entities, dropping categories
-  without an id, a name or a usable line.
-- `domain/entities` — `LinesThatLandFeed` (categories, locales, updatedAt, refreshInterval,
-  source), `LinesThatLandCategory` / `LinesThatLandTip` with `MultilocaleText` texts, which
-  the UI resolves per device locale with `TemplateText.textOf` (English fallback).
+The slice is `features/lines_that_land/` in the usual layers. What the file names do not
+say: the json_serializable response model (`LinesThatLandResponse`) is also the on-device
+cache format, kept in `SharedPreferences` (`lines_that_land_cache` /
+`lines_that_land_fetched_at`); the mapper drops categories without an id, a name or a usable
+line; and texts stay `MultilocaleText` all the way to the UI.
 
-`LinesThatLandRepositoryImpl`:
+`LinesThatLandRepositoryImpl`: `cached()` is what the tab renders at once, `refresh()` calls
+the function; `getFeed()` combines them:
 
 1. Cache younger than `refresh_interval_hours` → used without a request.
 2. Otherwise call the function and cache the response.
 3. Function unreachable → stale cache if present, else a `NetworkFailure` ("Couldn't load
    lines. Check your connection and try again.") with a **Try again** button on the Lines tab.
 
-`LinesThatLandLoaded` carries `updatedAt`, `refreshInterval` and `source`;
-`LinesFreshness.describe` turns them into the caption.
+`LinesFreshness.describe` turns the loaded state's `updatedAt` and `refreshInterval` into the
+caption.

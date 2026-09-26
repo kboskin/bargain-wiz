@@ -1,17 +1,9 @@
 # Profile sync — onboarding answers and preferences in Firestore
 
-> **2026-09-19:** the uid is the only identity. `AppBootstrap.run` **awaits** the anonymous
-> sign-in before the first screen and shows a blocking failure screen when it fails (see
-> `CONVERSATIONS.md` §2), so every request carries an ID token and the document is always
-> keyed by that uid. The `installation_id` — and `InstallationIdService` with it — is gone:
-> there is no signed-out document to key by, nothing to fold, and the endpoint now rejects a
-> call with no token instead of writing `users/inst_<id>`.
-
 The device is still the source of truth for the funnel (answers live in `SharedPreferences`
 under `onboarding_data`), but every change is mirrored to a Firestore document through the
 `profile` Cloud Function so the profile survives reinstalls, follows a signed-in user across
-devices, and can be analysed. The client never talks to Firestore directly (Admin SDK only, so
-Firestore security rules can stay closed).
+devices, and can be analysed.
 
 ## One shape for the answers
 
@@ -28,7 +20,7 @@ question added in Remote Config is recorded without a backend deploy. Beside it 
 **`onboarding_status`** — `completed_at`, stamped by the server when a client first reports
 the funnel finished.
 
-The answers are pushed **step by step** (2026-09-23): each time the person moves on from a
+The answers are pushed **step by step**: each time the person moves on from a
 screen that asks something, the flow sends everything answered so far. A document exists from
 the first launch (every launch sets `app.last_opened_at`, see below), so `created_at` is
 when the app was first opened; one with no `onboarding_status.completed_at` is a funnel still
@@ -37,13 +29,6 @@ moves on every write — a step, an edit or a launch — so it is not where some
 Signing in on the `create_account` screen keeps the uid (the anonymous user is linked), so the
 same document carries on; signing into an account that already exists switches uid, and the
 steps before it stay behind on the anonymous uid's document, unfinished.
-
-There used to be a second `onboarding` section holding the same answers again plus a `flow`
-trace of the screens shown. It was removed: the answers were a duplicate of `preferences`,
-nothing read the trace, and one record that can hold any key does the same job. Experiment
-assignment is Firebase A/B Testing's (Analytics user properties), not this document's — the
-cost of the removal is that an answer can no longer be interpreted without the template
-version that produced it, and the template is versioned in git.
 
 ```json
 {"type": "select", "answer_structure": {"answer_key_name": "vibe"}, "options": [ … ]}
@@ -54,8 +39,7 @@ So the app names almost no key: `RemoteConfigService.getProfileFields()` turns t
 subtext, emoji, savings, default) — and the profile services copy `{key: value}` pairs out of
 local storage. `ProfileFields` spells out one key only, and says why: `referral_code` has a
 wire section of its own and is the one answer the Profile screen never re-opens
-(`ProfileFields.lockedKeys`). `vibe`, `push` and `marketplace` used to be named beside it;
-they are not any more. Which answer gets a card instead of a settings row comes from the
+(`ProfileFields.lockedKeys`). Which answer gets a card instead of a settings row comes from the
 template its screen used (`slider_lottie` → the meter, `select` → the chips, anything else →
 a row), and which answer a single deal may carry its own value for comes from the screen's
 `scope` — so both are the template's to decide and neither is a list in Dart.
@@ -63,9 +47,9 @@ a row), and which answer a single deal may carry its own value for comes from th
 An answer that no function reads simply rides along and is ignored; a field the funnel stops
 asking for stops being sent. Two consequences worth knowing: an unanswered screen falls back
 to its configured `default_value` / first option, never to a Dart constant — nothing is
-required any more, the AI functions name no answer and so have none to demand, but what is
-not sent is not coached on — and **renaming a key orphans the answers already stored under
-the old one**: they stay in `preferences` under the old key and read as unanswered.
+required (`AI_INTEGRATION.md` "Prompting"), but what is not sent is not coached on — and
+**renaming a key orphans the answers already stored under the old one**: they stay in
+`preferences` under the old key and read as unanswered.
 
 Validation is deliberately loose: known preference fields are type-checked and clamped,
 answers accept any JSON leaf, unknown top-level sections are ignored (and logged), never
@@ -74,10 +58,8 @@ rejected. Nothing bounds the size of a patch beyond Firestore's own 1 MiB docume
 ## Document `users/{id}`
 
 Everything about a person lives under one path: this document holds the profile, and the same
-document parents the `conversations` and `limits` subcollections (see `CONVERSATIONS.md`).
-`{id}` is always the Firebase Auth uid — anonymous or linked to a provider, the app has no
-state in which it lacks one. The app never reads this document with the Firestore SDK; it
-goes through the `profile` function, and the security rules deny client access to it.
+document parents the `conversations` subcollection (see `CONVERSATIONS.md`).
+`{id}` is always the Firebase Auth uid (`CONVERSATIONS.md` §2).
 
 ```json
 {
@@ -118,45 +100,34 @@ Timestamps are Firestore server timestamps, returned as ISO-8601 UTC strings.
 Onboarding experiments run in the Firebase console (A/B Testing on Remote Config): each arm
 serves its own `onboarding_screens`, and Firebase tracks the assignment through Analytics
 (`firebase_exp_<id>` user properties, exported to BigQuery). The profile does not duplicate
-that, and no longer records which screens or options a user was served: join an answer to its
+that, and does not record which screens or options a user was served: join an answer to its
 arm through the Analytics export on uid — the uid is the Analytics user id, see
 [Funnel analytics](#funnel-analytics) — and to the question that produced it through the
 `onboarding_screens` template version in git.
 
 ## Preferences into the model
 
-`preferences` is the record; an AI request carries the same answers in a different shape. A
-request nests them under `profile`: `{"answers": [{"key", "value", "prompt"?}], "locale"}` —
-one entry per *pick*, so a multi-select is several entries sharing a key, in onboarding screen
-order, which is the order the buyer block reads in. A map is what a record wants; an order is
-what a prompt wants, and `UserProfileService.snapshot()` produces both from one traversal
+`preferences` is the record; an AI request carries the same answers as the ordered
+`profile.answers` list, whose shape, `prompt` sentences and reading by the backend are
+`AI_INTEGRATION.md` "Prompting". A map is what a record wants, an order is what a prompt
+wants, and `UserProfileService.snapshot()` produces both from one traversal
 (`ProfileSnapshot(fields, answers)`), so the two views can never describe different options.
-Nothing is required: the backend names no key, so an empty `answers` list is a valid request
-that simply produces a prompt with no buyer block — keep the screens asking, because an
-answer that is not sent is not coached on. The referral code is the one answer that stays out
-of `preferences`, and out of `answers` too: it has a section of its own (`referral.code`,
-stamped with `entered_at`). The client holds it back from the step-by-step pushes — the
-function keeps the first code it gets, and until the funnel is finished the person can still
-go back and correct one — and sends it from the completion push on: the device cannot change
-it after that, so a retried first push still credits it. The next step,
-once profiles are populated, is to let the functions read `users/{id}` themselves and drop
-the profile from the request body.
 
-Each entry carries the `metadata.prompt` sentence remote config writes next to the option that
-was picked, which is what the prompt renders instead of the backend keeping its own copy of
-the option list (`AI_INTEGRATION.md`). Those sentences are **not** part of `preferences` and
-are never stored: they are copy belonging to a template version, they would go stale in the
-document the moment someone edits one, and the template version in git records which options a
-screen offered. Mechanically there is nothing to do — `ProfileSyncService.buildPatch` builds
-`preferences` from the configured fields and the stored answers, never from
-`payload()`/`snapshot()`.
+The sentences are **never stored**: they are copy belonging to a template version, they would
+go stale in the document the moment someone edits one, and the template version in git
+records which options a screen offered. `ProfileSyncService.buildPatch` builds `preferences`
+from the stored answers, never from `payload()`/`snapshot()`.
 
-A deal's own answers travel beside the profile rather than inside it. A conversation write
-also carries `overrides`, `{answer key: value}` for the answers a screen marks
-`scope: "conversation"` (`CONVERSATIONS.md`); the app resolves them into the `answers` it
-sends, so what a deal shows is the option actually being sent. They change that
-deal only — nothing writes them back here, and this document keeps the default the Profile
-screen sets.
+The referral code is the one answer that stays out of `preferences`, and out of `answers` too:
+it has a section of its own (`referral.code`, stamped with `entered_at`). The client holds it
+back from the step-by-step pushes — the function keeps the first code it gets, and until the
+funnel is finished the person can still go back and correct one — and sends it from the
+completion push on: the device cannot change it after that, so a retried first push still
+credits it.
+
+A deal's own answers (`overrides`, `CONVERSATIONS.md`) travel beside the profile rather than
+inside it and change that deal only — nothing writes them back here, and this document keeps
+the default the Profile screen sets.
 
 ## Endpoint
 
@@ -173,13 +144,8 @@ what holds for an older or tampered client.
 
 `GET /profile` — the caller's document, 404 until the first PATCH.
 
-Identity: `Authorization: Bearer <Firebase ID token>` is **required** on both methods and is
-the only identity — the uid in the token picks the document. A call without one is
-`UNAUTHENTICATED`; the client sends no id of its own. Linking a provider to the anonymous
-user keeps the uid, so the same document simply gains `identity.provider` — there is nothing
-to merge.
-
-Errors: `{"error": {"status": "INVALID_ARGUMENT" | "UNAUTHENTICATED" | "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "INTERNAL", "message": "…"}}`.
+Both methods **require** `Authorization: Bearer <Firebase ID token>`, and the token's uid picks
+the document; the client sends no id of its own. Errors: `AI_INTEGRATION.md` "Errors".
 
 ## App side (`ProfileSyncService`)
 
@@ -228,10 +194,9 @@ what survives the funnel being reordered — a screen that asks nothing is named
 instead. Both events fire only where a screen actually changes, never per keystroke or slider
 tick.
 
-**What was picked rides on `onboarding_step_answered`** (2026-09-23; until then only
-`answer_keys` were sent). `preferences` is the record, of unfinished funnels too; the event
-puts the same picks beside the screen trace, so the funnel can be broken down by answer ("do
-small-deal sellers quit earlier?") and joined with the A/B arm in the BigQuery export on uid,
+**What was picked rides on `onboarding_step_answered`.** `preferences` is the record, of
+unfinished funnels too; the event puts the same picks beside the screen trace, so the funnel
+can be broken down by answer ("do small-deal sellers quit earlier?") and joined with the A/B arm in the BigQuery export on uid,
 finished or not. Rules:
 
 - **Option ids only.** Only answers picked from a configured option list are sent — `select`,
@@ -270,30 +235,16 @@ in the SDK, in `FirebaseService`, so emulator runs stay out of the data entirely
 
 ## What the Profile screen edits
 
-The Profile screen edits the same answers onboarding collected, and it reads the list from the
-same place: `ProfileFields.fromScreens` walks the `onboarding_screens` templates and turns every
-screen that writes an answer into a field — `select` / `select_group` groups and both slider
-templates single-choice, `multi_select` multi-choice, a text screen a text field. **Which
-widget an answer gets comes from the template its screen used**, not from a list of keys and
-not from a config key naming a control: `slider_lottie` becomes the meter card, `select` the
-chip card, and everything else a settings row that opens a sheet — a one-chip sheet, tick
-rows, or a text field, by kind. So the push meter and the tone chips are just what those two
-screens' templates draw, and a question added remotely draws itself with a control this build
-already has. Screens that ask nothing are skipped, and so is every key in
-`ProfileFields.lockedKeys` — today
-just `referral_code`. A referral code is an attribution, not a preference: it is asked for once
-during onboarding, so the screen offers no row for it and a profile push leaves it out of
-`preferences` (the function's write-once rule is what stops any client re-setting it). A screen
-added to the funnel remotely
-therefore becomes an editable row without an app release; one removed stops being offered, while
-an answer already stored still shows its raw value rather than disappearing.
-
-Row labels come from an optional `metadata.profile_label` on the screen (a `select_group` group
-uses its own `label`), because the screen title is the question — "Where has your money slipped
-away?" is not a settings row. Without one the title is used as-is. Edits go through
-`UserProfileService.setAnswer`, so they are stored, pushed by this service and picked up by
-`preferences` exactly like an onboarding answer; slider stops are stored as ints, multi-selects
-as the ordered list of values.
+The Profile screen edits the same answers onboarding collected, from the same list:
+`ProfileFields.fromScreens` over the `onboarding_screens` templates, skipping screens that ask
+nothing and every key in `ProfileFields.lockedKeys` (today just `referral_code`, which a push
+leaves out of `preferences`). A screen added to the funnel remotely therefore becomes an
+editable answer without an app release; one removed stops being offered, while an answer
+already stored stays in `preferences`. Edits go through `UserProfileService.setAnswer`, so
+they are stored and pushed by this service exactly like an onboarding answer; slider stops
+are stored as ints, multi-selects as the ordered list of values. How each answer is drawn is
+`features/profile/domain/profile_fields.dart` and
+`features/profile/presentation/pages/profile_page.dart`.
 
 Files: `core/services/user_profile_service.dart`, `core/services/profile_sync_service.dart`,
 `core/theme/option_style.dart` (how a configured option is drawn),
@@ -305,12 +256,15 @@ Files: `core/services/user_profile_service.dart`, `core/services/profile_sync_se
 
 ## Decisions and open points
 
-- **Firestore via Admin SDK only.** No client SDK, no rules to maintain; the function
-  validates. Keep Firestore rules at deny-all.
+- **The profile via Admin SDK only.** The app reaches `users/{id}` only through the function,
+  which validates; keep the rules at deny-all for it. The app's one Firestore SDK use is the
+  read-only conversation listener, which the rules allow on `users/{uid}/conversations/**`
+  for that uid alone (`CONVERSATIONS.md`).
 - **Full-state pushes, partial-update endpoint.** The client sends everything it knows (a few
   hundred bytes); the endpoint still honours true partial bodies for other clients or tools.
 - **Deleting an answer**: send `{"preferences": {"key": null}}`.
-- **Not stored**: names, emails, photos (they stay in Firebase Auth), purchases (store SDK),
-  conversations (device only), screenshots.
+- **Not stored here**: names, emails, photos (they stay in Firebase Auth), purchases (store
+  SDK), conversations (the backend-owned `conversations` subcollection, `CONVERSATIONS.md`),
+  screenshots (Cloud Storage).
 - **Later**: App Check on the function; a `deleted_at`/account-deletion path (GDPR/CCPA
   "delete my data") is the next thing this endpoint needs before launch.

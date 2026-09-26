@@ -4,7 +4,7 @@ platform :ios, '15.0'
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
-# Flavours add Xcode configurations named `<Base>-<flavour>` (see README_FLAVORS.md); every
+# Flavours add Xcode configurations named `<Base>-<flavour>` (see "Flavors" in wizard-app/AGENTS.md); every
 # one needs a build type here or CocoaPods builds the pods with the wrong settings.
 flavor_configurations = { 'Debug' => :debug, 'Profile' => :release, 'Release' => :release }
 %w[dev prod local].each do |flavor|

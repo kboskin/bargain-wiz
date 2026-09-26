@@ -15,10 +15,10 @@ fvm flutter test
 fvm flutter analyze lib test 2>&1 | grep -E "error •|warning •"
 ```
 
-- The analyzer has ~2900 pre-existing **infos**; the grep above is the signal. A clean grep
+- The analyzer has about 3,150 pre-existing **infos**; the grep above is the signal. A clean grep
   means no errors or warnings, not a clean analyzer — say it that way.
 - Touching plugins, Gradle, Xcode configs or `pubspec.yaml`? Prove it still builds:
-  `fvm flutter build apk --debug --flavor dev` (~45s warm). iOS plugins come through Swift
+  `fvm flutter build apk --debug --flavor dev --dart-define=FLAVOR=dev` (~45s warm). iOS plugins come through Swift
   Package Manager, so a new plugin lands in `ios/Flutter/ephemeral/Packages/…/Package.swift` —
   check it is there rather than assuming `pod install` did it.
 - Behaviour change in a flow? Exercise it against the emulators (`local-stack` skill).
@@ -36,7 +36,7 @@ venv/bin/ruff check .
   them run.
 - Changed `.env` or `core/config/settings.py`? The CLI rejects the whole `.env` on a reserved
   key, and that only shows when the emulator or a deploy loads it; run the manifest discovery
-  in `functions/README.md` to check the params still resolve.
+  in `wizard-backend/AGENTS.md` ("Toolchain") to check the params still resolve.
 - Changed a query? Confirm the composite index exists in `firestore.indexes.json`.
 - Changed a Firestore or Storage adapter, the queue, or a flow end to end? The in-memory tests
   cannot see those; run `E2E=1 venv/bin/python -m pytest tests/test_e2e.py -rs` against a
@@ -45,8 +45,7 @@ venv/bin/ruff check .
 ## Both
 
 - Wire format changed on one side → the other side and its doc change in the same commit
-  (`CONVERSATIONS.md`, `AI_INTEGRATION.md`, `PROFILE_SYNC.md`, `LINES_THAT_LAND.md`,
-  `functions/README.md`).
+  (`CONVERSATIONS.md`, `AI_INTEGRATION.md`, `PROFILE_SYNC.md`, `LINES_THAT_LAND.md`).
 - Git runs from the repo root (`bwiz/`), not from a project folder: `git -C .. status`.
 - Commit or push only when asked. If work is blocked by the environment (Vertex AI disabled,
   no deploy credentials), say so plainly instead of routing around it.

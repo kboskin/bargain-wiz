@@ -11,7 +11,7 @@ service cloud.firestore {
         allow write: if false;
       }
     }
-    // Everything else under users/{uid} — the profile document itself, limits/, … — is
+    // Everything else — the profile document users/{uid} itself, content/lines_that_land, … — is
     // server-only; the app reads its profile through the `profile` function.
     match /{document=**} {
       allow read, write: if false;

@@ -5,7 +5,8 @@ allowed on the launch path — the anonymous sign-in — and everything else wai
 frame.
 
 ```
-runApp(BargainWizApp)            first frame: AppSplash (gradient, static, no DI, no assets)
+runApp(BargainWizApp)            first frame: BootSplash (flat ColoredBox, static, no MaterialApp,
+                                 no DI, no assets)
   └─ AppBootstrap.run()          starts only after that frame is rasterized
        ├─ FirebaseService.initialize()          ~1.4 s, platform thread
        ├─ di.init()                             SharedPreferences + registrations
@@ -13,7 +14,9 @@ runApp(BargainWizApp)            first frame: AppSplash (gradient, static, no DI
        └─ AuthService.ensureSignedIn()          the one awaited network call
   └─ AppBootstrap.warmUp()       background, never awaited
        ├─ RemoteConfigService.refresh()         fetch + activate → notifies listeners
-       └─ ProfileSyncService.start()
+       ├─ ProfileSyncService.start()
+       ├─ PushTopicService.start()              one FCM topic per install
+       └─ AnalyticsService.setUserId(uid)       the uid run() signed in
 ```
 
 Rules that keep it fast:

@@ -5,7 +5,7 @@ the other fields are its labels and values. A log-based metric turns those entri
 series — for instance a distribution over `jsonPayload.latency_ms` filtered on
 `jsonPayload.metric="model_call"` and labelled by `jsonPayload.provider` and
 `jsonPayload.outcome`. That needs no client library, no extra IAM role and no API request per
-call; the metric definitions to create are listed in functions/README.md.
+call; the metric definitions to create are listed in wizard-backend/AGENTS.md ("Logs and metrics").
 
 Each metric is a [MetricEvent] subclass, so what it carries is declared, typed and the same on
 every call. [Metrics] is the interface callers depend on, so the sink can change without

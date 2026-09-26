@@ -1,6 +1,6 @@
 # Bargain Wiz
 
-Two halves in one git repo (root = this folder): `wizard-app/`, a Flutter 3.44.6 client for iOS
+Two halves in one git repo (root = this folder): `wizard-app/`, a Flutter client for iOS
 and Android, and `wizard-backend/`, a Firebase project of Python 3.12 Cloud Functions backed by
 Firestore, Cloud Storage and Gemini on Vertex AI.
 
