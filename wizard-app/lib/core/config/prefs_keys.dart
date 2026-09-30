@@ -25,6 +25,10 @@ class PrefsKeys {
   /// Replaced by every successful pull, dropped when the signed-in account changes.
   static const String profileDocument = 'profile_document';
 
+  /// Onboarding left part-way: the step the person was on and their answers so far
+  /// (`OnboardingProgress` JSON), so the flow reopens there. Cleared when onboarding completes.
+  static const String onboardingProgress = 'onboarding_progress';
+
   /// Random UUID minted on first launch; identifies this install to the profile endpoint
   /// while the user is signed out (see PROFILE_SYNC.md).
 }

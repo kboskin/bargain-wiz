@@ -5,6 +5,9 @@ import 'package:appwizard/core/services/onboarding_service.dart';
 import 'package:appwizard/core/services/push_topic_service.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
+import 'package:appwizard/features/onboarding/data/datasources/onboarding_progress_store.dart';
+import 'package:appwizard/features/onboarding/data/models/onboarding_progress.dart';
+import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_model.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
 import 'package:appwizard/features/onboarding/domain/entities/onboarding_data_entity.dart';
 import 'package:appwizard/features/onboarding/domain/logic/onboarding_answer_flattener.dart';
@@ -17,6 +20,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Onboarding BLoC: loads the remote screen list, collects answers per screen
 /// and persists them (flattened by answer key) when the flow completes.
+///
+/// An unfinished flow is saved as it moves ([OnboardingStepChanged] → [OnboardingProgressStore])
+/// and reopens where it stopped: every screen is still loaded, so Back works as before, but
+/// the flow starts on the saved step with the answers restored. When that step is no longer
+/// in the template, onboarding starts over from the first screen with no answers.
 class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
   OnboardingBloc({
     required OnboardingRepository repository,
@@ -25,15 +33,18 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
     SharedPreferences? preferences,
     UserProfileService? profileService,
     PushTopicService? pushTopics,
+    OnboardingProgressStore? progressStore,
   })  : _repository = repository,
         _onboardingService = onboardingService,
         _logger = logger,
         _preferences = preferences,
         _profileService = profileService,
         _pushTopics = pushTopics,
+        _progressStore = progressStore,
         super(const OnboardingInitial()) {
     on<LoadOnboardingConfigRequested>(_onLoadOnboardingConfig);
     on<OnboardingAnswerChanged>(_onAnswerChanged);
+    on<OnboardingStepChanged>(_onStepChanged);
     on<SubmitOnboardingRequested>(_onSubmitOnboarding);
   }
 
@@ -43,6 +54,7 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
   final SharedPreferences? _preferences;
   final UserProfileService? _profileService;
   final PushTopicService? _pushTopics;
+  final OnboardingProgressStore? _progressStore;
 
   Future<void> _onLoadOnboardingConfig(
     LoadOnboardingConfigRequested event,
@@ -62,7 +74,7 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
           'the flow will submit from the CTA of the last screen instead.',
         );
       }
-      emit(OnboardingConfigLoaded(screens: screens));
+      emit(await _resume(screens));
     } on Object catch (e, stackTrace) {
       _logger.e('Error loading onboarding config', e, stackTrace);
       emit(OnboardingError('Failed to load onboarding configuration: $e'));
@@ -81,7 +93,42 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
     } else {
       updated[event.screenIndex] = event.answer;
     }
-    emit(OnboardingConfigLoaded(screens: current.screens, answers: updated));
+    emit(current.copyWith(answers: updated));
+  }
+
+  /// The loaded state for [screens]: on the saved step with the saved answers, or — when
+  /// nothing is saved or the saved step is gone from the template — from scratch.
+  Future<OnboardingConfigLoaded> _resume(List<OnboardingModel> screens) async {
+    final progress = _progressStore?.read();
+    if (progress == null || screens.isEmpty) return OnboardingConfigLoaded(screens: screens);
+    final index = progress.indexIn(screens);
+    if (index == null) {
+      _logger.i('Onboarding step "${progress.stepId}" is no longer configured; starting over');
+      await _progressStore?.clear();
+      return OnboardingConfigLoaded(screens: screens);
+    }
+    _logger.i('Resuming onboarding at step ${progress.stepId} ($index/${screens.length})');
+    return OnboardingConfigLoaded(
+      screens: screens,
+      answers: OnboardingAnswerFlattener.byIndex(screens, progress.answers),
+      startIndex: index,
+    );
+  }
+
+  Future<void> _onStepChanged(
+    OnboardingStepChanged event,
+    Emitter<OnboardingState> emit,
+  ) async {
+    final current = state;
+    // Not once submitting: completion clears the progress, and a late save must not undo it.
+    if (current is! OnboardingConfigLoaded || current is OnboardingSubmitting) return;
+    final index = event.screenIndex;
+    if (index < 0 || index >= current.screens.length) return;
+    await _progressStore?.write(OnboardingProgress(
+      stepId: current.screens[index].stepId,
+      stepIndex: index,
+      answers: current.answersByKey,
+    ));
   }
 
   Future<void> _onSubmitOnboarding(
@@ -108,6 +155,7 @@ class OnboardingBloc extends BaseBloc<OnboardingEvent, OnboardingState> {
         },
         (_) async {
           await _markFirstRun();
+          await _progressStore?.clear();
           await _profileService?.refresh();
           unawaited(_pushTopics?.sync()); // onboarding_phase → subscription_phase
           emit(const OnboardingCompleted());

@@ -5,6 +5,12 @@ under `onboarding_data`), but every change is mirrored to a Firestore document t
 `profile` Cloud Function so the profile survives reinstalls, follows a signed-in user across
 devices, and can be analysed.
 
+An onboarding left part-way is kept apart from that record, under `onboarding_progress`
+(`OnboardingProgressStore`): the step the person was on, by `step_id`, and the answers so far.
+The flow reopens there, with every screen still loaded, and the key is cleared when onboarding
+completes. It is local only and never synced: the answers already reach the profile step by
+step, and a new install starts the funnel from the first screen.
+
 ## One shape for the answers
 
 Onboarding is a remote-configured template: screens, `answer_key_name`s and value types

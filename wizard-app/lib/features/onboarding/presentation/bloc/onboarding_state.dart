@@ -22,12 +22,17 @@ class OnboardingConfigLoaded extends OnboardingState {
   const OnboardingConfigLoaded({
     required this.screens,
     this.answers = const {},
+    this.startIndex = 0,
   });
 
   final List<OnboardingModel> screens;
 
   /// Answers by screen index. Multi-key screens store `{answerKey: value}` maps.
   final Map<int, dynamic> answers;
+
+  /// The screen the flow opens on: where an unfinished onboarding stopped, else 0. Read by
+  /// the page once, when the screens first arrive.
+  final int startIndex;
 
   /// Answers by `answer_key_name` (multi-key screens flattened).
   Map<String, dynamic> get answersByKey => OnboardingAnswerFlattener.byKey(screens, answers);
@@ -37,19 +42,21 @@ class OnboardingConfigLoaded extends OnboardingState {
   OnboardingConfigLoaded copyWith({
     List<OnboardingModel>? screens,
     Map<int, dynamic>? answers,
+    int? startIndex,
   }) =>
       OnboardingConfigLoaded(
         screens: screens ?? this.screens,
         answers: answers ?? this.answers,
+        startIndex: startIndex ?? this.startIndex,
       );
 
   @override
-  List<Object> get props => [screens, answers];
+  List<Object> get props => [screens, answers, startIndex];
 }
 
 /// Submitting state (keeps the loaded screens so the UI can stay put).
 class OnboardingSubmitting extends OnboardingConfigLoaded {
-  const OnboardingSubmitting({required super.screens, super.answers});
+  const OnboardingSubmitting({required super.screens, super.answers, super.startIndex});
 }
 
 /// Onboarding completed state

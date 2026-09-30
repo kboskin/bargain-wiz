@@ -63,8 +63,12 @@ class _OnboardingFlowView extends StatefulWidget {
 }
 
 class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
-  final PageController _pageController = PageController();
+  /// Created when the screens arrive, so the flow can open on the saved step.
+  PageController? _pageController;
   int _index = 0;
+
+  /// Saves the step when the app goes to the background, with whatever was picked on it.
+  late final AppLifecycleListener _lifecycle;
 
   /// Screens whose option the user explicitly tapped (for `require_explicit_tap`).
   final Set<int> _tapped = {};
@@ -86,9 +90,33 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   OnboardingBloc get _bloc => context.read<OnboardingBloc>();
 
   @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onHide: _saveStep);
+  }
+
+  @override
   void dispose() {
-    _pageController.dispose();
+    _lifecycle.dispose();
+    _pageController?.dispose();
     super.dispose();
+  }
+
+  /// Once, when the screens first arrive: open on [OnboardingConfigLoaded.startIndex] — the
+  /// step an unfinished onboarding stopped on, else the first — and report it as viewed.
+  void _start(OnboardingConfigLoaded state) {
+    if (_loaded != null) return;
+    _index = state.startIndex.clamp(0, state.screens.length - 1);
+    // Restored answers were tapped the first time round (`require_explicit_tap`).
+    _tapped.addAll(state.answers.keys);
+    _pageController ??= PageController(initialPage: _index);
+    _logStepView(state, _index, direction: _index > 0 ? 'resume' : 'forward');
+  }
+
+  /// Records the current step as where to reopen the flow.
+  void _saveStep() {
+    if (_loaded == null || !mounted) return;
+    _bloc.add(OnboardingStepChanged(_index));
   }
 
   // ─── navigation ────────────────────────────────────────────────────────────
@@ -119,12 +147,15 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
       _pushProgress(state, _index);
     }
     setState(() => _index = target);
-    _logStepView(state, target, forward: forward);
-    final current = _pageController.hasClients ? (_pageController.page?.round() ?? _index) : _index;
-    if (!_pageController.hasClients || (target - current).abs() > 1) {
-      _pageController.jumpToPage(target);
+    _saveStep();
+    _logStepView(state, target, direction: forward ? 'forward' : 'back');
+    final controller = _pageController;
+    if (controller == null || !controller.hasClients) return;
+    final current = controller.page?.round() ?? _index;
+    if ((target - current).abs() > 1) {
+      controller.jumpToPage(target);
     } else {
-      await _pageController.animateToPage(
+      await controller.animateToPage(
         target,
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOutCubic,
@@ -180,19 +211,15 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
   /// `screen_class` for every step: the flow is one route, and the class groups them.
   static const String _screenClass = 'OnboardingFlowPage';
 
-  /// Screens carry no id of their own: the answer key names the question, and a screen that
-  /// asks nothing is named by its template.
-  static String _stepId(OnboardingModel screen) =>
-      screen.answerKeys.isNotEmpty ? screen.answerKeys.first : screen.type.name;
-
   /// A step is a screen, so it is reported as one — `onboarding/vibe`, with where in the
   /// funnel it is as the screen view's own parameters. The router's observer cannot see
-  /// these: the whole flow is a single route drawing a `PageView`.
-  void _logStepView(OnboardingConfigLoaded state, int index, {required bool forward}) {
+  /// these: the whole flow is a single route drawing a `PageView`. [direction] is `forward`,
+  /// `back`, or `resume` for the step an unfinished onboarding reopens on.
+  void _logStepView(OnboardingConfigLoaded state, int index, {required String direction}) {
     if (_viewedIndex == index || index < 0 || index >= state.screens.length) return;
     _viewedIndex = index;
     final screen = state.screens[index];
-    final stepId = _stepId(screen);
+    final stepId = screen.stepId;
     unawaited(_analytics.logScreenView(
       screenName: 'onboarding/$stepId',
       screenClass: _screenClass,
@@ -201,7 +228,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
         'step_count': state.screens.length,
         'step_id': stepId,
         'step_type': screen.type.name,
-        'direction': forward ? 'forward' : 'back',
+        'direction': direction,
       },
     ));
   }
@@ -215,7 +242,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     final screen = state.screens[index];
     unawaited(_analytics.logOnboardingStepAnswered(
       index: index,
-      stepId: _stepId(screen),
+      stepId: screen.stepId,
       stepType: screen.type.name,
       answerKeys: screen.answerKeys,
       answers: OnboardingAnswerFlattener.pickedOptions(state.screens, {index: state.answers[index]}),
@@ -272,8 +299,8 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
     final content = BlocConsumer<OnboardingBloc, OnboardingState>(
       listener: (context, state) {
         if (state is OnboardingConfigLoaded && state.screens.isNotEmpty) {
+          _start(state); // the first screen; later ones are reported on move
           _loaded = state;
-          _logStepView(state, _index, forward: true); // the first screen; later ones on move
         }
         if (state is OnboardingCompleted) {
           final loaded = _loaded;
@@ -359,7 +386,7 @@ class _OnboardingFlowViewState extends State<_OnboardingFlowView> {
                   ),
                   Expanded(
                     child: PageView.builder(
-                      controller: _pageController,
+                      controller: _pageController ??= PageController(initialPage: index),
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: screens.length,
                       itemBuilder: (context, i) => _buildScreen(context, screens[i], i, state, textColor),

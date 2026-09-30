@@ -58,4 +58,34 @@ void main() {
     expect(copy, a);
     expect(copy.options, isNotNull);
   });
+
+  test('byIndex puts answers by key back on their screens, the reverse of byKey', () {
+    final perScreen = <int, dynamic>{
+      0: ['starting', 'fair_price'], // multi_select
+      1: 'tactical', // select (vibe)
+      2: 60, // slider_lottie (push)
+      3: {'marketplace': 'ebay', 'deals_per_month': '3_5'}, // select_group
+      4: 550, // slider (deal size)
+      7: 'FRIEND-42', // referral_code
+    };
+    final byKey = OnboardingAnswerFlattener.byKey(screens, perScreen);
+    expect(OnboardingAnswerFlattener.byIndex(screens, byKey), perScreen);
+  });
+
+  test('byIndex drops keys no screen asks for and picks the screen no longer offers', () {
+    final restored = OnboardingAnswerFlattener.byIndex(screens, {
+      'hurdles': ['starting', 'retired_option'], // the retired pick goes, the rest stays
+      'vibe': 'retired_vibe', // nothing left: the screen stays unanswered
+      'marketplace': 'retired_marketplace',
+      'deals_per_month': '6_plus', // the group keeps the answer it still offers
+      'referral_code': 'ANY-CODE', // typed, kept as typed
+      'not_a_question': 'x',
+      'push': null,
+    });
+    expect(restored, {
+      0: ['starting'],
+      3: {'deals_per_month': '6_plus'},
+      7: 'ANY-CODE',
+    });
+  });
 }

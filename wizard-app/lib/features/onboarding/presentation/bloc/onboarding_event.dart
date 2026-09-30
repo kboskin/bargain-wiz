@@ -28,6 +28,17 @@ class OnboardingAnswerChanged extends OnboardingEvent {
   List<Object?> get props => [screenIndex, answer];
 }
 
+/// The flow is now showing [screenIndex] (or is being left there): saves it, with the answers
+/// so far, as where to reopen an unfinished onboarding.
+class OnboardingStepChanged extends OnboardingEvent {
+  const OnboardingStepChanged(this.screenIndex);
+
+  final int screenIndex;
+
+  @override
+  List<Object?> get props => [screenIndex];
+}
+
 /// Submit onboarding answers (called when the data_upload screen finishes).
 class SubmitOnboardingRequested extends OnboardingEvent {
   const SubmitOnboardingRequested();

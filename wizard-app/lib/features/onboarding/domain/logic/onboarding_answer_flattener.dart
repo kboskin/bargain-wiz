@@ -91,6 +91,48 @@ class OnboardingAnswerFlattener {
     return out;
   }
 
+  /// The reverse of [byKey]: puts `answerKey → value` answers back on the screens that ask
+  /// for them, in the per-screen shape the bloc keeps (a `select_group` gets a
+  /// `{answerKey: value}` map of the groups answered). Keys no screen asks for are dropped, and
+  /// so are picks a select-type screen no longer offers, which would otherwise enable
+  /// Continue with nothing shown as selected.
+  static Map<int, dynamic> byIndex(
+    List<OnboardingModel> screens,
+    Map<String, dynamic> answers,
+  ) {
+    final out = <int, dynamic>{};
+    for (var i = 0; i < screens.length; i++) {
+      final screen = screens[i];
+      if (screen is SelectGroupScreenModel) {
+        final group = <String, dynamic>{
+          for (final key in screen.answerKeys)
+            if (_offered(screen, key, answers[key]) case final value?) key: value,
+        };
+        if (group.isNotEmpty) out[i] = group;
+        continue;
+      }
+      final keys = screen.answerKeys;
+      if (keys.isEmpty) continue;
+      final value = _offered(screen, keys.first, answers[keys.first]);
+      if (value != null) out[i] = value;
+    }
+    return out;
+  }
+
+  /// [value] as far as [screen] still offers it for [key]: select-type screens keep only
+  /// their current options, other screens take the value as it is; null when nothing is left.
+  static dynamic _offered(OnboardingModel screen, String key, dynamic value) {
+    if (_isBlank(value)) return null;
+    final isPick = screen is SelectScreenModel || screen is MultiSelectScreenModel || screen is SelectGroupScreenModel;
+    final options = isPick ? optionsFor(screen, key) : null;
+    if (options == null) return value;
+    if (value is List) {
+      final kept = [for (final v in value) if (options.contains(v.toString())) v];
+      return kept.isEmpty ? null : kept;
+    }
+    return options.contains(value.toString()) ? value : null;
+  }
+
   /// `answerKey → value` for the answers picked from a configured option list (select,
   /// multi-select, select-group, both sliders). Answers the person typed — a referral code —
   /// are left out: the option ids are the config's words, a typed answer is the person's.

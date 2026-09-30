@@ -294,6 +294,11 @@ abstract class OnboardingModel extends ValidatableEntity {
     return k == null || k.isEmpty ? const [] : [k];
   }
 
+  /// The step's name in analytics and in the saved progress. Screens carry no id of their
+  /// own: the answer key names the question, and a screen that asks nothing is named by its
+  /// template — so two screens of one informational template share it.
+  String get stepId => answerKeys.isNotEmpty ? answerKeys.first : type.name;
+
   /// English title used for stored answers / logging.
   String get titleForStorage {
     final dynamic raw = title is MultilocaleText ? (title as MultilocaleText).toJson() : title;

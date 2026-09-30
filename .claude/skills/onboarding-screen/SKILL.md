@@ -99,6 +99,12 @@ validation would rewrite one. Fix a bad line by editing it; deleting it restores
 - **`answer_key_name` is the wire and profile key.** It is also the `{key}` placeholder in
   warmup/data_upload copy and the funnel's `step_id`. Renaming it orphans stored answers,
   which then read as unanswered.
+- **The `step_id` is also where an unfinished onboarding reopens** (`OnboardingProgress`,
+  saved on the device as the flow moves). The flow finds the saved step by that id, so a
+  reorder still lands on the same question. Renaming the key or removing the screen restarts
+  anyone who stopped on it from the first screen, with no answers — by design. A screen that
+  asks nothing is identified by its `type`, so two of one informational template share an id
+  and only their position tells them apart.
 - **Keys must be valid Analytics parameter names**, because each one names a parameter on
   `onboarding_step_answered`. Use lowercase snake_case, at most 40 characters, no
   `firebase_`/`google_`/`ga_` prefix, and no clash with `step_index`, `step_id`,
