@@ -5,7 +5,9 @@ import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/subscription/data/datasources/subscription_in_memory_datasource.dart';
+import 'package:appwizard/features/subscription/data/models/subscription_config.dart';
 import 'package:appwizard/features/subscription/data/repositories/subscription_repository_impl.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +18,33 @@ class _SilentLogger implements AppLogger {
 }
 
 class _NoConfig implements RemoteConfigService {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+/// A `subscription_config` whose plan ids are not the bundled ones.
+class _Config implements RemoteConfigService {
+  @override
+  SubscriptionConfig? getSubscriptionConfig() => SubscriptionConfig(products: [
+        SubscriptionProductConfig(
+          id: 'yearly',
+          tier: 'premium',
+          productId: ProductIdConfig(ios: 'ios.yearly', android: 'android.yearly'),
+          title: 'Yearly',
+          description: 'Billed yearly',
+          features: const [],
+          displayOrder: 1,
+        ),
+        SubscriptionProductConfig(
+          tier: 'premium',
+          productId: ProductIdConfig(ios: 'ios.keyless', android: 'android.keyless'),
+          title: 'Keyless',
+          description: 'A product with no plan id',
+          features: const [],
+          displayOrder: 2,
+        ),
+      ]);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
 }
@@ -91,6 +120,7 @@ void main() {
     final status = (await r.getSubscriptionStatus()).getOrElse(() => null)!;
     expect(status.tier, SubscriptionTier.premium);
     expect(status.isActive, isTrue);
+    expect(status.plan, 'monthly');
     expect(prefs.getString(PrefsKeys.subscriptionStatus), contains('premium'));
     await r.dispose();
   });
@@ -121,6 +151,7 @@ void main() {
     final status = (await second.getSubscriptionStatus()).getOrElse(() => null);
     expect(status?.tier, SubscriptionTier.premium);
     expect(status?.productId, 'com.bargain.wiz.premium.weekly');
+    expect(status?.plan, 'weekly');
     await second.dispose();
   });
 
@@ -139,6 +170,7 @@ void main() {
 
   test('reports every entitlement change, with the new one already readable', () async {
     SubscriptionTier? seen;
+    SubscriptionStatus? told;
     var changes = 0;
     late SubscriptionRepositoryImpl r;
     r = SubscriptionRepositoryImpl(
@@ -148,18 +180,20 @@ void main() {
       prefs,
       _SilentLogger(),
       restoreWindow: Duration.zero,
-      onEntitlementChanged: () async {
+      onEntitlementChanged: (status) async {
         changes++;
+        told = status;
         seen = (await r.getSubscriptionStatus()).getOrElse(() => null)?.tier;
       },
     );
     payment.controller.add(PurchaseUpdate.success(_purchase('com.bargain.wiz.premium.weekly')));
     await Future<void>.delayed(Duration.zero);
     expect((changes, seen), (1, SubscriptionTier.premium));
+    expect(told?.plan, 'weekly'); // the callback is handed the new entitlement
 
     await r.restorePurchases(); // the store reports nothing: the entitlement is dropped
     await Future<void>.delayed(Duration.zero);
-    expect((changes, seen), (2, null));
+    expect((changes, seen, told), (2, null, null));
     await r.dispose();
   });
 
@@ -177,6 +211,28 @@ void main() {
     expect(r.tierForProduct('com.bargain.wiz.premium.weekly'), SubscriptionTier.premium);
     expect(r.tierForProduct('something.else'), SubscriptionTier.free);
     await r.dispose();
+  });
+
+  test('planForProduct names the plan: the config id, else the bundled keys, else nothing', () async {
+    final bundled = await repo();
+    expect(bundled.planForProduct('com.bargain.wiz.premium.monthly'), 'monthly');
+    expect(bundled.planForProduct('com.bargain.wiz.premium.weekly'), 'weekly');
+    expect(bundled.planForProduct('something.else'), isNull);
+    await bundled.dispose();
+
+    final configured = SubscriptionRepositoryImpl(
+      payment,
+      SubscriptionInMemoryDataSourceImpl(_SilentLogger()),
+      _Config(),
+      prefs,
+      _SilentLogger(),
+      restoreWindow: Duration.zero,
+    );
+    expect(configured.planForProduct('android.yearly'), 'yearly'); // the config's id, on either platform
+    expect(configured.planForProduct('ios.yearly'), 'yearly');
+    expect(configured.planForProduct('ios.keyless'), isNull); // in the config, but with no plan id
+    expect(configured.planForProduct('com.bargain.wiz.premium.weekly'), 'weekly'); // not in it: the bundled key
+    await configured.dispose();
   });
 
   test('the bundled fallback products carry the paywall option keys', () async {

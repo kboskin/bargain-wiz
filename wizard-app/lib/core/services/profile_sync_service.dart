@@ -4,6 +4,7 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:appwizard/core/services/auth_service.dart';
 import 'package:appwizard/core/services/firebase_service.dart';
+import 'package:appwizard/core/services/profile_cache.dart';
 import 'package:appwizard/core/services/user_profile_service.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/onboarding/data/models/remote_config/onboarding_screen_config.dart';
@@ -12,6 +13,7 @@ import 'package:appwizard/features/onboarding/domain/repositories/onboarding_rep
 import 'package:appwizard/features/profile/data/datasources/profile_remote_datasource.dart';
 import 'package:appwizard/features/profile/data/models/profile_api_models.dart';
 import 'package:appwizard/features/profile/domain/profile_fields.dart';
+import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
 
 /// Keeps the server-side profile (`profile` Cloud Function → Firestore) in step with the
 /// onboarding answers stored on the device. See PROFILE_SYNC.md.
@@ -25,6 +27,11 @@ import 'package:appwizard/features/profile/domain/profile_fields.dart';
 /// - Every push carries this install's FCM token (`app.fcm_token`); a token that arrives or
 ///   changes while the app runs is reported on its own ([_onFcmToken]).
 /// - Every launch is reported once ([_reportOpened]) as `app.last_opened_at`.
+/// - The plan the person starts or restores is reported as it happens ([reportSubscription]).
+/// - The other way round, the profile is pulled with a GET at every launch, at sign-in and
+///   when onboarding finishes, and cached ([ProfileCache]): the operator's
+///   `subscription.override` in it is what the gate reads. A pull that fails changes nothing,
+///   so the person is served from the last one.
 ///
 /// Every push is a partial update: the server merges. A failure is retried once after
 /// [retryDelay], and a failed retry is reported to Crashlytics; the UI never waits on this
@@ -35,6 +42,8 @@ class ProfileSyncService {
     required ProfileRemoteDataSource remote,
     required AuthService auth,
     required OnboardingRepository onboarding,
+    required ProfileCache cache,
+    required Future<void> Function() onOverrideChanged,
     required AppLogger logger,
     this.debounce = const Duration(milliseconds: 1500),
     this.retryDelay = const Duration(seconds: 30),
@@ -44,6 +53,8 @@ class ProfileSyncService {
         _remote = remote,
         _auth = auth,
         _onboarding = onboarding,
+        _cache = cache,
+        _onOverrideChanged = onOverrideChanged,
         _logger = logger,
         _localeCode = localeCode ?? (() => PlatformDispatcher.instance.locale.languageCode),
         _fcmTokens = fcmTokens ?? FirebaseService.fcmTokens;
@@ -52,6 +63,11 @@ class ProfileSyncService {
   final ProfileRemoteDataSource _remote;
   final AuthService _auth;
   final OnboardingRepository _onboarding;
+  final ProfileCache _cache;
+
+  /// Told after the cached override was set, replaced or removed: the gate and the push topic
+  /// must be asked again.
+  final Future<void> Function() _onOverrideChanged;
   final AppLogger _logger;
   final Duration debounce;
   final Duration retryDelay;
@@ -62,6 +78,10 @@ class ProfileSyncService {
   static const String _localeKey = 'locale';
 
   Timer? _timer;
+
+  /// The GET in flight, so a launch and a sign-in that overlap (an already signed-in account
+  /// has both) ask the server once.
+  Future<ProfileDocument?>? _pulling;
   StreamSubscription<Object?>? _authSub;
   StreamSubscription<String>? _fcmSub;
   bool _started = false;
@@ -74,6 +94,7 @@ class ProfileSyncService {
     if (_started) return;
     _started = true;
     _authSub = _auth.userChanges.listen((user) {
+      unawaited(_dropForeignProfile(user?.uid));
       final account = AuthService.isAccount(user);
       if (account && !_hadAccount) unawaited(onSignedIn());
       _hadAccount = account;
@@ -83,6 +104,7 @@ class ProfileSyncService {
       onError: (final Object e) => _logger.w('FCM token unavailable: $e'),
     );
     unawaited(_reportOpened());
+    unawaited(_pullProfile());
   }
 
   /// The app just started (this service starts once per launch, after the launch has signed
@@ -96,6 +118,48 @@ class ProfileSyncService {
       );
     } on Object catch (e) {
       _logger.w('Launch report failed: $e');
+    }
+  }
+
+  /// Pulls the profile and caches it: whether an operator has let this person in (or taken
+  /// that back) is only known by asking the server. Runs beside the launch report rather than
+  /// after it — on a first launch the document may not exist yet, which is just "no profile".
+  /// Best effort and not retried: a failure leaves the cache as it was, and the next launch,
+  /// sign-in or finished onboarding asks again.
+  Future<void> _pullProfile() async {
+    try {
+      await _remember(await _pull());
+    } on Object catch (e) {
+      _logger.w('Profile pull failed: $e');
+    }
+  }
+
+  /// The cached profile belongs to one account. When the signed-in uid is another one — a sign
+  /// out, or a sign-in to an account that already exists — it is dropped before it can let the
+  /// wrong person in; the pull that follows a sign-in fills it for the new one.
+  Future<void> _dropForeignProfile(final String? uid) async {
+    final cached = _cache.uid;
+    if (cached != null && cached != uid) await _remember(null);
+  }
+
+  /// `GET /profile`, shared by whoever asks while one is in flight.
+  Future<ProfileDocument?> _pull() =>
+      _pulling ??= _remote.fetch().whenComplete(() => _pulling = null);
+
+  /// Caches the [doc] a pull brought (null: the server has no profile for this account) and,
+  /// when that changes what the person is entitled to — an operator granted or took back
+  /// access — tells the gate. A request that failed never gets here, so it leaves the cache
+  /// alone. Nothing cached is an answer or is sent back.
+  Future<void> _remember(final ProfileDocument? doc) async {
+    try {
+      final before = _cache.subscriptionOverride;
+      await _cache.save(doc);
+      final override = _cache.subscriptionOverride;
+      if (override == before) return;
+      _logger.i(override == null ? 'Subscription override removed' : 'Subscription override: ${override.tier.name}');
+      await _onOverrideChanged();
+    } on Object catch (e) {
+      _logger.w('Subscription override not applied: $e');
     }
   }
 
@@ -123,6 +187,22 @@ class ProfileSyncService {
     }
   }
 
+  /// The person just started or restored a plan (the subscription repository calls this when
+  /// the stored entitlement changes): records which, as `subscription.plan` and
+  /// `subscription.product_id`. Sent on its own and retried like any push ([_push]).
+  ///
+  /// Only ever sets. A cleared entitlement ([status] null) or a free one says nothing, because
+  /// this device lacking a plan does not mean the account has none — another device may hold it,
+  /// or the store may simply not have replayed it here yet — so a plan, once recorded, stays
+  /// until another replaces it. It is a report of what the device last saw, not an entitlement:
+  /// nothing reads it back (PROFILE_SYNC.md "Subscription").
+  Future<void> reportSubscription(final SubscriptionStatus? status) async {
+    if (status == null || !status.isActive || status.isExpired()) return;
+    await _push(
+      ProfilePatchRequest(subscription: ProfileSubscription(plan: status.plan, productId: status.productId)),
+    );
+  }
+
   /// Pushes the stored answers after [debounce] (a later call restarts the wait), so a run of
   /// edits travels once. [UserProfileService] calls this after every write.
   void schedulePush([Duration? delay]) {
@@ -133,7 +213,14 @@ class ProfileSyncService {
   /// Pushes the in-flow answers (called by the repository's `uploadUserData`, before the
   /// answers are persisted locally): after every step, so a funnel that is never finished is
   /// recorded as far as it got, and once more when it finishes (`data.isCompleted`).
-  Future<void> pushOnboarding(OnboardingDataEntity data) => _push(buildPatch(data, completed: data.isCompleted));
+  ///
+  /// When the funnel has just finished it also pulls the profile again, for what the server
+  /// holds now. Not awaited and allowed to fail: the "Setting up" step is waiting on this
+  /// method, and the cached profile serves until the next pull.
+  Future<void> pushOnboarding(OnboardingDataEntity data) async {
+    await _push(buildPatch(data, completed: data.isCompleted));
+    if (data.isCompleted) unawaited(_pullProfile());
+  }
 
   /// Pushes the current local answers, if any.
   Future<void> pushNow() async {
@@ -161,13 +248,15 @@ class ProfileSyncService {
     }
   }
 
-  /// After sign-in: merge server-side, then hydrate a device that has no answers yet.
+  /// After sign-in: merge server-side, read the account's override (another uid may carry
+  /// one), then hydrate a device that has no answers yet.
   Future<void> onSignedIn() async {
     await pushNow();
     try {
       await _profile.ensureLoaded();
+      final doc = await _pull();
+      await _remember(doc);
       if (_profile.answers.isNotEmpty) return; // local answers already pushed and win
-      final doc = await _remote.fetch();
       final answers = {...?doc?.preferences}..remove(_localeKey); // a device fact, not an answer
       if (answers.isEmpty) return;
       final entity = entityFromAnswers(answers, completed: doc!.onboardingStatus?.completedAt != null);

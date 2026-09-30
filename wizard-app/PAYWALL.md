@@ -41,7 +41,12 @@ when the store reports no active purchase. On iOS the plugin uses StoreKit 2, so
 reports only *current* entitlements, and `IAPPaymentProvider` reads the platform-neutral
 fields (a cast to `AppStorePurchaseDetails` would throw on StoreKit 2 transactions). Nothing
 verifies receipts server-side and the AI functions do not check entitlement: the gate is
-client-side only.
+client-side only. Each time the stored entitlement changes, the plan (`monthly` / `weekly`) is
+also reported to the profile document (`PROFILE_SYNC.md` "Subscription"); that copy is a
+record for analysis and is never read back. The one thing read the other way is an operator's
+`subscription.override` on the profile, which lets a person in without a purchase: the tier is
+the purchase's, else the override's while it runs, else free
+(`SubscriptionCheckerService.getCurrentTier`), so the gate and the push topic follow it.
 
 ## The offer
 

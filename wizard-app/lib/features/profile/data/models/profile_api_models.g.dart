@@ -32,6 +32,36 @@ Map<String, dynamic> _$ProfileReferralToJson(ProfileReferral instance) =>
       'entered_at': ?instance.enteredAt,
     };
 
+ProfileSubscriptionOverride _$ProfileSubscriptionOverrideFromJson(
+  Map<String, dynamic> json,
+) => ProfileSubscriptionOverride(
+  tier: json['tier'] as String?,
+  until: json['until'] as String?,
+);
+
+Map<String, dynamic> _$ProfileSubscriptionOverrideToJson(
+  ProfileSubscriptionOverride instance,
+) => <String, dynamic>{'tier': ?instance.tier, 'until': ?instance.until};
+
+ProfileSubscription _$ProfileSubscriptionFromJson(Map<String, dynamic> json) =>
+    ProfileSubscription(
+      plan: json['plan'] as String?,
+      productId: json['product_id'] as String?,
+      operatorOverride: json['override'] == null
+          ? null
+          : ProfileSubscriptionOverride.fromJson(
+              json['override'] as Map<String, dynamic>,
+            ),
+    );
+
+Map<String, dynamic> _$ProfileSubscriptionToJson(
+  ProfileSubscription instance,
+) => <String, dynamic>{
+  'plan': ?instance.plan,
+  'product_id': ?instance.productId,
+  'override': ?instance.operatorOverride?.toJson(),
+};
+
 ProfileApp _$ProfileAppFromJson(Map<String, dynamic> json) => ProfileApp(
   platform: json['platform'] as String?,
   version: json['version'] as String?,
@@ -69,6 +99,11 @@ ProfilePatchRequest _$ProfilePatchRequestFromJson(Map<String, dynamic> json) =>
       referral: json['referral'] == null
           ? null
           : ProfileReferral.fromJson(json['referral'] as Map<String, dynamic>),
+      subscription: json['subscription'] == null
+          ? null
+          : ProfileSubscription.fromJson(
+              json['subscription'] as Map<String, dynamic>,
+            ),
       app: json['app'] == null
           ? null
           : ProfileApp.fromJson(json['app'] as Map<String, dynamic>),
@@ -80,6 +115,7 @@ Map<String, dynamic> _$ProfilePatchRequestToJson(
   'preferences': ?instance.preferences,
   'onboarding_status': ?instance.onboardingStatus?.toJson(),
   'referral': ?instance.referral?.toJson(),
+  'subscription': ?instance.subscription?.toJson(),
   'app': ?instance.app?.toJson(),
 };
 
@@ -98,6 +134,11 @@ ProfileDocument _$ProfileDocumentFromJson(Map<String, dynamic> json) =>
       referral: json['referral'] == null
           ? null
           : ProfileReferral.fromJson(json['referral'] as Map<String, dynamic>),
+      subscription: json['subscription'] == null
+          ? null
+          : ProfileSubscription.fromJson(
+              json['subscription'] as Map<String, dynamic>,
+            ),
       app: json['app'] == null
           ? null
           : ProfileApp.fromJson(json['app'] as Map<String, dynamic>),
@@ -112,6 +153,7 @@ Map<String, dynamic> _$ProfileDocumentToJson(ProfileDocument instance) =>
       'preferences': ?instance.preferences,
       'onboarding_status': ?instance.onboardingStatus?.toJson(),
       'referral': ?instance.referral?.toJson(),
+      'subscription': ?instance.subscription?.toJson(),
       'app': ?instance.app?.toJson(),
       'created_at': ?instance.createdAt,
       'updated_at': ?instance.updatedAt,

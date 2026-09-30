@@ -1,3 +1,4 @@
+import 'package:appwizard/core/services/profile_cache.dart';
 import 'package:appwizard/features/subscription/domain/repositories/subscription_repository.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_tier.dart';
@@ -8,15 +9,27 @@ import 'package:appwizard/core/utils/app_logger.dart';
 class SubscriptionCheckerService {
   final SubscriptionRepository _repository;
   final AppLogger _logger;
+  final ProfileCache _profile;
 
   SubscriptionCheckerService(
     this._repository,
     this._logger,
+    this._profile,
   );
 
-  /// Get current subscription tier
-  /// Returns free if no active subscription
+  /// The tier the person is entitled to: what they bought, else what an operator granted on
+  /// their profile (still running), else free. A purchase always wins, so an override never
+  /// hides a real plan and the plan reported to the profile stays the store's.
   Future<SubscriptionTier> getCurrentTier() async {
+    final purchased = await _purchasedTier();
+    if (purchased != SubscriptionTier.free) return purchased;
+    final grant = _profile.subscriptionOverride;
+    return grant != null && grant.grantsAt(DateTime.now()) ? grant.tier : SubscriptionTier.free;
+  }
+
+  /// Tier of the store purchase.
+  /// Returns free if no active subscription
+  Future<SubscriptionTier> _purchasedTier() async {
     try {
       final result = await _repository.getSubscriptionStatus();
       return result.fold(
@@ -37,7 +50,7 @@ class SubscriptionCheckerService {
     }
   }
 
-  /// Get current subscription status
+  /// Get current subscription status: the store purchase only, never the override.
   Future<SubscriptionStatus?> getCurrentStatus() async {
     try {
       final result = await _repository.getSubscriptionStatus();

@@ -51,6 +51,7 @@ import 'package:appwizard/features/feedback/presentation/bloc/feedback_bloc.dart
 import 'package:appwizard/features/lines_that_land/presentation/bloc/lines_that_land_bloc.dart';
 
 import 'package:appwizard/core/network/cloud_functions_client.dart';
+import 'package:appwizard/core/services/profile_cache.dart';
 import 'package:appwizard/core/services/profile_sync_service.dart';
 import 'package:appwizard/core/services/push_topic_service.dart';
 import 'package:appwizard/core/utils/screenshot_encoder.dart';
@@ -253,15 +254,23 @@ Future<void> init() async {
       sl<SharedPreferences>(),
       sl<AppLogger>(),
       // Resolved lazily: the topic service reads the entitlement back through this one.
-      onEntitlementChanged: () => sl<PushTopicService>().sync(),
+      onEntitlementChanged: (status) => Future.wait([
+        sl<PushTopicService>().sync(),
+        sl<ProfileSyncService>().reportSubscription(status),
+      ]),
     ),
   );
+
+  // 4. The last profile the server sent: the profile sync fills it, the checker reads the
+  //    operator's override from it
+  sl.registerLazySingleton<ProfileCache>(() => ProfileCache(sl<SharedPreferences>()));
 
   // 5. Subscription Checker Service
   sl.registerLazySingleton<SubscriptionCheckerService>(
     () => SubscriptionCheckerService(
       sl<SubscriptionRepository>(),
       sl<AppLogger>(),
+      sl<ProfileCache>(),
     ),
   );
 
@@ -302,6 +311,13 @@ Future<void> init() async {
         remote: sl<ProfileRemoteDataSource>(),
         auth: sl<AuthService>(),
         onboarding: sl<OnboardingRepository>(),
+        cache: sl<ProfileCache>(),
+        // Resolved lazily, and only when an override actually changes: both read the tier
+        // back through the checker, which reads the override.
+        onOverrideChanged: () async {
+          sl<FeatureGateService>().invalidate();
+          await sl<PushTopicService>().sync();
+        },
         logger: sl<AppLogger>(),
       ),
     );

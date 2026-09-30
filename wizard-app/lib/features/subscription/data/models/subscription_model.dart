@@ -14,6 +14,7 @@ class SubscriptionModel {
     required this.isActive,
     this.expiryDate,
     this.productId,
+    this.plan,
     this.transactionId,
     this.originalTransactionId,
     this.platform,
@@ -30,6 +31,9 @@ class SubscriptionModel {
 
   @JsonKey(name: 'product_id')
   final String? productId;
+
+  /// `subscription_config` id ("monthly" / "weekly"); absent in statuses stored before it existed.
+  final String? plan;
 
   @JsonKey(name: 'transaction_id')
   final String? transactionId;
@@ -67,6 +71,7 @@ class SubscriptionModel {
       isActive: entity.isActive,
       expiryDate: entity.expiryDate,
       productId: entity.productId,
+      plan: entity.plan,
       transactionId: entity.transactionId,
       originalTransactionId: entity.originalTransactionId,
       platform: entity.platform,
@@ -80,6 +85,7 @@ class SubscriptionModel {
       isActive: isActive,
       expiryDate: expiryDate,
       productId: productId,
+      plan: plan,
       transactionId: transactionId,
       originalTransactionId: originalTransactionId,
       platform: platform,
@@ -91,6 +97,7 @@ class SubscriptionModel {
     bool? isActive,
     DateTime? expiryDate,
     String? productId,
+    String? plan,
     String? transactionId,
     String? originalTransactionId,
     String? platform,
@@ -100,6 +107,7 @@ class SubscriptionModel {
       isActive: isActive ?? this.isActive,
       expiryDate: expiryDate ?? this.expiryDate,
       productId: productId ?? this.productId,
+      plan: plan ?? this.plan,
       transactionId: transactionId ?? this.transactionId,
       originalTransactionId: originalTransactionId ?? this.originalTransactionId,
       platform: platform ?? this.platform,

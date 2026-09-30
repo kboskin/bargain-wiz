@@ -46,6 +46,16 @@ void main() {
     expect(doc.preferences, {'vibe': 'tactical'});
   });
 
+  test('the subscription section goes out as sent and comes back on the document', () async {
+    final api = _FakeApi();
+    final doc = await ProfileRemoteDataSourceImpl(api).patch(
+      const ProfilePatchRequest(subscription: ProfileSubscription(plan: 'weekly', productId: 'p.weekly')),
+    );
+    expect(api.lastPatchBody, {'subscription': {'plan': 'weekly', 'product_id': 'p.weekly'}});
+    expect(doc.subscription!.plan, 'weekly');
+    expect(doc.subscription!.productId, 'p.weekly');
+  });
+
   test('fetch GETs /profile (the token is the identity) and maps NOT_FOUND to null', () async {
     final api = _FakeApi(getResult: {'identity': {'uid': 'u1'}, 'preferences': {'x': 1},
       'onboarding_status': {'completed_at': '2026-09-17T12:00:00Z'}});

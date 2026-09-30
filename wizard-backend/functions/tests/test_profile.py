@@ -112,11 +112,45 @@ def test_build_patch_stores_the_launch_time_as_a_timestamp():
         build_patch({"app": {"last_opened_at": "yesterday"}}, U1)
 
 
+def test_build_patch_records_the_subscription_plan():
+    patch = build_patch(
+        {
+            "subscription": {
+                "plan": " Weekly ",
+                "product_id": " com.bargain.wiz.premium.weekly ",
+                "x": 1,
+            }
+        },
+        U1,
+    )
+    # The plan is a remote-config key, lowercased like the other ids; the store's product id
+    # is kept as it is. Fields the section does not know are ignored.
+    assert patch["subscription"] == {
+        "plan": "weekly",
+        "product_id": "com.bargain.wiz.premium.weekly",
+    }
+
+    # Only what was sent is written: a product id alone leaves a recorded plan in place, and a
+    # blank or null one deletes it.
+    assert build_patch({"subscription": {"product_id": "p"}}, U1)["subscription"] == {
+        "product_id": "p"
+    }
+    assert build_patch({"subscription": {"plan": None, "product_id": " "}}, U1)["subscription"] == {
+        "plan": DELETE,
+        "product_id": DELETE,
+    }
+    assert "subscription" not in build_patch({"subscription": {}}, U1)
+
+
 def test_build_patch_rejects_wrong_types():
     with pytest.raises(BadRequest):
         build_patch({"preferences": {"push": "high"}}, U1)
     with pytest.raises(BadRequest):
         build_patch({"referral": "code"}, U1)
+    with pytest.raises(BadRequest):
+        build_patch({"subscription": {"plan": 7}}, U1)
+    with pytest.raises(BadRequest):
+        build_patch({"subscription": "weekly"}, U1)
 
 
 # ── merge flows ───────────────────────────────────────────────────────────────
@@ -156,6 +190,63 @@ def test_referral_code_is_write_once(service):
     _patch(service, U1, {"referral": {"code": None}})
     doc = _patch(service, U1, {"referral": {"code": "LATER-7"}})
     assert doc["referral"]["code"] == "LATER-7"
+
+
+def test_subscription_plan_is_replaced_when_the_person_switches(service):
+    _patch(service, U1, {"preferences": {"vibe": "friendly"}})
+    doc = _patch(
+        service,
+        U1,
+        {"subscription": {"plan": "weekly", "product_id": "com.bargain.wiz.premium.weekly"}},
+    )
+    assert doc["subscription"] == {
+        "plan": "weekly",
+        "product_id": "com.bargain.wiz.premium.weekly",
+    }
+
+    # A later push that says nothing about the plan (an answer edit, the launch report) leaves
+    # it alone; one that names the new plan replaces both fields.
+    doc = _patch(service, U1, {"preferences": {"push": 40}, "app": {"platform": "ios"}})
+    assert doc["subscription"]["plan"] == "weekly"
+    doc = _patch(
+        service,
+        U1,
+        {"subscription": {"plan": "monthly", "product_id": "com.bargain.wiz.premium.monthly"}},
+    )
+    assert doc["subscription"] == {
+        "plan": "monthly",
+        "product_id": "com.bargain.wiz.premium.monthly",
+    }
+    assert doc["preferences"] == {"vibe": "friendly", "push": 40}
+
+
+def test_the_subscription_override_is_the_operators_alone(service, store):
+    override = {"tier": "premium", "until": datetime(2026, 12, 31, tzinfo=UTC), "note": "review"}
+    store.docs["u1"] = {"subscription": {"override": override}}
+
+    # A client cannot set, change or delete it: the section only knows the device's own fields.
+    forged = {"tier": "premium", "until": "2099-01-01T00:00:00Z"}
+    assert build_patch({"subscription": {"override": forged}}, U1).get("subscription") is None
+    assert build_patch({"subscription": {"override": None}}, U1).get("subscription") is None
+    assert build_patch({"subscription": {"plan": "weekly", "override": forged}}, U1)[
+        "subscription"
+    ] == {"plan": "weekly"}
+
+    # What the device does report merges beside it, and the answer carries it back to the app.
+    _patch(service, U1, {"subscription": {"override": forged}, "preferences": {"push": 40}})
+    doc = _patch(service, U1, {"subscription": {"plan": "weekly", "product_id": "p.weekly"}})
+    assert doc["subscription"] == {"plan": "weekly", "product_id": "p.weekly", "override": override}
+
+
+def test_the_override_reaches_the_app_with_its_expiry_as_a_timestamp(monkeypatch, store):
+    store.docs["u1"] = {
+        "subscription": {
+            "override": {"tier": "premium", "until": datetime(2026, 12, 31, tzinfo=UTC)}
+        }
+    }
+    status, body = _call(monkeypatch, store, "GET", auth=U1)
+    assert status == 200
+    assert body["subscription"]["override"] == {"tier": "premium", "until": "2026-12-31T00:00:00Z"}
 
 
 def test_json_values_format_timestamps():

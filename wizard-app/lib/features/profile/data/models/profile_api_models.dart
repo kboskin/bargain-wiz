@@ -45,6 +45,50 @@ class ProfileReferral {
   Map<String, dynamic> toJson() => _$ProfileReferralToJson(this);
 }
 
+/// A grant an operator wrote on the profile. Response only: the function ignores it in a
+/// PATCH. The app reads `tier` and `until`; `plan` and `note` are the operator's own context.
+@JsonSerializable(includeIfNull: false)
+class ProfileSubscriptionOverride {
+  const ProfileSubscriptionOverride({this.tier, this.until});
+
+  factory ProfileSubscriptionOverride.fromJson(Map<String, dynamic> json) =>
+      _$ProfileSubscriptionOverrideFromJson(json);
+
+  @JsonKey(name: 'tier')
+  final String? tier;
+
+  /// ISO-8601 UTC end of the grant; null for one with no end.
+  @JsonKey(name: 'until')
+  final String? until;
+
+  Map<String, dynamic> toJson() => _$ProfileSubscriptionOverrideToJson(this);
+}
+
+/// The plan the person started or restored on this device. What the device last reported,
+/// not a verified entitlement (PROFILE_SYNC.md "Subscription"). The response also carries the
+/// operator's override beside it.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class ProfileSubscription {
+  const ProfileSubscription({this.plan, this.productId, this.operatorOverride});
+
+  factory ProfileSubscription.fromJson(Map<String, dynamic> json) => _$ProfileSubscriptionFromJson(json);
+
+  /// The `subscription_config` id of the plan: "monthly", "weekly".
+  @JsonKey(name: 'plan')
+  final String? plan;
+
+  /// The store product behind it.
+  @JsonKey(name: 'product_id')
+  final String? productId;
+
+  /// Response only (`override` on the wire; not a field name, since `override` is also the
+  /// annotation).
+  @JsonKey(name: 'override')
+  final ProfileSubscriptionOverride? operatorOverride;
+
+  Map<String, dynamic> toJson() => _$ProfileSubscriptionToJson(this);
+}
+
 @JsonSerializable(includeIfNull: false)
 class ProfileApp {
   const ProfileApp({this.platform, this.version, this.locale, this.fcmToken, this.lastOpenedAt});
@@ -87,7 +131,7 @@ class ProfileIdentity {
 /// Body of `PATCH /profile`: every section optional; nested maps merge, `null` deletes.
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class ProfilePatchRequest {
-  const ProfilePatchRequest({this.preferences, this.onboardingStatus, this.referral, this.app});
+  const ProfilePatchRequest({this.preferences, this.onboardingStatus, this.referral, this.subscription, this.app});
 
   factory ProfilePatchRequest.fromJson(Map<String, dynamic> json) => _$ProfilePatchRequestFromJson(json);
 
@@ -97,6 +141,8 @@ class ProfilePatchRequest {
   final ProfileOnboardingStatus? onboardingStatus;
   @JsonKey(name: 'referral')
   final ProfileReferral? referral;
+  @JsonKey(name: 'subscription')
+  final ProfileSubscription? subscription;
   @JsonKey(name: 'app')
   final ProfileApp? app;
 
@@ -112,6 +158,7 @@ class ProfileDocument {
     this.preferences,
     this.onboardingStatus,
     this.referral,
+    this.subscription,
     this.app,
     this.createdAt,
     this.updatedAt,
@@ -129,6 +176,8 @@ class ProfileDocument {
   final ProfileOnboardingStatus? onboardingStatus;
   @JsonKey(name: 'referral')
   final ProfileReferral? referral;
+  @JsonKey(name: 'subscription')
+  final ProfileSubscription? subscription;
   @JsonKey(name: 'app')
   final ProfileApp? app;
   @JsonKey(name: 'created_at')

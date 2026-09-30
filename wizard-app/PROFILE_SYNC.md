@@ -85,6 +85,15 @@ document parents the `conversations` subcollection (see `CONVERSATIONS.md`).
                                                  // absent while the funnel is unfinished
   },
   "referral": {"code": "FRIEND-42", "entered_at": "…"},
+  "subscription": {
+    "plan": "monthly | weekly",                  // reported by the device: the plan the person
+    "product_id": "com.bargain.wiz.premium.monthly",  // started or restored; absent until they do
+    "override": {                                // written by an operator, never by a client:
+      "tier": "premium",                         // lets the person in without a purchase
+      "until": "2026-12-31T00:00:00Z",           // optional; no end date when absent
+      "plan": "monthly", "note": "App Review"    // optional, for the operator's own records
+    }
+  },
   "app": {"platform": "ios | android", "locale": "en", "version": "…",
           "fcm_token": "…",                      // this install's FCM registration token
           "last_opened_at": "…"},                // device time, sent on every launch
@@ -94,6 +103,81 @@ document parents the `conversations` subcollection (see `CONVERSATIONS.md`).
 ```
 
 Timestamps are Firestore server timestamps, returned as ISO-8601 UTC strings.
+
+## Subscription
+
+`subscription` is one block with two writers: the **device** reports the plan the person
+bought, and an **operator** may add an [`override`](#the-operator-override) that lets them in
+without buying anything. The two never overwrite each other.
+
+What the device reports is which plan the person picked: `plan` is the `subscription_config`
+product `id` — `monthly`, `weekly`, the same key the paywall option carries — and `product_id`
+the store product behind it. The server stores `plan` lowercased and `product_id` as sent
+(both cut at 128 characters), whatever key the config uses, so a plan added in Remote Config
+is recorded without a deploy. `plan` is missing when neither `subscription_config` nor the
+bundled ids name the product (`SubscriptionRepositoryImpl.planForProduct`); `product_id` is
+always there.
+
+- **When.** The device reports it when the entitlement it stores changes — a purchase that
+  the store confirms, or a restore that finds one — not on the paywall tap. Choices that ended
+  in no purchase are the Analytics events `paywall_option_selected`, `paywall_cta_tap`,
+  `purchase_success` and `purchase_fail` (each with `option_id`), which join to the profile on
+  uid.
+- **It only ever sets.** A restore that finds nothing, a lapsed or free status: nothing is
+  sent, and a recorded plan stays until another replaces it. A device that lacks a plan does
+  not prove the account has none (another device may hold it, or the store has not replayed it
+  here yet), and deleting on that evidence would wipe a true record.
+- **It is a report, not an entitlement.** Nothing verifies a receipt and the app never reads
+  `plan` or `product_id` back: the gate stays what the store SDK reports on the device
+  (`PAYWALL.md`), and the sign-in hydration does not restore it. Read it as "the plan this
+  person last started or restored", not "they are paying now" — the profile cannot tell a
+  lapsed plan from a live one.
+- **Not re-sent at launch.** A report that fails twice is missed until the next purchase or
+  restore (which also re-reports a plan under a new uid after a reinstall or a switch of
+  account). Reading the entitlement at launch would build the store provider before the first
+  Remote Config fetch, and `payment_provider` is picked when it is built.
+
+### The operator override
+
+`subscription.override` is how a person is let in without a purchase — a reviewer, a tester,
+a friend, an apology. It is the one part of the profile the app **obeys** rather than reports.
+
+| Field | Meaning |
+|---|---|
+| `tier` | `premium` grants everything. Anything else (or a missing tier) grants nothing. |
+| `until` | Optional end of the grant, a Firestore timestamp or an ISO-8601 string. With none, the grant stands until the field is removed. One the app cannot read grants nothing — a grant that cannot be bounded is not one. |
+| `plan`, `note` | Optional, for the operator's own records (which plan the grant stands in for, why). The app ignores them. |
+
+- **Who writes it.** Only an operator, in the Firestore console or with the Admin SDK, on
+  `users/{uid}` (find the uid under Authentication → Users). `PATCH /profile` cannot set,
+  change or delete it — the section only declares the device's own fields, and the merge that
+  writes those leaves `override` in place (`test_the_subscription_override_is_the_operators_alone`).
+  To let someone in: add the map, to revoke: delete it.
+- **When the app learns of it.** The profile is pulled with a `GET /profile` at every launch
+  (beside the launch report, in the background after sign-in), at every sign-in — another uid
+  may carry one — and once more when onboarding finishes, for whatever the server holds by
+  then. A launch and a sign-in that overlap, as they do for an account that is already signed
+  in, share one request. A change therefore takes effect on the person's next launch (or
+  sign-in), not while the app is open.
+- **Served from the cache.** Each pull is cached on the device with the rest of the document
+  (`ProfileCache`, `SharedPreferences` key `profile_document`), and the gate reads the
+  override from that copy. A cold start therefore has the grant before any pull lands, and an
+  offline launch still honours it. No pull is mandatory: one that fails — the launch one, the
+  sign-in one, the one after onboarding — changes nothing, and the person is served from the
+  last one that worked. A pull that succeeds replaces the copy, so a document without an
+  override takes a cached grant back. The cache belongs to one account (`identity.uid`): when
+  the signed-in uid becomes another one (a sign-out, a sign-in to a different account) it is
+  dropped at once, and so it is when the server has no profile for the account. The answers in
+  the cached document are not read — `onboarding_data` is their record and the copy may be
+  older.
+- **How it is honoured.** `SubscriptionCheckerService.getCurrentTier` returns the purchased
+  tier, else the override's while it has not ended by the device clock, else free. That is
+  what the feature gate and the push topic (`premium_phase`) read, so a granted person sees no
+  paywall and receives the premium campaigns. A purchase always wins, and the override is
+  never part of the stored entitlement, so it is never reported back as their `plan`.
+- **Limits.** It is as client-side as the gate itself (`PAYWALL.md`): the AI functions do not
+  check entitlement, and the device clock decides when `until` passes. The Profile plan card
+  has no purchase to describe for a granted person and shows the default plan.
 
 ## Experiments
 
@@ -131,9 +215,10 @@ the default the Profile screen sets.
 
 ## Endpoint
 
-`PATCH /profile` — body `{preferences?, onboarding_status?, referral?, app?}`.
+`PATCH /profile` — body `{preferences?, onboarding_status?, referral?, subscription?, app?}`.
 Partial update: nested maps merge, a `null` leaf deletes the field, `onboarding_status.completed:
-true` stamps `completed_at`. `app.last_opened_at` is an ISO-8601 time, stored as a Firestore
+true` stamps `completed_at`. `subscription.override` is server-side only: a PATCH that names it
+has it dropped, like `identity`. `app.last_opened_at` is an ISO-8601 time, stored as a Firestore
 timestamp. Returns the merged document. `identity` is server-managed.
 
 `referral.code` is **write-once** (`WRITE_ONCE` in `domain/service.py`): the first code a
@@ -152,10 +237,12 @@ the document; the client sends no id of its own. Errors: `AI_INTEGRATION.md` "Er
 | Trigger | What happens |
 |---|---|
 | Onboarding step left | Moving forward off a screen that asks something (`_pushProgress` in `onboarding_screen.dart`): `uploadUserData` → `pushOnboarding` with every answer so far, no `onboarding_status`, no `referral`. Screens that ask nothing send nothing; going back sends nothing, and the next step forward sends a changed answer. Best effort and not awaited. |
-| Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `onboarding_status.completed: true` and the referral code. Best effort: onboarding finishes even if the backend is down. |
+| Onboarding "Setting up" step | `OnboardingRepository.uploadUserData` → `pushOnboarding`: full answers with `onboarding_status.completed: true` and the referral code, then a `GET` of the profile for fresh server-side data (the override), not awaited and allowed to fail — the cached profile stays. Best effort: onboarding finishes even if the backend is down. |
 | Profile screen edit | `UserProfileService` stores the answer, then calls `schedulePush`: a debounced (1.5 s) push of the full current state, which the server merges. |
-| Sign-in (`authStateChanges`) | Push once (server merges the anonymous profile), then if the device has no local answers, `GET` the account profile and save its answers locally (`saveOnboardingData` + `refresh`), so the profile follows the user. |
+| Plan started or restored | `SubscriptionRepositoryImpl` tells `onEntitlementChanged` whenever it stores an entitlement; the DI wiring hands it to `ProfileSyncService.reportSubscription`, which sends `{"subscription": {"plan", "product_id"}}` on its own. Retried like any push. See [Subscription](#subscription). |
+| Sign-in (`authStateChanges`) | Push once (server merges the anonymous profile), then `GET` the account profile: keep its `subscription.override` ([operator override](#the-operator-override)), and if the device has no local answers save its answers locally (`saveOnboardingData` + `refresh`), so the profile follows the user. |
 | Launch | `start()` (from `AppBootstrap.warmUp`, once per launch, after the launch has signed in) sends `{"app": {"platform", "locale", "last_opened_at"}}`, the time now in UTC by the device clock — whether or not onboarding has begun, so the first launch creates the document. A cold start only: coming back from the background is not a launch. Not retried: the next launch sends it again. |
+| Launch pull | Beside the report, `start()` also `GET`s the profile and holds its `subscription.override` for the gate ([operator override](#the-operator-override)); the answers in it are not read (a launch is not a sign-in). Best effort, not retried and not blocking: until it lands, or if it never does, the gate uses the cached profile. |
 | FCM token | `FirebaseService.fcmTokens()` — the token at launch, then every rotation. Every push above carries the latest as `app.fcm_token`; every token FCM hands over is also sent on its own (`{"app": {"fcm_token": …}}`) the moment it arrives — answers or not, so it never waits on another push, and a fresh install has it recorded before the first step is answered. That is one small write per launch, which doubles as the "still in use" signal for pruning stale tokens. Not retried: the next launch or push sends it again. |
 | Failure | Retried once after 30 s with the same patch (a change made meanwhile pushes the full state instead). A failed retry is reported to Crashlytics as a non-fatal — the count of profiles the server is missing — and is not retried again: the next change pushes the full state. |
 
@@ -250,7 +337,11 @@ Files: `core/services/user_profile_service.dart`, `core/services/profile_sync_se
 `core/theme/option_style.dart` (how a configured option is drawn),
 `features/profile/domain/profile_fields.dart`,
 `features/profile/data/datasources/profile_remote_datasource.dart`,
-`features/profile/data/models/profile_api_models.dart`; backend
+`features/profile/data/models/profile_api_models.dart`,
+`core/services/profile_cache.dart` (the pulled profile, kept),
+`core/services/subscription/subscription_checker_service.dart` (honours the override read from
+it), `features/subscription/data/repositories/subscription_repository_impl.dart` (the source
+of the plan); backend
 `functions/features/profile/` (`domain/patches.py`, `domain/service.py`, `data/store.py`,
 `presentation/controller.py`).
 
@@ -263,8 +354,9 @@ Files: `core/services/user_profile_service.dart`, `core/services/profile_sync_se
 - **Full-state pushes, partial-update endpoint.** The client sends everything it knows (a few
   hundred bytes); the endpoint still honours true partial bodies for other clients or tools.
 - **Deleting an answer**: send `{"preferences": {"key": null}}`.
-- **Not stored here**: names, emails, photos (they stay in Firebase Auth), purchases (store
-  SDK), conversations (the backend-owned `conversations` subcollection, `CONVERSATIONS.md`),
+- **Not stored here**: names, emails, photos (they stay in Firebase Auth), purchases beyond the
+  plan (transaction ids, receipts and expiry stay with the store SDK; see Subscription),
+  conversations (the backend-owned `conversations` subcollection, `CONVERSATIONS.md`),
   screenshots (Cloud Storage).
 - **Later**: App Check on the function; a `deleted_at`/account-deletion path (GDPR/CCPA
   "delete my data") is the next thing this endpoint needs before launch.

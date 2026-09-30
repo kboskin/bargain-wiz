@@ -14,7 +14,7 @@ class ProfileController:
     its first call.
 
     GET                 → the document, 404 when none exists yet.
-    PATCH {preferences?, onboarding_status?, referral?, app?}
+    PATCH {preferences?, onboarding_status?, referral?, subscription?, app?}
           → partial update (nested maps merge, null deletes a leaf); returns the document.
             `referral.code` is write-once: a code sent over one already recorded is dropped.
     """

@@ -8,6 +8,10 @@ class SubscriptionStatus extends Equatable {
   final bool isActive;
   final DateTime? expiryDate;
   final String? productId;
+
+  /// `subscription_config` id of the plan the product belongs to ("monthly", "weekly"); null
+  /// for a status stored before plans were tracked, or a product the config does not name.
+  final String? plan;
   final String? transactionId;
   final String? originalTransactionId;
   final String? platform; // 'ios' or 'android'
@@ -17,6 +21,7 @@ class SubscriptionStatus extends Equatable {
     required this.isActive,
     this.expiryDate,
     this.productId,
+    this.plan,
     this.transactionId,
     this.originalTransactionId,
     this.platform,
@@ -51,6 +56,7 @@ class SubscriptionStatus extends Equatable {
     bool? isActive,
     DateTime? expiryDate,
     String? productId,
+    String? plan,
     String? transactionId,
     String? originalTransactionId,
     String? platform,
@@ -60,6 +66,7 @@ class SubscriptionStatus extends Equatable {
       isActive: isActive ?? this.isActive,
       expiryDate: expiryDate ?? this.expiryDate,
       productId: productId ?? this.productId,
+      plan: plan ?? this.plan,
       transactionId: transactionId ?? this.transactionId,
       originalTransactionId: originalTransactionId ?? this.originalTransactionId,
       platform: platform ?? this.platform,
@@ -72,6 +79,7 @@ class SubscriptionStatus extends Equatable {
         isActive,
         expiryDate,
         productId,
+        plan,
         transactionId,
         originalTransactionId,
         platform,

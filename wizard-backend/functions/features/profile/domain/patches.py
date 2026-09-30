@@ -13,6 +13,12 @@ Sections (all optional; nested maps merge, `null` deletes a leaf):
                   funnel finished. Experiment assignment is Firebase A/B Testing's job
                   (Analytics user properties), not stored here.
     referral      code entered during onboarding, write-once (see `service.WRITE_ONCE`)
+    subscription  the plan the person started or restored (`plan`: the `subscription_config`
+                  id, `product_id`: the store product). What the device last reported, not a
+                  verified entitlement: nothing here checks a receipt. The same block holds
+                  `override`, which an operator writes on the document (Firestore console or
+                  Admin SDK) to let a user in without a purchase; a PATCH can neither set,
+                  change nor delete it, and every response carries it back to the app
     app           last seen platform / version / locale, and that install's
                   `fcm_token` (the address a push goes to; one per profile, last device wins);
                   `last_opened_at`, sent by the app on each launch
@@ -164,6 +170,33 @@ class ReferralPatch(_Section):
         return {"code": self.code, "entered_at": FieldOp.SERVER_TIME}
 
 
+class SubscriptionPatch(_Section):
+    """The plan the device holds. `plan` is a key of the remote-config `subscription_config`
+    ("monthly", "weekly", …), so it is stored lowercased and as sent — a plan added there is
+    recorded without a deploy — and `product_id` is the store's id for the same purchase,
+    which stays meaningful when a config product has no key.
+
+    `override` is deliberately not a field: the section ignores what it does not declare
+    (`extra="ignore"`), so a client cannot grant itself access, and the merge leaves the
+    operator's `override` in place when it writes the fields above."""
+
+    MAX_TEXT_CHARS: ClassVar[int] = 128
+
+    plan: str | None = None
+    product_id: str | None = None
+
+    @field_validator("plan", mode="before")
+    @classmethod
+    def _plan(cls, value: object) -> str | None:
+        text = Text.clip(value, cls.MAX_TEXT_CHARS, ellipsis=False)
+        return text.lower() if text else None
+
+    @field_validator("product_id", mode="before")
+    @classmethod
+    def _product_id(cls, value: object) -> str | None:
+        return Text.clip(value, cls.MAX_TEXT_CHARS, ellipsis=False)
+
+
 class AppPatch(_Section):
     MAX_TEXT_CHARS: ClassVar[int] = 64
 
@@ -191,11 +224,18 @@ class ProfilePatchBody(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     SCHEMA_VERSION: ClassVar[int] = 2
-    SECTIONS: ClassVar[tuple[str, ...]] = ("preferences", "onboarding_status", "referral", "app")
+    SECTIONS: ClassVar[tuple[str, ...]] = (
+        "preferences",
+        "onboarding_status",
+        "referral",
+        "subscription",
+        "app",
+    )
 
     preferences: PreferencesPatch | None = None
     onboarding_status: OnboardingStatusPatch | None = None
     referral: ReferralPatch | None = None
+    subscription: SubscriptionPatch | None = None
     app: AppPatch | None = None
 
     @classmethod

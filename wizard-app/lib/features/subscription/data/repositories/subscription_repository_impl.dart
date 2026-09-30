@@ -11,6 +11,7 @@ import 'package:appwizard/core/services/remote_config_service.dart';
 import 'package:appwizard/core/services/subscription/payment_provider.dart';
 import 'package:appwizard/core/utils/app_logger.dart';
 import 'package:appwizard/features/subscription/data/datasources/subscription_in_memory_datasource.dart';
+import 'package:appwizard/features/subscription/data/models/subscription_config.dart';
 import 'package:appwizard/features/subscription/data/models/subscription_model.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_product.dart';
 import 'package:appwizard/features/subscription/domain/entities/subscription_status.dart';
@@ -61,8 +62,9 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
   /// How long Restore Purchases waits for the store to replay purchases on the stream.
   final Duration _restoreWindow;
 
-  /// Told after the stored entitlement is replaced or cleared (the push topic follows it).
-  final Future<void> Function()? onEntitlementChanged;
+  /// Told after the stored entitlement is replaced or cleared, with the new one (null when
+  /// cleared): the push topic and the profile's plan follow it.
+  final Future<void> Function(SubscriptionStatus? status)? onEntitlementChanged;
 
   StreamSubscription<PurchaseUpdate>? _updates;
 
@@ -81,16 +83,26 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     _remember(statusFor(details));
   }
 
+  /// The `subscription_config` product that sells a store product id, if the config names it.
+  SubscriptionProductConfig? _configProduct(String productId) {
+    final config = _remoteConfigService.getSubscriptionConfig();
+    return config?.products
+        .where((p) => p.productId.ios == productId || p.productId.android == productId)
+        .firstOrNull;
+  }
+
   /// Tier for a store product id: `subscription_config` first, then the id's naming.
   SubscriptionTier tierForProduct(String productId) {
-    final config = _remoteConfigService.getSubscriptionConfig();
-    for (final product in config?.products ?? const []) {
-      if (product.productId.ios == productId || product.productId.android == productId) {
-        return product.tierEnum;
-      }
-    }
+    final product = _configProduct(productId);
+    if (product != null) return product.tierEnum;
     return productId.contains('premium') ? SubscriptionTier.premium : SubscriptionTier.free;
   }
+
+  /// Plan ("monthly", "weekly") a store product id belongs to: the `subscription_config`
+  /// product's `id` first, then the bundled fallback ids; null for a product neither names.
+  String? planForProduct(String productId) =>
+      _configProduct(productId)?.id ??
+      fallbackProductIds.entries.where((e) => e.value == productId).firstOrNull?.key;
 
   /// Entitlement implied by a store purchase (active while the store keeps reporting it).
   SubscriptionStatus statusFor(PurchaseDetails purchase) {
@@ -99,6 +111,7 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
       tier: tier,
       isActive: tier != SubscriptionTier.free,
       productId: purchase.productId,
+      plan: planForProduct(purchase.productId),
       transactionId: purchase.transactionId,
       originalTransactionId: purchase.originalTransactionId,
       platform: purchase.platform,
@@ -110,13 +123,13 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     _inMemoryDataSource.saveSubscriptionStatus(model);
     _prefs.setString(PrefsKeys.subscriptionStatus, jsonEncode(model.toJson()));
     _logger.i('Subscription: ${status.tier.name} via ${status.productId}');
-    unawaited(onEntitlementChanged?.call());
+    unawaited(onEntitlementChanged?.call(status));
   }
 
   void _forget() {
     _inMemoryDataSource.clearSubscriptionStatus();
     _prefs.remove(PrefsKeys.subscriptionStatus);
-    unawaited(onEntitlementChanged?.call());
+    unawaited(onEntitlementChanged?.call(null));
   }
 
   SubscriptionModel? _persisted() {

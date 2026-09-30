@@ -21,6 +21,10 @@ class PrefsKeys {
   /// subscription repository. Cleared by Restore Purchases before re-reading the store.
   static const String subscriptionStatus = 'subscription_status';
 
+  /// The last profile document the server sent (`ProfileDocument` JSON); see ProfileCache.
+  /// Replaced by every successful pull, dropped when the signed-in account changes.
+  static const String profileDocument = 'profile_document';
+
   /// Random UUID minted on first launch; identifies this install to the profile endpoint
   /// while the user is signed out (see PROFILE_SYNC.md).
 }
